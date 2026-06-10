@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="设备密码管理工具图标">
+  <!-- App icon based on Lucide Key Round, ISC licensed. -->
+  <rect width="1024" height="1024" rx="224" fill="#0f73e8"/>
+  <path d="M164 772c0-248 0-372 77-449s201-77 449-77h70c57 0 86 0 110 11 31 14 56 39 70 70 11 24 11 53 11 110v70c0 248 0 372-77 449s-201 77-449 77h-70c-57 0-86 0-110-11-31-14-56-39-70-70-11-24-11-53-11-110v-70Z" fill="#156fe0" opacity=".35"/>
+  <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" transform="translate(192 192) scale(26.6666667)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="632" cy="392" r="13.33" fill="#fff"/>
+</svg>
