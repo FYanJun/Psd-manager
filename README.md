@@ -28,6 +28,20 @@
 - macOS：下载 `.dmg` 文件并拖入应用程序。
 - Windows：下载 `.exe` 安装包并按提示安装。
 
+### macOS 提示“已损坏”
+
+当前 macOS 安装包未配置 Apple Developer ID 签名和公证。通过 Chrome/GitHub 下载后，macOS Gatekeeper 可能提示“应用已损坏，无法打开”。这通常不是文件真的损坏，而是下载隔离标记导致的拦截。
+
+把应用拖到“应用程序”后，执行：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/设备密码管理工具.app"
+```
+
+然后重新打开应用。
+
+要彻底消除这个提示，需要配置 Apple Developer ID 证书并在发布流程中完成 notarization。
+
 ## 本地开发
 
 环境要求：
