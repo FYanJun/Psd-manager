@@ -74,6 +74,7 @@
     username: string;
     password: string;
     website: string;
+    ipAddress: string;
     tag: string;
     iconText: string;
     iconClass: string;
@@ -91,6 +92,7 @@
     username: string;
     password: string;
     website: string;
+    ipAddress: string;
     tag: string;
     notes: string;
   };
@@ -122,7 +124,6 @@
     { label: "NAS", iconText: "N", color: "rose" },
     { label: "服务器", iconText: "服", color: "indigo" },
     { label: "业务系统", iconText: "业", color: "sand" },
-    { label: "网站账号", iconText: "网", color: "gold" },
     { label: "SSH 密钥", iconText: ">_", color: "dark" },
   ];
   const typeColorOptions = [
@@ -659,6 +660,7 @@
       username: readString(item.username),
       password: readString(item.password),
       website: readString(item.website),
+      ipAddress: readString(item.ipAddress, readString((item as { ip?: unknown }).ip)),
       tag: readString(item.tag, deviceType) || deviceType,
       iconText: readString(item.iconText, getTypeMeta(deviceType).iconText),
       iconClass: readString(item.iconClass, iconClassForType(deviceType)),
@@ -714,7 +716,12 @@
   }
 
   function copyDeviceAccountInfo(account = selectedAccount) {
-    return `${selectedItem.deviceName}\n${account.username}\n${account.password}\n${account.website}`;
+    return [
+      selectedItem.deviceName,
+      selectedItem.ipAddress ? `IP: ${selectedItem.ipAddress}` : "",
+      account.username,
+      account.password,
+    ].filter(Boolean).join("\n");
   }
 
   function selectAccount(id: number) {
@@ -733,6 +740,7 @@
       username: "",
       password: "",
       website: "",
+      ipAddress: "",
       tag: "",
       iconText: "?",
       iconClass: "icon-router",
@@ -750,6 +758,7 @@
       username: "",
       password: "",
       website: "",
+      ipAddress: "",
       tag: "",
       notes: "",
       updatedAt: formatDateTime(new Date()),
@@ -996,6 +1005,7 @@
       username: selectedAccount.username,
       password: selectedAccount.password,
       website: selectedAccount.website,
+      ipAddress: selectedItem.ipAddress,
       tag: selectedAccount.tag,
       notes: selectedAccount.notes,
     };
@@ -1031,6 +1041,7 @@
       username: nextAccount.username,
       password: nextAccount.password,
       website: nextAccount.website,
+      ipAddress: deviceForm.ipAddress.trim(),
       tag: nextAccount.tag,
       iconText: typeMeta.iconText,
       iconClass: iconClassForType(deviceForm.deviceType),
@@ -1051,6 +1062,7 @@
                 ...item,
                 deviceName: nextItem.deviceName,
                 deviceType: nextItem.deviceType,
+                ipAddress: nextItem.ipAddress,
                 iconText: nextItem.iconText,
                 iconClass: nextItem.iconClass,
               },
@@ -1072,7 +1084,6 @@
     activePopover = null;
     accountForm = {
       ...createEmptyAccountForm(),
-      website: selectedAccount.website || selectedItem.website,
       tag: selectedAccount.tag || selectedItem.tag || selectedItem.deviceType,
     };
     activeDialog = "account";
@@ -1382,7 +1393,7 @@
                 </span>
                 <span class="item-copy">
                   <strong>{item.deviceName}</strong>
-                  <small>{itemAccounts.length} 个账号 · {primaryAccount.username || "未填写用户名"} · {primaryAccount.website || "未填写地址"}</small>
+                  <small>{itemAccounts.length} 个账号 · {primaryAccount.username || "未填写用户名"}{#if item.ipAddress} · {item.ipAddress}{/if}</small>
                 </span>
                 {#if selectedDeviceType === "全部设备" || searchQuery.trim()}
                   <span class="item-type-pill">{item.deviceType}</span>
@@ -1435,10 +1446,25 @@
               <p class="identity-subtitle">{selectedItem.deviceType} · {selectedAccounts.length} 个账号</p>
               <div class="identity-meta">
                 <span>{selectedAccount.tag || selectedItem.deviceType}</span>
+                {#if selectedItem.ipAddress}
+                  <span>IP {selectedItem.ipAddress}</span>
+                {/if}
                 <span>当前账号更新于 {selectedAccount.updatedAt}</span>
               </div>
             </div>
           </div>
+
+          {#if selectedItem.ipAddress}
+            <div class="device-info-row">
+              <div>
+                <span class="field-label">IP 地址</span>
+                <p>{selectedItem.ipAddress}</p>
+              </div>
+              <button class="icon-button inline" aria-label="复制 IP 地址" on:click={() => copyText(selectedItem.ipAddress, "IP 地址")}>
+                <Copy size={18} />
+              </button>
+            </div>
+          {/if}
 
           <section class="account-section" aria-label="设备账号">
             <div class="panel-heading account-heading">
@@ -1455,7 +1481,7 @@
                   on:click={() => selectAccount(account.id)}
                 >
                   <strong>{account.username || account.title || "未填写用户名"}</strong>
-                  <span>{account.website || account.tag || "未填写地址"}</span>
+                  <span>{account.tag || "账号信息"}</span>
                 </button>
               {/each}
             </div>
@@ -1499,11 +1525,6 @@
                 </div>
               </div>
             {/if}
-          </div>
-
-          <div class="single-field">
-            <span class="field-label">网站</span>
-            <a href={selectedAccount.website}>{selectedAccount.website}</a>
           </div>
 
           <button class="meta-row" on:click={() => (historyOpen = !historyOpen)}>
@@ -1766,10 +1787,6 @@
               <input bind:value={accountForm.password} />
             </label>
             <label>
-              <span>网站 / IP</span>
-              <input bind:value={accountForm.website} />
-            </label>
-            <label>
               <span>标签</span>
               <input bind:value={accountForm.tag} />
             </label>
@@ -1801,16 +1818,16 @@
               </span>
             </label>
             <label>
+              <span>IP 地址</span>
+              <input bind:value={deviceForm.ipAddress} placeholder="例如：192.168.1.1" />
+            </label>
+            <label>
               <span>用户名</span>
               <input bind:value={deviceForm.username} />
             </label>
             <label>
               <span>密码</span>
               <input bind:value={deviceForm.password} />
-            </label>
-            <label>
-              <span>网站 / IP</span>
-              <input bind:value={deviceForm.website} />
             </label>
             <label>
               <span>标签</span>

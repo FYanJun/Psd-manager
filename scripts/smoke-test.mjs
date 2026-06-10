@@ -89,7 +89,18 @@ test("account display uses username without a separate account name field", () =
   assert.match(app, /title: accountUsername \|\| "未填写用户名"/);
   assert.match(app, /<strong>\{account\.username \|\| account\.title \|\| "未填写用户名"\}<\/strong>/);
   assert.match(app, /function copyDeviceAccountInfo\(account = selectedAccount\)/);
-  assert.ok(app.includes("return `${selectedItem.deviceName}\\n${account.username}\\n${account.password}\\n${account.website}`"));
+  assert.match(app, /selectedItem\.ipAddress \? `IP: \$\{selectedItem\.ipAddress\}` : ""/);
+  assert.doesNotMatch(app, /return `\$\{selectedItem\.deviceName\}\\n/);
+});
+
+test("ip address is device information and website fields stay out of the UI", () => {
+  assert.match(app, /ipAddress: string/);
+  assert.match(app, /ipAddress: readString\(item\.ipAddress/);
+  assert.match(app, /bind:value=\{deviceForm\.ipAddress\}/);
+  assert.match(app, /selectedItem\.ipAddress/);
+  assert.match(app, /aria-label="复制 IP 地址"/);
+  assert.doesNotMatch(app, /网站 \/ IP|<span>网站<\/span>|网站账号|未填写地址/);
+  assert.match(styles, /\.device-info-row/);
 });
 
 test("generator length is directly editable and clamped on commit", () => {
