@@ -325,8 +325,8 @@
   $: listContextMeta = deviceTypeRows.find((type) => type.label === listContextLabel) ?? defaultDeviceTypeMeta[0];
   $: searchPlaceholder =
     searchQuery.trim() || selectedDeviceType === "全部设备"
-      ? "在全部设备中搜索设备名或 IP"
-      : `在${selectedDeviceType}中搜索设备名或 IP`;
+      ? "搜索设备名或 IP，快速定位凭据"
+      : `在${selectedDeviceType}中搜索设备凭据`;
   $: sortedHistory = [...selectedAccount.history].sort((left, right) =>
     historySortDesc ? right.id - left.id : left.id - right.id
   );
@@ -947,7 +947,7 @@
   function createBlankItem(): VaultItem {
     return {
       id: 0,
-      title: "未选择项目",
+      title: "未选择设备凭据",
       deviceName: "未选择设备",
       deviceType: "",
       username: "",
@@ -967,7 +967,7 @@
   function createBlankAccount(): DeviceAccount {
     return {
       id: 0,
-      title: "未选择账号",
+      title: "未选择账号凭据",
       username: "",
       password: "",
       website: "",
@@ -1602,7 +1602,7 @@
 
   function openPasswordDialog() {
     activePopover = null;
-    passwordForm = { password: generatedPassword || selectedAccount.password, reason: "" };
+    passwordForm = { password: selectedAccount.password, reason: "" };
     activeDialog = "password";
   }
 
@@ -1613,7 +1613,7 @@
     bulkPasswordForm = {
       deviceType: selectedDeviceType,
       username: selectedAccount.id ? selectedAccount.username : "",
-      password: useGenerated ? generatedPassword : generatedPassword || "",
+      password: useGenerated ? generatedPassword : "",
       reason: "",
     };
     activeDialog = "bulk-password";
@@ -1877,7 +1877,7 @@
   <aside class="sidebar" aria-label="设备类型" on:contextmenu={openTypeBlankContextMenu}>
     <div class="pane-header sidebar-pane-header">
       <div class="sidebar-pane-title">
-        <span class="pane-kicker">设备库</span>
+        <span class="pane-kicker">凭据库</span>
         <h2>设备类型</h2>
       </div>
       <div class="pane-actions">
@@ -1930,7 +1930,7 @@
 
       <label class="search-box">
         <Search size={22} />
-        <input bind:this={searchInput} value={searchQuery} on:input={updateSearch} placeholder={searchPlaceholder} aria-label="搜索项目" aria-keyshortcuts="Meta+F Control+F Meta+K Control+K" />
+        <input bind:this={searchInput} value={searchQuery} on:input={updateSearch} placeholder={searchPlaceholder} aria-label="搜索设备凭据" aria-keyshortcuts="Meta+F Control+F Meta+K Control+K" />
       </label>
 
       <button class="primary-button" aria-keyshortcuts="Meta+N Control+N" on:click={() => openAddDeviceDialog()}>
@@ -1943,7 +1943,7 @@
       </button>
       <button class="tool-button topbar-tool accent" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
         <Sparkles size={20} />
-        <span>生成密码</span>
+        <span>密码生成器</span>
       </button>
     </header>
 
@@ -1969,8 +1969,8 @@
             <div class="empty-list" class:onboarding-empty={!hasDevices}>
               <Folder size={24} />
               <div>
-                <strong>{hasDevices ? "没有匹配设备" : "还没有设备"}</strong>
-                <span>{hasDevices ? "换个设备名或 IP 搜索，或新增一台设备。" : "新增第一台设备后，这里会显示账号和密码信息。"}</span>
+                <strong>{hasDevices ? "没有匹配的设备凭据" : "密码库还是空的"}</strong>
+                <span>{hasDevices ? "换个设备名或 IP 搜索，或新增一条设备凭据。" : "新增第一台设备后，这里会保存账号、当前密码和历史密码。"}</span>
               </div>
             </div>
           {:else}
@@ -2013,7 +2013,7 @@
         on:pointerdown={(event) => startPaneResize("list", event)}
       ></button>
 
-      <section class="detail-pane" aria-label="项目详情" on:contextmenu={openDetailBlankContextMenu}>
+      <section class="detail-pane" aria-label="设备凭据详情" on:contextmenu={openDetailBlankContextMenu}>
         {#if hasSelectedDevice}
         <div class="detail-topline">
           <div class="breadcrumb" aria-label="当前详情设备类型">
@@ -2075,10 +2075,10 @@
             </div>
           {/if}
 
-          <section class="account-section" aria-label="设备账号">
+          <section class="account-section" aria-label="设备账号凭据">
             <div class="panel-heading account-heading">
               <UserRound size={19} />
-              <h2>账号</h2>
+              <h2>账号凭据</h2>
               <button class="secondary-button account-add-action" on:click={openAddAccountDialog}>新增账号</button>
             </div>
             <div class="account-list" role="tablist" aria-label="当前设备账号">
@@ -2090,7 +2090,7 @@
                   on:click={() => selectAccount(account.id)}
                 >
                   <strong>{account.username || account.title || "未填写用户名"}</strong>
-                  <span>{account.tag || "账号信息"}</span>
+                  <span>{account.tag || "登录凭据"}</span>
                 </button>
               {/each}
             </div>
@@ -2196,14 +2196,14 @@
           <div class="detail-topline">
             <div class="breadcrumb" aria-label="当前详情设备类型">
               <span class="device-type-badge"><ShieldCheck size={16} /></span>
-              <span>设备详情</span>
+              <span>设备凭据</span>
             </div>
           </div>
 
           <div class="detail-empty-state">
             <span class="empty-state-icon"><Folder size={34} /></span>
-            <h1>{hasDevices ? "没有找到设备" : "还没有设备"}</h1>
-            <p>{hasDevices ? "当前搜索会匹配设备名和 IP。清空搜索后可以回到全部设备。" : "新增第一台设备后，账号、密码和历史记录会在这里集中管理。"}</p>
+            <h1>{hasDevices ? "没有匹配的设备凭据" : "密码库还是空的"}</h1>
+            <p>{hasDevices ? "当前搜索会匹配设备名和 IP。清空搜索后可以回到全部设备。" : "新增第一台设备后，账号、当前密码和旧密码记录会在这里集中管理。"}</p>
             <div class="empty-state-actions">
               {#if searchQuery.trim()}
                 <button class="secondary-button" on:click={clearSearch}>清空搜索</button>
@@ -2262,7 +2262,7 @@
       {:else if activePopover === "type-blank-context"}
         <div class="context-menu-title">
           <strong>设备类型</strong>
-          <span>管理分类</span>
+          <span>管理凭据分类</span>
         </div>
         <button class="menu-item" on:click={openAddTypeDialog}>
           <Plus size={16} />
@@ -2274,8 +2274,8 @@
         </button>
       {:else if activePopover === "list-blank-context" || activePopover === "detail-blank-context"}
         <div class="context-menu-title">
-          <strong>{activePopover === "detail-blank-context" ? "设备详情" : listContextLabel}</strong>
-          <span>{activePopover === "detail-blank-context" ? "未选择设备" : "当前范围"}</span>
+          <strong>{activePopover === "detail-blank-context" ? "设备凭据" : listContextLabel}</strong>
+          <span>{activePopover === "detail-blank-context" ? "未选择凭据" : "当前密码库范围"}</span>
         </div>
         {#if searchQuery.trim()}
           <button class="menu-item" on:click={() => { clearSearch(); activePopover = null; }}>
@@ -2351,9 +2351,9 @@
             {#if activeDialog === "type"}
               {typeForm.originalLabel ? "编辑设备类型" : "新增设备类型"}
             {:else if activeDialog === "password"}
-              更新密码
+              更新账号密码
             {:else if activeDialog === "bulk-password"}
-              批量修改密码
+              批量更新密码
             {:else if activeDialog === "account"}
               {accountForm.id ? "编辑账号" : "新增账号"}
             {:else if deviceForm.id}
@@ -2432,11 +2432,11 @@
               <span>更新原因</span>
               <input bind:value={passwordForm.reason} />
             </label>
-            <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("current-account"); activeDialog = null; }}>使用生成器密码</button>
+            <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("current-account"); activeDialog = null; }}>使用随机密码</button>
           </div>
           <footer class="modal-actions">
             <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" on:click={savePasswordUpdate}>保存并保留旧密码</button>
+            <button class="primary-button" on:click={savePasswordUpdate}>保存新密码</button>
           </footer>
         {:else if activeDialog === "bulk-password"}
           <div class="form-grid bulk-password-grid">
@@ -2492,7 +2492,7 @@
             </div>
             <label>
               <span>指定用户名</span>
-              <input bind:value={bulkPasswordForm.username} placeholder="留空则更新全部账号" />
+              <input bind:value={bulkPasswordForm.username} placeholder="留空则更新全部账号凭据" />
             </label>
             <label>
               <span>新密码</span>
@@ -2502,15 +2502,15 @@
               <span>更新原因</span>
               <input bind:value={bulkPasswordForm.reason} />
             </label>
-            <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("bulk-password"); activeDialog = null; }}>使用生成器密码</button>
+            <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("bulk-password"); activeDialog = null; }}>使用随机密码</button>
 
-            <section class="bulk-preview wide-field" aria-label="批量修改命中账号">
+            <section class="bulk-preview wide-field" aria-label="批量更新命中账号">
               <div class="bulk-preview-head">
-                <strong>命中 {bulkPasswordMatches.length} 个账号</strong>
-                <span>{bulkPasswordForm.deviceType === "全部设备" ? "全部设备" : `类型：${bulkPasswordForm.deviceType}`} · {bulkPasswordForm.username.trim() ? `用户名：${bulkPasswordForm.username.trim()}` : "全部账号"}</span>
+                <strong>将更新 {bulkPasswordMatches.length} 个账号密码</strong>
+                <span>{bulkPasswordForm.deviceType === "全部设备" ? "全部设备" : `类型：${bulkPasswordForm.deviceType}`} · {bulkPasswordForm.username.trim() ? `用户名：${bulkPasswordForm.username.trim()}` : "全部账号凭据"}</span>
               </div>
               {#if bulkPasswordMatches.length === 0}
-                <p class="quiet-text">没有匹配账号，换一个用户名或留空更新全部账号。</p>
+                <p class="quiet-text">没有匹配的账号凭据，换一个用户名或留空更新全部账号凭据。</p>
               {:else}
                 <div class="bulk-match-list">
                   {#each bulkPasswordPreview as match}
@@ -2521,14 +2521,14 @@
                   {/each}
                 </div>
                 {#if bulkPasswordMatches.length > bulkPasswordPreview.length}
-                  <p class="quiet-text">还有 {bulkPasswordMatches.length - bulkPasswordPreview.length} 个账号将在保存时一起更新。</p>
+                  <p class="quiet-text">还有 {bulkPasswordMatches.length - bulkPasswordPreview.length} 个账号密码将在保存时一起更新。</p>
                 {/if}
               {/if}
             </section>
           </div>
           <footer class="modal-actions">
             <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" disabled={!bulkPasswordForm.password.trim() || bulkPasswordMatches.length === 0} on:click={saveBulkPasswordUpdate}>批量保存并保留旧密码</button>
+            <button class="primary-button" disabled={!bulkPasswordForm.password.trim() || bulkPasswordMatches.length === 0} on:click={saveBulkPasswordUpdate}>批量更新密码</button>
           </footer>
         {:else if activeDialog === "account"}
           <div class="form-grid">
@@ -2663,21 +2663,21 @@
   {/if}
 
   {#if generatorPanelOpen}
-    <button class="drawer-scrim" aria-label="关闭随机密码生成器" on:click={() => closeGeneratorPanel(true)}></button>
-    <aside class="generator-drawer" aria-label="随机密码生成器">
+    <button class="drawer-scrim" aria-label="关闭密码生成器" on:click={() => closeGeneratorPanel(true)}></button>
+    <aside class="generator-drawer" aria-label="密码生成器">
       <header class="drawer-header">
         <div>
-          <span class="drawer-kicker">工具</span>
-          <h2>随机密码生成器</h2>
+          <span class="drawer-kicker">密码工具</span>
+          <h2>密码生成器</h2>
         </div>
-        <button class="icon-button" aria-label="关闭随机密码生成器" on:click={() => closeGeneratorPanel(true)}>
+        <button class="icon-button" aria-label="关闭密码生成器" on:click={() => closeGeneratorPanel(true)}>
           <X size={21} />
         </button>
       </header>
 
       <div class="generator-result">
         <div>
-          <span>生成结果</span>
+          <span>随机密码</span>
           <code>{generatedPassword || "未选择可用字符"}</code>
         </div>
         <div class="result-actions">
@@ -2806,15 +2806,15 @@
         </button>
         <button class="secondary-button" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={useGeneratedPasswordForCurrentDevice}>
           <KeyRound size={18} />
-          <span>用于当前账号</span>
+          <span>填入当前账号</span>
         </button>
         <button class="secondary-button" disabled={!generatedPassword || items.length === 0} on:click={useGeneratedPasswordForBulkUpdate}>
           <KeyRound size={18} />
-          <span>用于批量改密</span>
+          <span>填入批量改密</span>
         </button>
         <button class="secondary-button" disabled={!generatedPassword} on:click={() => copyText(generatedPassword, "生成密码")}>
           <Copy size={18} />
-          <span>复制</span>
+          <span>复制密码</span>
         </button>
       </footer>
     </aside>

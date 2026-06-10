@@ -9,7 +9,7 @@ const tauriLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url
 test("workspace keeps the requested three-pane information architecture", () => {
   assert.match(app, /<aside class="sidebar" aria-label="设备类型"/);
   assert.match(app, /<section class="item-list" aria-label="设备名称">/);
-  assert.match(app, /<section class="detail-pane" aria-label="项目详情"/);
+  assert.match(app, /<section class="detail-pane" aria-label="设备凭据详情"/);
   assert.match(app, /type ResizePane = "sidebar" \| "list"/);
   assert.match(app, /const RESIZER_WIDTH = 8/);
   assert.match(app, /style=\{layoutStyle\}/);
@@ -40,7 +40,7 @@ test("desktop window defaults to 75 percent of the screen and stays centered", (
 
 test("top-level actions avoid fake window chrome and keep generator after add device", () => {
   assert.doesNotMatch(app, /window-controls|control red|control yellow|control green|mini-avatar|Fan/);
-  assert.match(app, /<span>新增设备<\/span>[\s\S]*?<span>生成密码<\/span>/);
+  assert.match(app, /<span>新增设备<\/span>[\s\S]*?<span>密码生成器<\/span>/);
 });
 
 test("status toast stays above the interface and can be dismissed", () => {
@@ -62,7 +62,7 @@ test("empty vault renders onboarding instead of blank device details", () => {
   assert.match(app, /\$: hasSelectedDevice = selectedItem\.id > 0/);
   assert.match(app, /\{#if hasSelectedDevice\}[\s\S]*class="detail-empty-state"/);
   assert.match(app, /function clearSearch\(\)/);
-  assert.match(app, /还没有设备/);
+  assert.match(app, /密码库还是空的/);
   assert.match(app, /当前搜索会匹配设备名和 IP/);
   assert.match(app, /<div class="type-combo-empty-state">请先新增设备类型<\/div>/);
   assert.match(app, /if \(deviceTypeOptions\.length === 0\) \{[\s\S]*openAddTypeDialog\(\);[\s\S]*copyStatus = "请先新增设备类型";[\s\S]*return;/);
@@ -96,7 +96,7 @@ test("search fuzzily matches device names and IP addresses", () => {
   assert.match(app, /const deviceName = normalizeSearchValue\(item\.deviceName\)/);
   assert.match(app, /const ipAddress = normalizeSearchValue\(item\.ipAddress\)/);
   assert.match(app, /return fuzzyContains\(deviceName, query\) \|\| fuzzyContains\(ipAddress, query\)/);
-  assert.match(app, /在全部设备中搜索设备名或 IP/);
+  assert.match(app, /搜索设备名或 IP，快速定位凭据/);
   assert.doesNotMatch(app, /item\.website\.toLowerCase\(\)\.includes\(query\)/);
   assert.doesNotMatch(app, /item\.username\.toLowerCase\(\)\.includes\(query\)/);
 });
@@ -119,7 +119,8 @@ test("password update dialog shows the target account", () => {
   assert.match(app, /newPassword: readString\(entry\?\.newPassword\)/);
   assert.match(app, /newPassword: password/);
   assert.match(app, /let passwordForm = \{ password: "", reason: "" \}/);
-  assert.match(app, /passwordForm = \{ password: generatedPassword \|\| selectedAccount\.password, reason: "" \}/);
+  assert.match(app, /passwordForm = \{ password: selectedAccount\.password, reason: "" \}/);
+  assert.doesNotMatch(app, /passwordForm = \{ password: generatedPassword \|\| selectedAccount\.password/);
   assert.match(app, /const reason = passwordForm\.reason\.trim\(\)/);
   assert.doesNotMatch(app, /reason: "随机密码生成器"/);
   assert.doesNotMatch(app, /passwordForm\.reason\.trim\(\) \|\| "手动更新"/);
@@ -140,6 +141,8 @@ test("bulk password updates target usernames and reuse generated passwords", () 
   assert.match(app, /let bulkPasswordForm: BulkPasswordForm = \{ deviceType: "全部设备", username: "", password: "", reason: "" \}/);
   assert.match(app, /function openBulkPasswordDialog\(useGenerated = false\)/);
   assert.match(app, /deviceType: selectedDeviceType/);
+  assert.match(app, /password: useGenerated \? generatedPassword : ""/);
+  assert.doesNotMatch(app, /password: useGenerated \? generatedPassword : generatedPassword \|\| ""/);
   assert.match(app, /reason: "",/);
   assert.match(app, /function matchesBulkDeviceType\(item: VaultItem, deviceType: "全部设备" \| DeviceType\)/);
   assert.match(app, /function getBulkPasswordMatches\(form: BulkPasswordForm\)/);
@@ -160,10 +163,10 @@ test("bulk password updates target usernames and reuse generated passwords", () 
   assert.match(app, /role="listbox" aria-label="批量改密设备类型"/);
   assert.match(app, /on:click=\{\(\) => setBulkPasswordDeviceType\(type\.label\)\}/);
   assert.match(app, /指定用户名/);
-  assert.match(app, /命中 \{bulkPasswordMatches\.length\} 个账号/);
+  assert.match(app, /将更新 \{bulkPasswordMatches\.length\} 个账号密码/);
   assert.match(app, /类型：\$\{bulkPasswordForm\.deviceType\}/);
   assert.match(app, /已批量更新 \$\{matches\.length\} 个账号/);
-  assert.match(app, /用于批量改密/);
+  assert.match(app, /填入批量改密/);
   assert.match(styles, /\.bulk-preview/);
   assert.match(styles, /\.bulk-match-list/);
 });
@@ -360,7 +363,7 @@ test("right-click context menus are available for types, devices, and details", 
   assert.match(app, /on:contextmenu=\{\(event\) => openDeviceContextMenu\(item, event\)\}/);
   assert.match(app, /<aside class="sidebar" aria-label="设备类型" on:contextmenu=\{openTypeBlankContextMenu\}>/);
   assert.match(app, /<div class="list-scroll" role="group" aria-label="设备列表右键菜单区域" on:contextmenu=\{openDeviceListBlankContextMenu\}>/);
-  assert.match(app, /<section class="detail-pane" aria-label="项目详情" on:contextmenu=\{openDetailBlankContextMenu\}>/);
+  assert.match(app, /<section class="detail-pane" aria-label="设备凭据详情" on:contextmenu=\{openDetailBlankContextMenu\}>/);
   assert.match(app, /on:contextmenu=\{openSelectedDeviceContextMenu\}/);
   assert.doesNotMatch(deviceContextMenuBody, /closest\("button, a, input, textarea, select/);
   assert.match(app, /function openSelectedDeviceContextMenu[\s\S]*?closest\("button, a, input, textarea, select, \[role='button'\]"\)/);
@@ -380,9 +383,9 @@ test("right-click context menus are available for types, devices, and details", 
   assert.match(app, /复制用户名/);
   assert.doesNotMatch(app, /新增此类型设备|新增此类设备/);
   assert.doesNotMatch(app, />空白区域<|>空白详情区域<|>设备列表空白区域</);
-  assert.match(app, />管理分类</);
-  assert.match(app, /"当前范围"/);
-  assert.match(app, /"未选择设备"/);
+  assert.match(app, />管理凭据分类</);
+  assert.match(app, /"当前密码库范围"/);
+  assert.match(app, /"未选择凭据"/);
   assert.match(app, /disabled=\{deviceTypeOptions\.length === 0\}/);
   assert.match(app, /title=\{deviceTypeOptions\.length === 0 \? "请先新增设备类型" : "新增设备"\}/);
   assert.match(app, /删除设备类型/);
