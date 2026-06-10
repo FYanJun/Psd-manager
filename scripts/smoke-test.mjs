@@ -10,8 +10,32 @@ test("workspace keeps the requested three-pane information architecture", () => 
   assert.match(app, /<aside class="sidebar" aria-label="设备类型"/);
   assert.match(app, /<section class="item-list" aria-label="设备名称">/);
   assert.match(app, /<section class="detail-pane" aria-label="项目详情"/);
-  assert.match(styles, /grid-template-columns:\s*252px minmax\(0, 1fr\)/);
-  assert.match(styles, /grid-template-columns:\s*368px minmax\(0, 1fr\)/);
+  assert.match(app, /type ResizePane = "sidebar" \| "list"/);
+  assert.match(app, /const RESIZER_WIDTH = 8/);
+  assert.match(app, /style=\{layoutStyle\}/);
+  assert.match(app, /class="pane-resizer"/);
+  assert.match(app, /startPaneResize\("sidebar", event\)/);
+  assert.match(app, /startPaneResize\("list", event\)/);
+  assert.match(app, /window\.innerWidth - DETAIL_MIN_WIDTH - RESIZER_WIDTH \* 2/);
+  assert.match(styles, /--sidebar-width:\s*252px/);
+  assert.match(styles, /--list-width:\s*368px/);
+  assert.match(styles, /--resizer-width:\s*8px/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(208px, var\(--sidebar-width\)\) var\(--resizer-width\) minmax\(0, 1fr\)/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(300px, var\(--list-width\)\) var\(--resizer-width\) minmax\(420px, 1fr\)/);
+  assert.match(app, /class="sidebar-pane-title"/);
+  assert.match(styles, /\.sidebar-pane-header \{[\s\S]*flex-direction: column;[\s\S]*min-height: 102px;/);
+  assert.match(styles, /\.sidebar-pane-title \{[\s\S]*white-space: nowrap;/);
+});
+
+test("desktop window defaults to 75 percent of the screen and stays centered", () => {
+  assert.match(tauriLib, /\.setup\(\|app\|/);
+  assert.match(tauriLib, /get_webview_window\("main"\)/);
+  assert.match(tauriLib, /current_monitor\(\)/);
+  assert.match(tauriLib, /primary_monitor\(\)/);
+  assert.match(tauriLib, /monitor\.size\(\)/);
+  assert.match(tauriLib, /\* 0\.75/);
+  assert.match(tauriLib, /window\.set_size\(PhysicalSize::new\(width\.max\(1024\), height\.max\(720\)\)\)/);
+  assert.match(tauriLib, /window\.center\(\)/);
 });
 
 test("top-level actions avoid fake window chrome and keep generator after add device", () => {

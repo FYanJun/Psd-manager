@@ -151,8 +151,17 @@
   };
   type GeneratorTarget = "current-account" | "bulk-password" | null;
   type TypePickerScope = "device" | "bulk";
+  type ResizePane = "sidebar" | "list";
 
   const STORAGE_KEY = "device-password-manager-state-v1";
+  const SIDEBAR_DEFAULT_WIDTH = 252;
+  const SIDEBAR_MIN_WIDTH = 208;
+  const SIDEBAR_MAX_WIDTH = 360;
+  const LIST_DEFAULT_WIDTH = 368;
+  const LIST_MIN_WIDTH = 300;
+  const LIST_MAX_WIDTH = 540;
+  const DETAIL_MIN_WIDTH = 420;
+  const RESIZER_WIDTH = 8;
 
   const initialItems: VaultItem[] = [];
 
@@ -219,6 +228,12 @@
   let forwardStack: ViewState[] = [];
   let restoringView = false;
   let searchInput: HTMLInputElement | null = null;
+  let sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
+  let listWidth = LIST_DEFAULT_WIDTH;
+  let resizingPane: ResizePane | null = null;
+  let resizeStartX = 0;
+  let resizeStartSidebarWidth = SIDEBAR_DEFAULT_WIDTH;
+  let resizeStartListWidth = LIST_DEFAULT_WIDTH;
 
   onMount(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -228,18 +243,33 @@
         if (Array.isArray(parsed.items)) items = normalizeVaultItems(parsed.items);
         if (Array.isArray(parsed.customDeviceTypes)) customDeviceTypes = parsed.customDeviceTypes;
         if (Array.isArray(parsed.hiddenDeviceTypes)) hiddenDeviceTypes = parsed.hiddenDeviceTypes;
+        if (parsed.paneLayout) {
+          sidebarWidth = clampPaneWidth(readNumber(parsed.paneLayout.sidebarWidth, SIDEBAR_DEFAULT_WIDTH), "sidebar");
+          listWidth = clampPaneWidth(readNumber(parsed.paneLayout.listWidth, LIST_DEFAULT_WIDTH), "list");
+        }
       } catch {
         copyStatus = "本地数据读取失败，已使用默认数据";
       }
     }
+    clampPaneLayout();
     hydrated = true;
     window.addEventListener("keydown", handleGlobalKeydown);
-    return () => window.removeEventListener("keydown", handleGlobalKeydown);
+    window.addEventListener("resize", clampPaneLayout);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeydown);
+      window.removeEventListener("resize", clampPaneLayout);
+      stopPaneResize();
+    };
   });
 
   $: if (hydrated) {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes }));
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes, paneLayout: { sidebarWidth, listWidth } })
+    );
   }
+
+  $: layoutStyle = `--sidebar-width: ${sidebarWidth}px; --list-width: ${listWidth}px;`;
 
   $: filteredItems = items.filter((item) => {
     const query = searchQuery.trim().toLowerCase();
@@ -666,6 +696,57 @@
     if (mode === sortMode) return;
     pushNavigationState();
     sortMode = mode;
+  }
+
+  function getMaxPaneWidth(pane: ResizePane) {
+    if (typeof window === "undefined") return pane === "sidebar" ? SIDEBAR_MAX_WIDTH : LIST_MAX_WIDTH;
+    const availableWidth = window.innerWidth - DETAIL_MIN_WIDTH - RESIZER_WIDTH * 2;
+    if (pane === "sidebar") return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - listWidth));
+    return Math.max(LIST_MIN_WIDTH, Math.min(LIST_MAX_WIDTH, availableWidth - sidebarWidth));
+  }
+
+  function clampPaneWidth(width: number, pane: ResizePane) {
+    const minWidth = pane === "sidebar" ? SIDEBAR_MIN_WIDTH : LIST_MIN_WIDTH;
+    return Math.round(Math.min(Math.max(width, minWidth), getMaxPaneWidth(pane)));
+  }
+
+  function clampPaneLayout() {
+    listWidth = clampPaneWidth(listWidth, "list");
+    sidebarWidth = clampPaneWidth(sidebarWidth, "sidebar");
+    listWidth = clampPaneWidth(listWidth, "list");
+  }
+
+  function startPaneResize(pane: ResizePane, event: PointerEvent) {
+    event.preventDefault();
+    activePopover = null;
+    openTypePicker = null;
+    resizingPane = pane;
+    resizeStartX = event.clientX;
+    resizeStartSidebarWidth = sidebarWidth;
+    resizeStartListWidth = listWidth;
+    document.body.classList.add("is-resizing-pane");
+    window.addEventListener("pointermove", handlePaneResize);
+    window.addEventListener("pointerup", stopPaneResize);
+    window.addEventListener("pointercancel", stopPaneResize);
+  }
+
+  function handlePaneResize(event: PointerEvent) {
+    if (!resizingPane) return;
+    const deltaX = event.clientX - resizeStartX;
+    if (resizingPane === "sidebar") {
+      sidebarWidth = clampPaneWidth(resizeStartSidebarWidth + deltaX, "sidebar");
+    } else {
+      listWidth = clampPaneWidth(resizeStartListWidth + deltaX, "list");
+    }
+  }
+
+  function stopPaneResize() {
+    if (!resizingPane) return;
+    resizingPane = null;
+    document.body.classList.remove("is-resizing-pane");
+    window.removeEventListener("pointermove", handlePaneResize);
+    window.removeEventListener("pointerup", stopPaneResize);
+    window.removeEventListener("pointercancel", stopPaneResize);
   }
 
   function maskPassword(password: string) {
@@ -1791,11 +1872,11 @@
   }
 </script>
 
-<main class="app-shell">
+<main class="app-shell" style={layoutStyle}>
   <input id="import-file" class="hidden-file-input" type="file" accept="application/json" on:change={importData} />
   <aside class="sidebar" aria-label="设备类型" on:contextmenu={openTypeBlankContextMenu}>
     <div class="pane-header sidebar-pane-header">
-      <div>
+      <div class="sidebar-pane-title">
         <span class="pane-kicker">设备库</span>
         <h2>设备类型</h2>
       </div>
@@ -1831,6 +1912,14 @@
       {/each}
     </div>
   </aside>
+
+  <button
+    class:active={resizingPane === "sidebar"}
+    class="pane-resizer"
+    type="button"
+    aria-label="调整设备类型宽度"
+    on:pointerdown={(event) => startPaneResize("sidebar", event)}
+  ></button>
 
   <section class="workspace">
     <header class="topbar">
@@ -1915,6 +2004,14 @@
           {/if}
         </div>
       </section>
+
+      <button
+        class:active={resizingPane === "list"}
+        class="pane-resizer"
+        type="button"
+        aria-label="调整设备列表宽度"
+        on:pointerdown={(event) => startPaneResize("list", event)}
+      ></button>
 
       <section class="detail-pane" aria-label="项目详情" on:contextmenu={openDetailBlankContextMenu}>
         {#if hasSelectedDevice}
