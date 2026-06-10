@@ -26,6 +26,12 @@ jobs:
             arch: x64
             packageType: installer
             extension: exe
+          - platform: windows-latest
+            args: --no-bundle
+            platformName: windows
+            arch: x64
+            packageType: portable
+            extension: exe
 
     runs-on: ${{ matrix.platform }}
 
@@ -59,17 +65,26 @@ jobs:
           $artifactName = "PsdManager-$version-${{ matrix.platformName }}-${{ matrix.arch }}-${{ matrix.packageType }}.${{ matrix.extension }}"
           New-Item -ItemType Directory -Force -Path "dist-release"
 
-          if ("${{ matrix.platformName }}" -eq "macos") {
+          if ("${{ matrix.packageType }}" -eq "portable") {
+            $sourcePath = "src-tauri/target/release/device-password-manager.exe"
+            if (-not (Test-Path $sourcePath)) {
+              throw "Portable executable was not found."
+            }
+            Copy-Item $sourcePath "dist-release/$artifactName"
+          } elseif ("${{ matrix.platformName }}" -eq "macos") {
             $source = Get-ChildItem "src-tauri/target/release/bundle/dmg" -Filter "*.dmg" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if (-not $source) {
+              throw "Release artifact was not found."
+            }
+            Copy-Item $source.FullName "dist-release/$artifactName"
           } else {
             $source = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if (-not $source) {
+              throw "Release artifact was not found."
+            }
+            Copy-Item $source.FullName "dist-release/$artifactName"
           }
 
-          if (-not $source) {
-            throw "Release artifact was not found."
-          }
-
-          Copy-Item $source.FullName "dist-release/$artifactName"
           "name=$artifactName" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
 

@@ -89,7 +89,7 @@ macOS 本地打包：
 npm run tauri -- build --bundles dmg
 ```
 
-Windows 安装包和免安装版建议通过 GitHub Actions 在 Windows runner 上构建：
+发布包建议通过 GitHub Actions 构建：
 
 ```bash
 git tag v0.1.0
