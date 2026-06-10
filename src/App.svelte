@@ -28,7 +28,7 @@
 
   type DeviceType = string;
   type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
-  type ActiveDialog = "device" | "type" | "password" | "account" | null;
+  type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | null;
   type ActivePopover = "type-sort" | "device-sort" | "type-context" | "device-context" | "more" | null;
   type PopoverPosition = {
     top: number;
@@ -113,6 +113,20 @@
     tag: string;
     notes: string;
   };
+  type BulkPasswordForm = {
+    username: string;
+    password: string;
+    reason: string;
+  };
+  type BulkPasswordMatch = {
+    itemId: number;
+    accountId: number;
+    deviceName: string;
+    deviceType: string;
+    ipAddress: string;
+    username: string;
+    tag: string;
+  };
 
   const STORAGE_KEY = "device-password-manager-state-v1";
 
@@ -153,6 +167,7 @@
   let accountForm: AccountForm = createEmptyAccountForm();
   let typeForm: TypeForm = { originalLabel: null, label: "", iconText: "", color: "blue" };
   let passwordForm = { password: "", reason: "手动更新" };
+  let bulkPasswordForm: BulkPasswordForm = { username: "", password: "", reason: "批量更新" };
   let selectedAccountId = 0;
   let passwordVisible = false;
   let historyOpen = true;
@@ -250,6 +265,8 @@
   $: sortedHistory = [...selectedAccount.history].sort((left, right) =>
     historySortDesc ? right.id - left.id : left.id - right.id
   );
+  $: bulkPasswordMatches = getBulkPasswordMatches(bulkPasswordForm.username);
+  $: bulkPasswordPreview = bulkPasswordMatches.slice(0, 8);
   $: deviceFormTypeMeta = getTypeMeta(deviceForm.deviceType);
   $: {
     useUpper;
@@ -587,6 +604,13 @@
     passwordForm = { password: generatedPassword, reason: "随机密码生成器" };
     generatorPanelOpen = false;
     activeDialog = "password";
+  }
+
+  function useGeneratedPasswordForBulkUpdate() {
+    if (!generatedPassword) generatePassword();
+    if (!generatedPassword) return;
+    generatorPanelOpen = false;
+    openBulkPasswordDialog(true);
   }
 
   function accountFromItem(item: VaultItem): DeviceAccount {
@@ -1148,26 +1172,63 @@
     activeDialog = "password";
   }
 
+  function openBulkPasswordDialog(useGenerated = false) {
+    activePopover = null;
+    bulkPasswordForm = {
+      username: selectedAccount.id ? selectedAccount.username : "",
+      password: useGenerated ? generatedPassword : generatedPassword || "",
+      reason: useGenerated ? "随机密码生成器批量更新" : "批量更新",
+    };
+    activeDialog = "bulk-password";
+  }
+
+  function matchesBulkUsername(account: DeviceAccount, username: string) {
+    const target = username.trim().toLowerCase();
+    if (!target) return true;
+    return account.username.trim().toLowerCase() === target;
+  }
+
+  function getBulkPasswordMatches(username: string): BulkPasswordMatch[] {
+    return items.flatMap((item) =>
+      getAccounts(item)
+        .filter((account) => matchesBulkUsername(account, username))
+        .map((account) => ({
+          itemId: item.id,
+          accountId: account.id,
+          deviceName: item.deviceName,
+          deviceType: item.deviceType,
+          ipAddress: item.ipAddress,
+          username: account.username,
+          tag: account.tag,
+        }))
+    );
+  }
+
+  function updateAccountPassword(account: DeviceAccount, password: string, changedAt: string, reason: string) {
+    const historyEntry: PasswordHistory = {
+      id: Math.max(0, ...account.history.map((entry) => entry.id)) + 1,
+      password: account.password,
+      changedAt,
+      reason,
+    };
+    return {
+      ...account,
+      password,
+      updatedAt: changedAt,
+      history: account.password ? [historyEntry, ...account.history] : account.history,
+    };
+  }
+
   function savePasswordUpdate() {
     if (!passwordForm.password) {
       copyStatus = "请输入新密码";
       return;
     }
-    const now = new Date();
-    const historyEntry: PasswordHistory = {
-      id: Math.max(0, ...selectedAccount.history.map((entry) => entry.id)) + 1,
-      password: selectedAccount.password,
-      changedAt: formatDateTime(now),
-      reason: passwordForm.reason.trim() || "手动更新",
-    };
+    const changedAt = formatDateTime(new Date());
+    const reason = passwordForm.reason.trim() || "手动更新";
     const nextAccounts = selectedAccounts.map((account) =>
       account.id === selectedAccount.id
-        ? {
-            ...account,
-            password: passwordForm.password,
-            updatedAt: formatDateTime(now),
-            history: account.password ? [historyEntry, ...account.history] : account.history,
-          }
+        ? updateAccountPassword(account, passwordForm.password, changedAt, reason)
         : account
     );
     items = items.map((item) =>
@@ -1177,6 +1238,41 @@
     activeDialog = null;
     passwordVisible = true;
     visibleHistoryIds = [];
+  }
+
+  function saveBulkPasswordUpdate() {
+    const password = bulkPasswordForm.password.trim();
+    if (!password) {
+      copyStatus = "请输入新密码";
+      return;
+    }
+    const matches = getBulkPasswordMatches(bulkPasswordForm.username);
+    if (matches.length === 0) {
+      copyStatus = "没有匹配账号";
+      return;
+    }
+    const reason = bulkPasswordForm.reason.trim() || "批量更新";
+    const changedAt = formatDateTime(new Date());
+    const targetAccountIdsByItem = new Map<number, Set<number>>();
+    matches.forEach((match) => {
+      const accountIds = targetAccountIdsByItem.get(match.itemId) ?? new Set<number>();
+      accountIds.add(match.accountId);
+      targetAccountIdsByItem.set(match.itemId, accountIds);
+    });
+
+    items = items.map((item) => {
+      const accountIds = targetAccountIdsByItem.get(item.id);
+      if (!accountIds) return item;
+      const nextAccounts = getAccounts(item).map((account) =>
+        accountIds.has(account.id) ? updateAccountPassword(account, password, changedAt, reason) : account
+      );
+      return syncItemWithAccounts(item, nextAccounts);
+    });
+    pushNavigationState();
+    activeDialog = null;
+    passwordVisible = false;
+    visibleHistoryIds = [];
+    copyStatus = `已批量更新 ${matches.length} 个账号`;
   }
 
   function deleteSelectedDevice() {
@@ -1336,6 +1432,10 @@
       <button class="primary-button" on:click={() => openAddDeviceDialog()}>
         <Plus size={22} />
         <span>新增设备</span>
+      </button>
+      <button class="tool-button topbar-tool" on:click={() => openBulkPasswordDialog()}>
+        <KeyRound size={20} />
+        <span>批量改密</span>
       </button>
       <button class="tool-button topbar-tool accent" on:click={openGeneratorPanel}>
         <Sparkles size={20} />
@@ -1702,13 +1802,15 @@
 
   {#if activeDialog}
     <div class="modal-backdrop">
-      <section class="modal" class:type-modal={activeDialog === "type"} role="dialog" aria-modal="true">
+      <section class="modal" class:type-modal={activeDialog === "type"} class:bulk-modal={activeDialog === "bulk-password"} role="dialog" aria-modal="true">
         <header class="modal-header">
           <h2>
             {#if activeDialog === "type"}
               {typeForm.originalLabel ? "编辑设备类型" : "新增设备类型"}
             {:else if activeDialog === "password"}
               更新密码
+            {:else if activeDialog === "bulk-password"}
+              批量修改密码
             {:else if activeDialog === "account"}
               {accountForm.id ? "编辑账号" : "新增账号"}
             {:else if deviceForm.id}
@@ -1775,6 +1877,48 @@
           <footer class="modal-actions">
             <button class="secondary-button" on:click={closeOverlays}>取消</button>
             <button class="primary-button" on:click={savePasswordUpdate}>保存并保留旧密码</button>
+          </footer>
+        {:else if activeDialog === "bulk-password"}
+          <div class="form-grid bulk-password-grid">
+            <label>
+              <span>指定用户名</span>
+              <input bind:value={bulkPasswordForm.username} placeholder="留空则更新全部账号" />
+            </label>
+            <label>
+              <span>新密码</span>
+              <input bind:value={bulkPasswordForm.password} />
+            </label>
+            <label class="wide-field">
+              <span>更新原因</span>
+              <input bind:value={bulkPasswordForm.reason} />
+            </label>
+            <button class="secondary-button wide-field" disabled={!generatedPassword} on:click={() => (bulkPasswordForm.password = generatedPassword)}>使用生成器密码</button>
+
+            <section class="bulk-preview wide-field" aria-label="批量修改命中账号">
+              <div class="bulk-preview-head">
+                <strong>命中 {bulkPasswordMatches.length} 个账号</strong>
+                <span>{bulkPasswordForm.username.trim() ? `用户名：${bulkPasswordForm.username.trim()}` : "当前将更新全部账号"}</span>
+              </div>
+              {#if bulkPasswordMatches.length === 0}
+                <p class="quiet-text">没有匹配账号，换一个用户名或留空更新全部账号。</p>
+              {:else}
+                <div class="bulk-match-list">
+                  {#each bulkPasswordPreview as match}
+                    <div>
+                      <strong>{match.deviceName}</strong>
+                      <span>{match.username || "未填写用户名"} · {match.ipAddress || match.deviceType} · {match.tag || "账号"}</span>
+                    </div>
+                  {/each}
+                </div>
+                {#if bulkPasswordMatches.length > bulkPasswordPreview.length}
+                  <p class="quiet-text">还有 {bulkPasswordMatches.length - bulkPasswordPreview.length} 个账号将在保存时一起更新。</p>
+                {/if}
+              {/if}
+            </section>
+          </div>
+          <footer class="modal-actions">
+            <button class="secondary-button" on:click={closeOverlays}>取消</button>
+            <button class="primary-button" disabled={!bulkPasswordForm.password.trim() || bulkPasswordMatches.length === 0} on:click={saveBulkPasswordUpdate}>批量保存并保留旧密码</button>
           </footer>
         {:else if activeDialog === "account"}
           <div class="form-grid">
@@ -1992,6 +2136,10 @@
         <button class="secondary-button" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={useGeneratedPasswordForCurrentDevice}>
           <KeyRound size={18} />
           <span>用于当前账号</span>
+        </button>
+        <button class="secondary-button" disabled={!generatedPassword || items.length === 0} on:click={useGeneratedPasswordForBulkUpdate}>
+          <KeyRound size={18} />
+          <span>用于批量改密</span>
         </button>
         <button class="secondary-button" disabled={!generatedPassword} on:click={() => copyText(generatedPassword, "生成密码")}>
           <Copy size={18} />

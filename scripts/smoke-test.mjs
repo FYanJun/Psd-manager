@@ -63,6 +63,23 @@ test("password history is masked by default and individually revealable", () => 
   assert.match(app, /aria-label="复制旧密码"/);
 });
 
+test("bulk password updates target usernames and reuse generated passwords", () => {
+  assert.match(app, /"bulk-password"/);
+  assert.match(app, /let bulkPasswordForm: BulkPasswordForm/);
+  assert.match(app, /function openBulkPasswordDialog\(useGenerated = false\)/);
+  assert.match(app, /function getBulkPasswordMatches\(username: string\)/);
+  assert.match(app, /function updateAccountPassword\(account: DeviceAccount, password: string, changedAt: string, reason: string\)/);
+  assert.match(app, /function saveBulkPasswordUpdate\(\)/);
+  assert.match(app, /function useGeneratedPasswordForBulkUpdate\(\)/);
+  assert.match(app, /批量改密/);
+  assert.match(app, /指定用户名/);
+  assert.match(app, /命中 \{bulkPasswordMatches\.length\} 个账号/);
+  assert.match(app, /已批量更新 \$\{matches\.length\} 个账号/);
+  assert.match(app, /用于批量改密/);
+  assert.match(styles, /\.bulk-preview/);
+  assert.match(styles, /\.bulk-match-list/);
+});
+
 test("a device can hold multiple account credentials", () => {
   assert.match(app, /type DeviceAccount = \{/);
   assert.match(app, /accounts\?: DeviceAccount\[\]/);
