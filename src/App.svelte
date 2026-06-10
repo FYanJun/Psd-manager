@@ -211,6 +211,8 @@
   });
 
   $: selectedItem = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0] ?? createBlankItem();
+  $: hasDevices = items.length > 0;
+  $: hasSelectedDevice = selectedItem.id > 0 && filteredItems.some((item) => item.id === selectedItem.id);
 
   $: if (filteredItems.length > 0 && !filteredItems.some((item) => item.id === selectedId)) {
     selectedId = filteredItems[0].id;
@@ -342,6 +344,12 @@
     if (value === searchQuery) return;
     if (!searchQuery.trim() || !value.trim()) pushNavigationState();
     searchQuery = value;
+  }
+
+  function clearSearch() {
+    if (!searchQuery.trim()) return;
+    pushNavigationState();
+    searchQuery = "";
   }
 
   function selectDeviceType(deviceType: "全部设备" | DeviceType) {
@@ -1343,9 +1351,15 @@
 
         <div class="list-scroll">
           {#if filteredItems.length === 0}
-            <div class="empty-list">
+            <div class="empty-list" class:onboarding-empty={!hasDevices}>
               <Folder size={24} />
-              <span>没有匹配项目</span>
+              <div>
+                <strong>{hasDevices ? "没有匹配设备" : "还没有设备"}</strong>
+                <span>{hasDevices ? "换个设备名搜索，或新增一台设备。" : "新增第一台设备后，这里会显示账号和密码信息。"}</span>
+              </div>
+              {#if !hasDevices}
+                <button class="secondary-button" on:click={() => openAddDeviceDialog()}>新增设备</button>
+              {/if}
             </div>
           {:else}
             <h2 class="list-heading">{searchQuery.trim() ? "搜索结果" : "设备名称"}</h2>
@@ -1380,6 +1394,7 @@
       </section>
 
       <section class="detail-pane" aria-label="项目详情">
+        {#if hasSelectedDevice}
         <div class="detail-topline">
           <div class="breadcrumb" aria-label="当前详情设备类型">
             <span class="device-type-badge"><ShieldCheck size={16} /></span>
@@ -1538,6 +1553,26 @@
           {/if}
 
         </div>
+        {:else}
+          <div class="detail-topline">
+            <div class="breadcrumb" aria-label="当前详情设备类型">
+              <span class="device-type-badge"><ShieldCheck size={16} /></span>
+              <span>设备详情</span>
+            </div>
+          </div>
+
+          <div class="detail-empty-state">
+            <span class="empty-state-icon"><Folder size={34} /></span>
+            <h1>{hasDevices ? "没有找到设备" : "还没有设备"}</h1>
+            <p>{hasDevices ? "当前搜索只匹配设备名。清空搜索后可以回到全部设备。" : "新增第一台设备后，账号、密码和历史记录会在这里集中管理。"}</p>
+            <div class="empty-state-actions">
+              {#if searchQuery.trim()}
+                <button class="secondary-button" on:click={clearSearch}>清空搜索</button>
+              {/if}
+              <button class="primary-button" on:click={() => openAddDeviceDialog()}>新增设备</button>
+            </div>
+          </div>
+        {/if}
       </section>
     </div>
   </section>

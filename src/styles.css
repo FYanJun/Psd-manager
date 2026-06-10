@@ -501,10 +501,42 @@ button {
 
 .empty-list {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 12px;
   margin: 28px 14px;
   color: var(--quiet);
+}
+
+.empty-list div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.empty-list strong {
+  color: #2e3338;
+  font-size: 15px;
+}
+
+.empty-list span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.empty-list.onboarding-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  margin-top: 34px;
+}
+
+.empty-list.onboarding-empty button {
+  grid-column: 2;
+  justify-self: start;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 
 .detail-pane {
@@ -581,6 +613,49 @@ button {
 
 .detail-scroll {
   padding: 22px clamp(28px, 5vw, 64px) 40px;
+}
+
+.detail-empty-state {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  max-width: 520px;
+  min-height: 100%;
+  padding: 28px clamp(36px, 7vw, 86px) 72px;
+}
+
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border: 1px solid #dfe5ec;
+  border-radius: 16px;
+  color: #536170;
+  background: #f6f8fa;
+}
+
+.detail-empty-state h1 {
+  margin: 20px 0 0;
+  color: #24282c;
+  font-size: 28px;
+  line-height: 1.18;
+}
+
+.detail-empty-state p {
+  max-width: 430px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
 }
 
 .identity-row {

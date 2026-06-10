@@ -19,6 +19,18 @@ test("top-level actions avoid fake window chrome and keep generator after add de
   assert.match(app, /<span>新增设备<\/span>[\s\S]*?<span>生成密码<\/span>/);
 });
 
+test("empty vault renders onboarding instead of blank device details", () => {
+  assert.match(app, /const initialItems: VaultItem\[\] = \[\];/);
+  assert.match(app, /\$: hasDevices = items\.length > 0/);
+  assert.match(app, /\$: hasSelectedDevice = selectedItem\.id > 0/);
+  assert.match(app, /\{#if hasSelectedDevice\}[\s\S]*class="detail-empty-state"/);
+  assert.match(app, /function clearSearch\(\)/);
+  assert.match(app, /还没有设备/);
+  assert.match(app, /当前搜索只匹配设备名/);
+  assert.match(styles, /\.empty-list\.onboarding-empty/);
+  assert.match(styles, /\.detail-empty-state/);
+});
+
 test("list and detail headers show static context without redundant filters", () => {
   assert.match(app, /class="list-context" aria-label="当前设备范围"/);
   assert.match(app, /class="breadcrumb" aria-label="当前详情设备类型"/);
