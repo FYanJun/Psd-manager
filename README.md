@@ -1,4 +1,4 @@
-# Psd-manager
+# Psd Manager
 
 ![应用图标](src-tauri/icons/icon.png)
 
@@ -23,10 +23,17 @@
 
 ## 安装
 
-在 GitHub Releases 下载对应平台安装包：
+在 GitHub Releases 下载对应平台发布包：
 
-- macOS：下载 `.dmg` 文件并拖入应用程序。
-- Windows：下载 `.exe` 安装包并按提示安装。
+- macOS：下载 `PsdManager-{version}-macos-arm64-installer.dmg`，打开后拖入应用程序。
+- Windows 免安装版：下载 `PsdManager-{version}-windows-x64-portable.exe`，双击即可运行。
+- Windows 安装版：下载 `PsdManager-{version}-windows-x64-installer.exe`，按提示安装。
+
+发布包命名规则：
+
+```text
+PsdManager-{version}-{platform}-{arch}-{type}.{ext}
+```
 
 ### macOS 提示“已损坏”
 
@@ -82,14 +89,14 @@ macOS 本地打包：
 npm run tauri -- build --bundles dmg
 ```
 
-Windows 安装包建议通过 GitHub Actions 在 Windows runner 上构建：
+Windows 安装包和免安装版建议通过 GitHub Actions 在 Windows runner 上构建：
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-推送 `v*` 标签后，GitHub Actions 会自动生成 Release，并上传 macOS DMG 与 Windows EXE 安装包。
+推送 `v*` 标签后，GitHub Actions 会自动生成 Release，并上传 macOS DMG、Windows EXE 安装包和 Windows 免安装版。
 
 ## 技术栈
 

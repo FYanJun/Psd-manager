@@ -56,12 +56,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "dist-release"
-          Copy-Item "src-tauri/target/release/device-password-manager.exe" "dist-release/Psd-manager_${{ steps.release.outputs.version }}_x64_portable.exe"
+          Copy-Item "src-tauri/target/release/device-password-manager.exe" "dist-release/PsdManager-${{ steps.release.outputs.version }}-windows-x64-portable.exe"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Psd-manager_${{ steps.release.outputs.version }}_x64_portable
+          name: PsdManager-${{ steps.release.outputs.version }}-windows-x64-portable
           path: dist-release/*.exe
           if-no-files-found: error
 
