@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "设备密码管理工具",
+  "productName": "设备资产凭据管理工具",
   "version": "0.1.1",
   "identifier": "com.fan.device-password-manager",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "设备密码管理工具",
+        "title": "设备资产凭据管理工具",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,

@@ -3,185 +3,110 @@
   import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
   import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   import { onMount } from "svelte";
+  import ActionPopover from "./components/ActionPopover.svelte";
+  import AppDialog from "./components/AppDialog.svelte";
+  import ConfirmationDialog from "./components/ConfirmationDialog.svelte";
+  import DeviceDetailPane from "./components/DeviceDetailPane.svelte";
+  import DeviceListPane from "./components/DeviceListPane.svelte";
+  import PasswordGeneratorDrawer from "./components/PasswordGeneratorDrawer.svelte";
+  import SidebarPane from "./components/SidebarPane.svelte";
+  import StatusToast from "./components/StatusToast.svelte";
+  import Topbar from "./components/Topbar.svelte";
+
   import {
-    ChevronDown,
-    ChevronRight,
-    Clock3,
-    Copy,
-    Eye,
-    EyeOff,
-    Folder,
-    Grid2X2,
-    History,
-    KeyRound,
-    ListFilter,
-    MoreVertical,
-    Pencil,
-    Plus,
-    RefreshCcw,
-    RotateCcwKey,
-    Search,
-    ShieldCheck,
-    SlidersHorizontal,
-    Sparkles,
-    Trash2,
-    UserRound,
-    X,
-  } from "@lucide/svelte";
-
-  type DeviceType = string;
-  type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
-  type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
-  type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | null;
-  type ActivePopover =
-    | "type-sort"
-    | "device-sort"
-    | "type-context"
-    | "device-context"
-    | "type-blank-context"
-    | "list-blank-context"
-    | "detail-blank-context"
-    | "more"
-    | null;
-  type ConfirmationAction = "delete-device" | "delete-account" | "delete-device-type";
-  type PopoverPosition = {
-    top: number;
-    left: number;
-  };
-  type PendingConfirmation = {
-    action: ConfirmationAction;
-    title: string;
-    message: string;
-    detail: string;
-    confirmLabel: string;
-    deviceType?: "全部设备" | DeviceType;
-  };
-  type DeviceTypeMeta = {
-    label: string;
-    iconText: string;
-    color: string;
-  };
-  type GeneratorPreset = "balanced" | "readable" | "strong" | "pin";
-  type ViewState = {
-    selectedDeviceType: "全部设备" | DeviceType;
-    selectedId: number;
-    searchQuery: string;
-    sortMode: SortMode;
-  };
-
-  type PasswordHistory = {
-    id: number;
-    password: string;
-    newPassword: string;
-    changedAt: string;
-    reason: string;
-  };
-
-  type DeviceAccount = {
-    id: number;
-    title: string;
-    username: string;
-    password: string;
-    website: string;
-    tag: string;
-    notes: string;
-    updatedAt: string;
-    history: PasswordHistory[];
-  };
-
-  type VaultItem = {
-    id: number;
-    title: string;
-    deviceName: string;
-    deviceType: DeviceType;
-    username: string;
-    password: string;
-    website: string;
-    ipAddress: string;
-    tag: string;
-    iconText: string;
-    iconClass: string;
-    updatedAt: string;
-    notes: string;
-    history: PasswordHistory[];
-    accounts?: DeviceAccount[];
-  };
-
-  type DeviceForm = {
-    id: number | null;
-    deviceName: string;
-    deviceType: string;
-    title: string;
-    username: string;
-    password: string;
-    website: string;
-    ipAddress: string;
-    tag: string;
-    notes: string;
-  };
-
-  type TypeForm = {
-    originalLabel: string | null;
-    label: string;
-    iconText: string;
-    color: string;
-  };
-
-  type AccountForm = {
-    id: number | null;
-    title: string;
-    username: string;
-    password: string;
-    website: string;
-    notes: string;
-  };
-  type BulkPasswordForm = {
-    deviceType: "全部设备" | DeviceType;
-    username: string;
-    password: string;
-    reason: string;
-  };
-  type BulkPasswordMatch = {
-    itemId: number;
-    accountId: number;
-    deviceName: string;
-    deviceType: string;
-    ipAddress: string;
-    username: string;
-    tag: string;
-  };
-  type GeneratorTarget = "current-account" | "bulk-password" | null;
-  type TypePickerScope = "device" | "bulk";
-  type ResizePane = "sidebar" | "list" | "generator";
-
-  const STORAGE_KEY = "device-password-manager-state-v1";
-  const SIDEBAR_DEFAULT_WIDTH = 252;
-  const SIDEBAR_MIN_WIDTH = 208;
-  const SIDEBAR_MAX_WIDTH = 360;
-  const LIST_DEFAULT_WIDTH = 368;
-  const LIST_MIN_WIDTH = 300;
-  const LIST_MAX_WIDTH = 540;
-  const GENERATOR_DEFAULT_WIDTH = 460;
-  const GENERATOR_MIN_WIDTH = 360;
-  const GENERATOR_MAX_WIDTH = 680;
-  const DETAIL_MIN_WIDTH = 420;
-  const RESIZER_WIDTH = 8;
-
-  const initialItems: VaultItem[] = [];
-
-  const defaultDeviceTypeMeta: Array<DeviceTypeMeta & { label: "全部设备" | DeviceType }> = [
-    { label: "全部设备", iconText: "全", color: "blue" },
-  ];
-  const fallbackDeviceTypeMeta: DeviceTypeMeta = { label: "", iconText: "设", color: "blue" };
-  const typeColorOptions = [
-    { value: "blue", label: "蓝色" },
-    { value: "cyan", label: "青色" },
-    { value: "rose", label: "红色" },
-    { value: "indigo", label: "靛蓝" },
-    { value: "sand", label: "沙色" },
-    { value: "gold", label: "金色" },
-    { value: "dark", label: "深色" },
-  ];
+    APP_TITLE,
+    DEFAULT_ACCOUNT_TAG,
+    DETAIL_MIN_WIDTH,
+    GENERATOR_DEFAULT_WIDTH,
+    GENERATOR_MAX_WIDTH,
+    GENERATOR_MIN_WIDTH,
+    LIST_DEFAULT_WIDTH,
+    LIST_MAX_WIDTH,
+    LIST_MIN_WIDTH,
+    RESIZER_WIDTH,
+    SIDEBAR_DEFAULT_WIDTH,
+    SIDEBAR_MAX_WIDTH,
+    SIDEBAR_MIN_WIDTH,
+    STORAGE_KEY,
+    defaultDeviceTypeMeta,
+    fallbackDeviceTypeMeta,
+    initialItems,
+  } from "./lib/constants";
+  import {
+    createAccountFromForm as createAccountFromFormData,
+    formatDeviceAccountInfo,
+    formatDeviceInfo,
+    getBulkPasswordMatches as getBulkPasswordMatchesData,
+    getBulkPasswordMatchKey,
+    getBulkUsernameSuggestions,
+    updateAccountPassword,
+  } from "./lib/device-commands";
+  import {
+    clampPaneWidth as clampPaneWidthValue,
+    sortDeviceTypeOptions,
+  } from "./lib/layout";
+  import {
+    applyGeneratorPresetOptions,
+    buildGeneratorPool,
+    generatePasswordValue,
+    normalizeGeneratorLength,
+    type GeneratorOptions,
+  } from "./lib/password-generator";
+  import type {
+    AccountForm,
+    ActiveDialog,
+    ActivePopover,
+    BulkPasswordForm,
+    BulkPasswordMatch,
+    BulkUsernameSuggestion,
+    ConfigFormat,
+    DeviceAccount,
+    DeviceForm,
+    DeviceType,
+    DeviceTypeMeta,
+    DeviceTypeSortMode,
+    GeneratorPreset,
+    GeneratorTarget,
+    PendingConfirmation,
+    PopoverPosition,
+    ResizePane,
+    SortMode,
+    TypeForm,
+    TypePickerScope,
+    VaultItem,
+    ViewState,
+  } from "./lib/types";
+  import {
+    filterDeviceTypeChoices,
+    formatDateTime,
+    readNumber,
+  } from "./lib/utils";
+  import {
+    createConfigFilename,
+    createConfigPayload,
+    formatConfigSummary,
+    getConfigSummary,
+    getConfigMimeType,
+    inferConfigFormat,
+    normalizeDeviceTypeMetaList,
+    normalizeHiddenDeviceTypes,
+    parseConfigContent,
+    parseConfigContentWithFallback,
+  } from "./lib/config";
+  import {
+    createBlankAccount,
+    createBlankItem,
+    createEmptyAccountForm,
+    createEmptyDeviceForm,
+    getAccounts,
+    getVaultItemUpdatedTimestamp,
+    iconClassForColor,
+    iconClassForType as resolveIconClassForType,
+    matchesVaultItemSearch,
+    normalizeVaultItems,
+    syncItemWithAccounts,
+    isBlankPlaceholderAccount,
+  } from "./lib/vault";
 
   let items: VaultItem[] = initialItems;
   let customDeviceTypes: DeviceTypeMeta[] = [];
@@ -196,6 +121,9 @@
   let activeDialog: ActiveDialog = null;
   let activePopover: ActivePopover = null;
   let pendingConfirmation: PendingConfirmation | null = null;
+  let pendingConfigContent = "";
+  let pendingConfigFormat: ConfigFormat = "json";
+  let exportConfigFormat: ConfigFormat = "json";
   let contextDeviceType: "全部设备" | DeviceType = "全部设备";
   let popoverPosition: PopoverPosition = { top: 72, left: 22 };
   let deviceForm: DeviceForm = createEmptyDeviceForm();
@@ -203,11 +131,13 @@
   let typeForm: TypeForm = { originalLabel: null, label: "", iconText: "", color: "blue" };
   let passwordForm = { password: "", reason: "" };
   let bulkPasswordForm: BulkPasswordForm = { deviceType: "全部设备", username: "", password: "", reason: "" };
+  let bulkUsernameSearch = "";
   let bulkPasswordDeselectedKeys: string[] = [];
   let openTypePicker: TypePickerScope | null = null;
   let deviceTypeSearch = "";
   let bulkTypeSearch = "";
   let selectedAccountId = 0;
+  let selectedAccountIds: number[] = [];
   let passwordVisible = false;
   let historyOpen = true;
   let visibleHistoryIds: number[] = [];
@@ -250,8 +180,9 @@
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.items)) items = normalizeVaultItems(parsed.items);
-        if (Array.isArray(parsed.customDeviceTypes)) customDeviceTypes = parsed.customDeviceTypes;
-        if (Array.isArray(parsed.hiddenDeviceTypes)) hiddenDeviceTypes = parsed.hiddenDeviceTypes;
+        if (Array.isArray(parsed.customDeviceTypes)) customDeviceTypes = normalizeDeviceTypeMetaList(parsed.customDeviceTypes);
+        ensureDeviceTypeMetaForItems(items);
+        hiddenDeviceTypes = normalizeHiddenDeviceTypes(parsed.hiddenDeviceTypes, items);
         if (parsed.paneLayout) {
           sidebarWidth = clampPaneWidth(readNumber(parsed.paneLayout.sidebarWidth, SIDEBAR_DEFAULT_WIDTH), "sidebar");
           listWidth = clampPaneWidth(readNumber(parsed.paneLayout.listWidth, LIST_DEFAULT_WIDTH), "list");
@@ -288,7 +219,7 @@
 
   $: filteredItems = items.filter((item) => {
     const query = searchQuery.trim().toLowerCase();
-    const matchesQuery = !query || matchesSearch(item, query);
+    const matchesQuery = !query || matchesVaultItemSearch(item, query);
 
     const isSearching = query.length > 0;
     const matchesType = isSearching || selectedDeviceType === "全部设备" || item.deviceType === selectedDeviceType;
@@ -296,7 +227,7 @@
   }).sort((left, right) => {
     if (sortMode === "nameAsc") return left.deviceName.localeCompare(right.deviceName, "zh-Hans-CN");
     if (sortMode === "typeAsc") return left.deviceType.localeCompare(right.deviceType, "zh-Hans-CN");
-    return right.id - left.id;
+    return getVaultItemUpdatedTimestamp(right) - getVaultItemUpdatedTimestamp(left) || right.id - left.id;
   });
 
   $: selectedItem = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0] ?? createBlankItem();
@@ -306,6 +237,7 @@
   $: if (filteredItems.length > 0 && !filteredItems.some((item) => item.id === selectedId)) {
     selectedId = filteredItems[0].id;
     selectedAccountId = 0;
+    selectedAccountIds = [];
   }
 
   $: deviceTypeOptions = [
@@ -335,8 +267,18 @@
 
   $: selectedAccounts = getAccounts(selectedItem);
   $: selectedAccount = selectedAccounts.find((account) => account.id === selectedAccountId) ?? selectedAccounts[0] ?? createBlankAccount();
+  $: selectedAccountBatch = selectedAccounts.filter((account) => selectedAccountIds.includes(account.id));
+  $: selectedAccountTargets = selectedAccountBatch.length > 0 ? selectedAccountBatch : selectedAccount.id ? [selectedAccount] : [];
+  $: selectedAccountTargetCount = selectedAccountTargets.length;
+  $: canDeleteSelectedAccountTargets = selectedAccountTargetCount > 0;
   $: if (selectedAccounts.length > 0 && !selectedAccounts.some((account) => account.id === selectedAccountId)) {
     selectedAccountId = selectedAccounts[0].id;
+  }
+  $: {
+    const validSelectedAccountIds = selectedAccountIds.filter((id) => selectedAccounts.some((account) => account.id === id));
+    if (validSelectedAccountIds.length !== selectedAccountIds.length) {
+      selectedAccountIds = validSelectedAccountIds;
+    }
   }
   $: passwordStrength = selectedAccount.password.length >= 14 ? "较强" : selectedAccount.password.length >= 10 ? "一般" : "较弱";
   $: selectedTypeDeviceCount = getDeviceTypeCount(selectedDeviceType);
@@ -344,12 +286,15 @@
   $: listContextMeta = deviceTypeRows.find((type) => type.label === listContextLabel) ?? defaultDeviceTypeMeta[0];
   $: searchPlaceholder =
     searchQuery.trim() || selectedDeviceType === "全部设备"
-      ? "搜索设备名或 IP，快速定位凭据"
+      ? "搜索设备名或 IP，快速定位资产"
       : `在${selectedDeviceType}中搜索设备`;
   $: sortedHistory = [...selectedAccount.history].sort((left, right) =>
     historySortDesc ? right.id - left.id : left.id - right.id
   );
-  $: bulkPasswordMatches = getBulkPasswordMatches(bulkPasswordForm);
+  $: bulkUsernameSuggestions = bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim()
+    ? getBulkUsernameSuggestions(items, bulkPasswordForm, bulkUsernameSearch)
+    : [];
+  $: bulkPasswordMatches = bulkPasswordForm.username.trim() ? getBulkPasswordMatchesData(items, bulkPasswordForm) : [];
   $: bulkPasswordSelectedMatches = bulkPasswordMatches.filter((match) =>
     !bulkPasswordDeselectedKeys.includes(getBulkPasswordMatchKey(match))
   );
@@ -363,7 +308,7 @@
     excludeSimilar;
     allowedSymbols;
     excludedCharacters;
-    generatorPool = buildGeneratorPool();
+    generatorPool = buildGeneratorPool(getGeneratorOptions());
   }
   function snapshotView(): ViewState {
     return {
@@ -383,43 +328,6 @@
     );
   }
 
-  function normalizeSearchValue(value: string) {
-    return value.trim().toLowerCase();
-  }
-
-  function compactSearchValue(value: string) {
-    return normalizeSearchValue(value).replace(/[\s._:/\\-]+/g, "");
-  }
-
-  function fuzzyContains(source: string, query: string) {
-    if (!query) return true;
-    if (source.includes(query)) return true;
-
-    const compactSource = compactSearchValue(source);
-    const compactQuery = compactSearchValue(query);
-    if (!compactQuery) return true;
-    if (compactSource.includes(compactQuery)) return true;
-
-    let queryIndex = 0;
-    for (const char of compactSource) {
-      if (char === compactQuery[queryIndex]) queryIndex += 1;
-      if (queryIndex === compactQuery.length) return true;
-    }
-    return false;
-  }
-
-  function matchesSearch(item: VaultItem, query: string) {
-    const deviceName = normalizeSearchValue(item.deviceName);
-    const ipAddress = normalizeSearchValue(item.ipAddress);
-    return fuzzyContains(deviceName, query) || fuzzyContains(ipAddress, query);
-  }
-
-  function filterDeviceTypeChoices<T extends { label: string }>(types: T[], query: string) {
-    const normalizedQuery = normalizeSearchValue(query);
-    if (!normalizedQuery) return types;
-    return types.filter((type) => normalizeSearchValue(type.label).includes(normalizedQuery));
-  }
-
   function pushNavigationState() {
     if (restoringView) return;
     const current = snapshotView();
@@ -434,6 +342,7 @@
     restoringView = true;
     selectedDeviceType = state.selectedDeviceType;
     selectedId = state.selectedId;
+    selectedAccountIds = [];
     searchQuery = state.searchQuery;
     sortMode = state.sortMode;
     queueMicrotask(() => {
@@ -457,8 +366,7 @@
     applyViewState(next);
   }
 
-  function updateSearch(event: Event) {
-    const value = (event.currentTarget as HTMLInputElement).value;
+  function updateSearchValue(value: string) {
     if (value === searchQuery) return;
     if (!searchQuery.trim() || !value.trim()) pushNavigationState();
     searchQuery = value;
@@ -482,6 +390,7 @@
     searchQuery = "";
     const firstMatch = items.find((item) => deviceType === "全部设备" || item.deviceType === deviceType);
     selectedId = firstMatch?.id ?? 0;
+    selectedAccountIds = [];
     activePopover = null;
     visibleHistoryIds = [];
   }
@@ -491,6 +400,7 @@
     pushNavigationState();
     selectedId = id;
     selectedAccountId = 0;
+    selectedAccountIds = [];
     passwordVisible = false;
     visibleHistoryIds = [];
   }
@@ -540,90 +450,33 @@
     scheduleStatusDismiss(3000);
   }
 
-  function buildGeneratorPool() {
-    const groups = getGeneratorGroups();
-    return uniqueChars(groups.flatMap((group) => group.chars).join(""));
-  }
-
-  function getGeneratorGroups() {
-    const customExcludes = new Set(
-      `${excludedCharacters}${excludeSimilar ? "0O1Il|`'" : ""}`.split("")
-    );
-    const filter = (source: string) =>
-      uniqueChars(
-        source
-          .split("")
-          .filter((char) => !customExcludes.has(char))
-          .join("")
-      );
-
-    return [
-      { key: "upper", chars: useUpper ? filter("ABCDEFGHIJKLMNOPQRSTUVWXYZ") : "" },
-      { key: "lower", chars: useLower ? filter("abcdefghijklmnopqrstuvwxyz") : "" },
-      { key: "numbers", chars: useNumbers ? filter("0123456789") : "" },
-      { key: "symbols", chars: useSymbols ? filter(allowedSymbols) : "" },
-    ].filter((group) => group.chars.length > 0);
-  }
-
-  function uniqueChars(value: string) {
-    return Array.from(new Set(value.split(""))).join("");
-  }
-
-  function randomIndex(max: number) {
-    const values = new Uint32Array(1);
-    crypto.getRandomValues(values);
-    return values[0] % max;
-  }
-
-  function pickFrom(source: string, previous = "") {
-    if (source.length === 0) return "";
-    if (!preventRepeats || source.length === 1) return source[randomIndex(source.length)];
-
-    let next = source[randomIndex(source.length)];
-    let guard = 0;
-    while (next === previous && guard < 8) {
-      next = source[randomIndex(source.length)];
-      guard += 1;
-    }
-    return next;
-  }
-
-  function shufflePassword(chars: string[]) {
-    for (let index = chars.length - 1; index > 0; index -= 1) {
-      const swapIndex = randomIndex(index + 1);
-      [chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]];
-    }
-    return chars;
+  function getGeneratorOptions(): GeneratorOptions {
+    return {
+      length: generatorLength,
+      useUpper,
+      useLower,
+      useNumbers,
+      useSymbols,
+      excludeSimilar,
+      preventRepeats,
+      minimumNumbers,
+      minimumSymbols,
+      allowedSymbols,
+      excludedCharacters,
+    };
   }
 
   function generatePassword() {
-    const groups = getGeneratorGroups();
-    const pool = groups.map((group) => group.chars).join("");
+    generatedPassword = generatePasswordValue(getGeneratorOptions());
+  }
 
-    if (!pool) {
-      generatedPassword = "";
-      return;
-    }
-
-    const numbers = groups.find((group) => group.key === "numbers")?.chars ?? "";
-    const symbols = groups.find((group) => group.key === "symbols")?.chars ?? "";
-    const requiredNumbers = numbers ? Math.min(minimumNumbers, generatorLength) : 0;
-    const requiredSymbols = symbols ? Math.min(minimumSymbols, generatorLength - requiredNumbers) : 0;
-    const required: string[] = [];
-
-    for (let index = 0; index < requiredNumbers; index += 1) {
-      required.push(pickFrom(numbers, required[required.length - 1]));
-    }
-
-    for (let index = 0; index < requiredSymbols; index += 1) {
-      required.push(pickFrom(symbols, required[required.length - 1]));
-    }
-
-    while (required.length < generatorLength) {
-      required.push(pickFrom(pool, required[required.length - 1]));
-    }
-
-    generatedPassword = shufflePassword(required).join("");
+  function clampGeneratorMinimums(changedField: "numbers" | "symbols" = "symbols") {
+    minimumNumbers = Math.min(generatorLength, Math.max(0, minimumNumbers));
+    minimumSymbols = Math.min(generatorLength, Math.max(0, minimumSymbols));
+    const overflow = minimumNumbers + minimumSymbols - generatorLength;
+    if (overflow <= 0) return;
+    if (changedField === "numbers") minimumSymbols = Math.max(0, minimumSymbols - overflow);
+    else minimumNumbers = Math.max(0, minimumNumbers - overflow);
   }
 
   function openGeneratorPanel(target: GeneratorTarget = null) {
@@ -642,61 +495,51 @@
   }
 
   function applyGeneratorPreset(preset: GeneratorPreset) {
-    generatorPreset = preset;
-    if (preset === "readable") {
-      generatorLength = 16;
-      useUpper = true;
-      useLower = true;
-      useNumbers = true;
-      useSymbols = false;
-      excludeSimilar = true;
-      preventRepeats = true;
-      minimumNumbers = 2;
-      minimumSymbols = 0;
-    } else if (preset === "strong") {
-      generatorLength = 24;
-      useUpper = true;
-      useLower = true;
-      useNumbers = true;
-      useSymbols = true;
-      excludeSimilar = true;
-      preventRepeats = true;
-      minimumNumbers = 3;
-      minimumSymbols = 3;
-    } else if (preset === "pin") {
-      generatorLength = 12;
-      useUpper = false;
-      useLower = false;
-      useNumbers = true;
-      useSymbols = false;
-      excludeSimilar = false;
-      preventRepeats = false;
-      minimumNumbers = 12;
-      minimumSymbols = 0;
-    } else {
-      generatorLength = 8;
-      useUpper = true;
-      useLower = true;
-      useNumbers = true;
-      useSymbols = true;
-      excludeSimilar = true;
-      preventRepeats = false;
-      minimumNumbers = 2;
-      minimumSymbols = 2;
-    }
+    const presetOptions = applyGeneratorPresetOptions(preset);
+    generatorPreset = presetOptions.preset;
+    generatorLength = presetOptions.length;
+    useUpper = presetOptions.useUpper;
+    useLower = presetOptions.useLower;
+    useNumbers = presetOptions.useNumbers;
+    useSymbols = presetOptions.useSymbols;
+    excludeSimilar = presetOptions.excludeSimilar;
+    preventRepeats = presetOptions.preventRepeats;
+    minimumNumbers = presetOptions.minimumNumbers;
+    minimumSymbols = presetOptions.minimumSymbols;
+    allowedSymbols = presetOptions.allowedSymbols;
+    excludedCharacters = presetOptions.excludedCharacters;
     generatorLengthInput = String(generatorLength);
     generatePassword();
-  }
-
-  function normalizeGeneratorLength(length: number) {
-    return Math.min(24, Math.max(3, Number.isFinite(length) ? Math.round(length) : 8));
   }
 
   function setGeneratorLength(length: number, syncInput = true) {
     generatorLength = normalizeGeneratorLength(length);
     if (syncInput) generatorLengthInput = String(generatorLength);
-    if (minimumNumbers > generatorLength) minimumNumbers = generatorLength;
-    if (minimumSymbols > generatorLength) minimumSymbols = generatorLength;
+    clampGeneratorMinimums();
+    generatePassword();
+  }
+
+  function setGeneratorMinimumNumbers(value: number | string) {
+    const nextValue = Number(value);
+    minimumNumbers = Math.min(generatorLength, Math.max(0, Number.isFinite(nextValue) ? Math.round(nextValue) : 0));
+    clampGeneratorMinimums("numbers");
+    generatePassword();
+  }
+
+  function setGeneratorMinimumSymbols(value: number | string) {
+    const nextValue = Number(value);
+    minimumSymbols = Math.min(generatorLength, Math.max(0, Number.isFinite(nextValue) ? Math.round(nextValue) : 0));
+    clampGeneratorMinimums("symbols");
+    generatePassword();
+  }
+
+  function setAllowedSymbols(value: string) {
+    allowedSymbols = value;
+    generatePassword();
+  }
+
+  function setExcludedCharacters(value: string) {
+    excludedCharacters = value;
     generatePassword();
   }
 
@@ -706,9 +549,12 @@
 
   function handleGeneratorLengthInput(value: string) {
     const nextValue = value.replace(/[^\d]/g, "");
-    generatorLengthInput = nextValue;
+    if (!nextValue) {
+      generatorLengthInput = String(generatorLength);
+      return;
+    }
 
-    if (!nextValue) return;
+    generatorLengthInput = nextValue;
 
     const parsedLength = Number(nextValue);
     if (parsedLength >= 3 && parsedLength <= 24) {
@@ -737,39 +583,12 @@
     deviceTypeSortMode = mode;
   }
 
-  function sortDeviceTypeOptions(types: DeviceTypeMeta[], mode: DeviceTypeSortMode, vaultItems: VaultItem[]) {
-    const rows = types.map((type, index) => ({
-      ...type,
-      count: vaultItems.filter((item) => item.deviceType === type.label).length,
-      index,
-    }));
-    if (mode === "nameAsc") {
-      rows.sort((left, right) => left.label.localeCompare(right.label, "zh-Hans-CN"));
-    } else if (mode === "countDesc") {
-      rows.sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "zh-Hans-CN"));
-    } else {
-      rows.sort((left, right) => left.index - right.index);
-    }
-    return rows.map(({ index, count, ...type }) => type);
-  }
-
-  function getMaxPaneWidth(pane: ResizePane) {
-    if (typeof window === "undefined") {
-      if (pane === "sidebar") return SIDEBAR_MAX_WIDTH;
-      if (pane === "list") return LIST_MAX_WIDTH;
-      return GENERATOR_MAX_WIDTH;
-    }
-    if (pane === "generator") {
-      return Math.max(GENERATOR_MIN_WIDTH, Math.min(GENERATOR_MAX_WIDTH, window.innerWidth - 120));
-    }
-    const availableWidth = window.innerWidth - DETAIL_MIN_WIDTH - RESIZER_WIDTH * 2;
-    if (pane === "sidebar") return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - listWidth));
-    return Math.max(LIST_MIN_WIDTH, Math.min(LIST_MAX_WIDTH, availableWidth - sidebarWidth));
-  }
-
   function clampPaneWidth(width: number, pane: ResizePane) {
-    const minWidth = pane === "sidebar" ? SIDEBAR_MIN_WIDTH : pane === "list" ? LIST_MIN_WIDTH : GENERATOR_MIN_WIDTH;
-    return Math.round(Math.min(Math.max(width, minWidth), getMaxPaneWidth(pane)));
+    const viewportWidth =
+      typeof window === "undefined"
+        ? DETAIL_MIN_WIDTH + SIDEBAR_MAX_WIDTH + LIST_MAX_WIDTH + RESIZER_WIDTH * 2
+        : window.innerWidth;
+    return clampPaneWidthValue(width, pane, viewportWidth, sidebarWidth, listWidth);
   }
 
   function clampPaneLayout() {
@@ -852,157 +671,36 @@
     }
   }
 
-  function accountFromItem(item: VaultItem): DeviceAccount {
-    return {
-      id: 1,
-      title: item.username || item.title || "未填写用户名",
-      username: item.username,
-      password: item.password,
-      website: item.website,
-      tag: item.tag,
-      notes: item.notes,
-      updatedAt: item.updatedAt,
-      history: item.history ?? [],
-    };
-  }
-
-  function readString(value: unknown, fallback = "") {
-    return typeof value === "string" ? value : fallback;
-  }
-
-  function readNumber(value: unknown, fallback: number) {
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-  }
-
-  function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
-    if (!Array.isArray(value)) return [];
-    return value.map((entry, index) => ({
-      id: readNumber(entry?.id, index + 1),
-      password: readString(entry?.password),
-      newPassword: readString(entry?.newPassword),
-      changedAt: readString(entry?.changedAt),
-      reason: readString(entry?.reason),
-    }));
-  }
-
-  function normalizeAccount(value: unknown, fallback: VaultItem, index: number): DeviceAccount {
-    const account = value as Partial<DeviceAccount>;
-    const username = readString(account.username, fallback.username);
-    return {
-      id: readNumber(account.id, index + 1),
-      title: username || readString(account.title, fallback.title || "未填写用户名") || "未填写用户名",
-      username,
-      password: readString(account.password, fallback.password),
-      website: readString(account.website, fallback.website),
-      tag: readString(account.tag, fallback.tag || fallback.deviceType) || fallback.deviceType,
-      notes: readString(account.notes, fallback.notes),
-      updatedAt: readString(account.updatedAt, fallback.updatedAt),
-      history: normalizeHistoryEntries(account.history ?? fallback.history),
-    };
-  }
-
-  function normalizeAccountIds(accounts: DeviceAccount[]) {
-    const usedIds = new Set<number>();
-    let nextId = 1;
-    return accounts.map((account) => {
-      let id = account.id > 0 ? account.id : nextId;
-      while (usedIds.has(id)) id += 1;
-      usedIds.add(id);
-      nextId = Math.max(nextId, id + 1);
-      return { ...account, id };
-    });
-  }
-
-  function normalizeVaultItem(value: unknown, index: number): VaultItem {
-    const item = value as Partial<VaultItem>;
-    const deviceType = readString(item.deviceType);
-    const fallback: VaultItem = {
-      id: readNumber(item.id, index + 1),
-      title: readString(item.title, "管理员账号") || "管理员账号",
-      deviceName: readString(item.deviceName, readString(item.title, `设备 ${index + 1}`)) || `设备 ${index + 1}`,
-      deviceType,
-      username: readString(item.username),
-      password: readString(item.password),
-      website: readString(item.website),
-      ipAddress: readString(item.ipAddress, readString((item as { ip?: unknown }).ip)),
-      tag: readString(item.tag, deviceType) || deviceType,
-      iconText: readString(item.iconText, getTypeMeta(deviceType).iconText),
-      iconClass: readString(item.iconClass, iconClassForType(deviceType)),
-      updatedAt: readString(item.updatedAt, formatDateTime(new Date())),
-      notes: readString(item.notes),
-      history: normalizeHistoryEntries(item.history),
-      accounts: [],
-    };
-    const accountSource = Array.isArray(item.accounts) && item.accounts.length > 0 ? item.accounts : [item];
-    const accounts = normalizeAccountIds(accountSource.map((account, accountIndex) => normalizeAccount(account, fallback, accountIndex)));
-    return syncItemWithAccounts(fallback, accounts);
-  }
-
-  function normalizeVaultItems(value: unknown) {
-    if (!Array.isArray(value)) throw new Error("invalid backup");
-    return value.map((item, index) => normalizeVaultItem(item, index));
-  }
-
-  function getAccounts(item: VaultItem) {
-    if (Array.isArray(item.accounts) && item.accounts.length > 0) return item.accounts;
-    return item.id ? [accountFromItem(item)] : [];
-  }
-
-  function createAccountFromForm(id: number, updatedAt: string): DeviceAccount {
-    const username = accountForm.username.trim();
-    return {
-      id,
-      title: username || "未填写用户名",
-      username,
-      password: accountForm.password,
-      website: accountForm.website.trim(),
-      tag: selectedItem.deviceName || selectedItem.deviceType,
-      notes: accountForm.notes.trim(),
-      updatedAt,
-      history: [],
-    };
-  }
-
-  function syncItemWithAccounts(item: VaultItem, accounts: DeviceAccount[]) {
-    const primaryAccount = accounts[0] ?? createBlankAccount();
-    return {
-      ...item,
-      title: primaryAccount.title,
-      username: primaryAccount.username,
-      password: primaryAccount.password,
-      website: primaryAccount.website,
-      tag: primaryAccount.tag,
-      notes: primaryAccount.notes,
-      updatedAt: primaryAccount.updatedAt,
-      history: primaryAccount.history,
-      accounts,
-    };
-  }
-
   function copyDeviceAccountInfo(account = selectedAccount) {
-    return [
-      account.username ? `用户名: ${account.username}` : "",
-      account.password ? `密码: ${account.password}` : "",
-    ].filter(Boolean).join("\n");
+    return formatDeviceAccountInfo(account);
   }
 
   function copyDeviceInfo(item = selectedItem) {
-    return [
-      item.deviceName,
-      item.deviceType ? `类型: ${item.deviceType}` : "",
-      item.ipAddress ? `IP: ${item.ipAddress}` : "",
-      `${getAccounts(item).length} 个账号`,
-    ].filter(Boolean).join("\n");
+    return formatDeviceInfo(item);
   }
 
   function copySelectedDeviceInfo() {
     activePopover = null;
+    if (!hasSelectedDevice) {
+      showStatus("请先选择设备");
+      return;
+    }
     copyText(copyDeviceInfo(), "设备信息");
   }
 
   function copySelectedAccountInfo() {
     activePopover = null;
-    copyText(copyDeviceAccountInfo(), "账号密码");
+    const targets = selectedAccountTargets;
+    if (!hasSelectedDevice || targets.length === 0) {
+      showStatus("请先选择账号");
+      return;
+    }
+    const accountsWithPassword = targets.filter((account) => account.password);
+    if (accountsWithPassword.length === 0) {
+      showStatus(targets.length > 1 ? "选中的账号都没有密码" : "当前账号没有密码");
+      return;
+    }
+    copyText(accountsWithPassword.map((account) => copyDeviceAccountInfo(account)).join("\n\n"), "账号密码");
   }
 
   function selectAccount(id: number) {
@@ -1012,81 +710,30 @@
     visibleHistoryIds = [];
   }
 
-  function createBlankItem(): VaultItem {
-    return {
-      id: 0,
-      title: "未选择设备",
-      deviceName: "未选择设备",
-      deviceType: "",
-      username: "",
-      password: "",
-      website: "",
-      ipAddress: "",
-      tag: "",
-      iconText: "?",
-      iconClass: iconClassForColor(fallbackDeviceTypeMeta.color),
-      updatedAt: formatDateTime(new Date()),
-      notes: "",
-      history: [],
-      accounts: [],
-    };
+  function isAccountSelectedForBatch(id: number) {
+    return selectedAccountIds.includes(id);
   }
 
-  function createBlankAccount(): DeviceAccount {
-    return {
-      id: 0,
-      title: "未选择账号",
-      username: "",
-      password: "",
-      website: "",
-      ipAddress: "",
-      tag: "",
-      notes: "",
-      updatedAt: formatDateTime(new Date()),
-      history: [],
-    };
+  function toggleAccountBatchSelection(id: number) {
+    selectedAccountIds = selectedAccountIds.includes(id)
+      ? selectedAccountIds.filter((accountId) => accountId !== id)
+      : [...selectedAccountIds, id];
   }
 
-  function createEmptyDeviceForm(): DeviceForm {
-    return {
-      id: null,
-      deviceName: "",
-      deviceType: "",
-      title: "管理员账号",
-      username: "",
-      password: "",
-      website: "",
-      notes: "",
-    };
+  function selectAllCurrentAccounts() {
+    selectedAccountIds = selectedAccounts.map((account) => account.id);
   }
 
-  function createEmptyAccountForm(): AccountForm {
-    return {
-      id: null,
-      title: "管理员账号",
-      username: "",
-      password: "",
-      website: "",
-      tag: "",
-      notes: "",
-    };
-  }
-
-  function formatDateTime(date: Date) {
-    return new Intl.DateTimeFormat("zh-CN", {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      weekday: "long",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(date);
+  function clearAccountBatchSelection() {
+    selectedAccountIds = [];
   }
 
   function getTypeMeta(deviceType: string) {
     return deviceTypeOptions.find((type) => type.label === deviceType) ?? fallbackDeviceTypeMeta;
+  }
+
+  function iconClassForType(deviceType: string) {
+    return resolveIconClassForType(deviceType, deviceTypeOptions);
   }
 
   function getDeviceTypeCount(deviceType: "全部设备" | DeviceType) {
@@ -1095,20 +742,6 @@
 
   function canDeleteDeviceType(deviceType: "全部设备" | DeviceType) {
     return deviceType !== "全部设备" && getDeviceTypeCount(deviceType) === 0;
-  }
-
-  function iconClassForColor(color: string) {
-    if (color === "cyan") return "icon-router";
-    if (color === "rose") return "icon-rose";
-    if (color === "indigo") return "icon-indigo";
-    if (color === "sand") return "icon-sand";
-    if (color === "gold") return "icon-gold";
-    if (color === "dark") return "icon-terminal";
-    return "icon-cyan";
-  }
-
-  function iconClassForType(deviceType: string) {
-    return iconClassForColor(getTypeMeta(deviceType).color);
   }
 
   function getPopoverPosition(trigger: HTMLElement): PopoverPosition {
@@ -1131,6 +764,8 @@
   }
 
   function openPopover(popover: ActivePopover, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     if (activePopover === popover) {
       activePopover = null;
       return;
@@ -1193,10 +828,7 @@
 
   function openSelectedDeviceContextMenu(event: MouseEvent) {
     if (!selectedItem.id) return;
-    if ((event.target as HTMLElement).closest("button, a, input, textarea, select, [role='button']")) {
-      event.preventDefault();
-      return;
-    }
+    if ((event.target as HTMLElement).closest("button, a, input, textarea, select, [role='button']")) return;
     openDeviceContextMenu(selectedItem, event);
   }
 
@@ -1211,6 +843,7 @@
     activePopover = null;
     activeDialog = null;
     pendingConfirmation = null;
+    pendingConfigContent = "";
     openTypePicker = null;
   }
 
@@ -1219,7 +852,11 @@
   }
 
   function handleGlobalContextMenu(event: MouseEvent) {
-    closePopoverWhenPointerLeavesMenu(event);
+    if (!activePopover) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest(".action-popover")) return;
+    const hasContextMenuOwner = target instanceof HTMLElement && target.closest(".sidebar, .list-scroll, .detail-pane");
+    if (!hasContextMenuOwner) activePopover = null;
   }
 
   function closeKeyboardSurface() {
@@ -1229,6 +866,7 @@
     }
     if (pendingConfirmation) {
       pendingConfirmation = null;
+      pendingConfigContent = "";
       return true;
     }
     if (activeDialog) {
@@ -1261,6 +899,7 @@
     if (activeDialog === "bulk-password") return saveBulkPasswordUpdate();
     if (activeDialog === "account") return saveAccount();
     if (activeDialog === "device") return saveDevice();
+    if (activeDialog === "export-config") return exportConfig();
   }
 
   function selectRelativeDevice(direction: 1 | -1) {
@@ -1408,6 +1047,7 @@
     customDeviceTypes = customDeviceTypes.filter((type) => type.label !== deviceType);
     selectedDeviceType = "全部设备";
     selectedId = items[0]?.id ?? 0;
+    selectedAccountIds = [];
     activePopover = null;
     activeDialog = null;
     showStatus("设备类型已删除");
@@ -1451,10 +1091,7 @@
               tag: item.tag === originalLabel ? label : item.tag,
               iconText: nextMeta.iconText,
               iconClass: iconClassForColor(nextMeta.color),
-              accounts: getAccounts(item).map((account) => ({
-                ...account,
-                tag: account.tag === originalLabel ? label : account.tag,
-              })),
+              accounts: getAccounts(item),
             }
           : item
       );
@@ -1484,18 +1121,19 @@
 
   function openEditDeviceDialog() {
     activePopover = null;
+    if (!hasSelectedDevice) {
+      showStatus("请先选择设备");
+      return;
+    }
     openTypePicker = null;
     deviceTypeSearch = "";
     deviceForm = {
       id: selectedItem.id,
       deviceName: selectedItem.deviceName,
       deviceType: selectedItem.deviceType,
-      title: selectedAccount.title,
       username: selectedAccount.username,
       password: selectedAccount.password,
-      website: selectedAccount.website,
       ipAddress: selectedItem.ipAddress,
-      tag: selectedAccount.tag,
       notes: selectedAccount.notes,
     };
     activeDialog = "device";
@@ -1518,10 +1156,6 @@
     if (deviceForm.id) {
       items = items.map((item) => {
         if (item.id !== deviceForm.id) return item;
-        const nextAccounts = getAccounts(item).map((account) => ({
-          ...account,
-          tag: account.tag === item.deviceType ? deviceForm.deviceType : account.tag,
-        }));
         return syncItemWithAccounts(
           {
             ...item,
@@ -1531,12 +1165,13 @@
             iconText: typeMeta.iconText,
             iconClass: iconClassForType(deviceForm.deviceType),
           },
-          nextAccounts
+          getAccounts(item)
         );
       });
       pushNavigationState();
       selectedId = deviceForm.id;
       selectedDeviceType = deviceForm.deviceType;
+      selectedAccountIds = [];
       activeDialog = null;
       return;
     }
@@ -1547,8 +1182,7 @@
       title: accountUsername || "未填写用户名",
       username: accountUsername,
       password: deviceForm.password,
-      website: deviceForm.website.trim(),
-      tag: deviceForm.tag.trim() || deviceForm.deviceType,
+      tag: DEFAULT_ACCOUNT_TAG,
       notes: deviceForm.notes.trim(),
       updatedAt: accountUpdatedAt,
       history: [],
@@ -1560,9 +1194,8 @@
       deviceType: deviceForm.deviceType,
       username: nextAccount.username,
       password: nextAccount.password,
-      website: nextAccount.website,
       ipAddress: deviceForm.ipAddress.trim(),
-      tag: nextAccount.tag,
+      tag: deviceForm.deviceType,
       iconText: typeMeta.iconText,
       iconClass: iconClassForType(deviceForm.deviceType),
       updatedAt: accountUpdatedAt,
@@ -1576,88 +1209,113 @@
     selectedId = nextItem.id;
     selectedDeviceType = nextItem.deviceType;
     selectedAccountId = nextAccount.id;
+    selectedAccountIds = [];
     activeDialog = null;
   }
 
   function openAddAccountDialog() {
     activePopover = null;
+    if (!hasSelectedDevice) {
+      showStatus("请先选择设备");
+      return;
+    }
     accountForm = createEmptyAccountForm();
     activeDialog = "account";
   }
 
   function openEditAccountDialog() {
     activePopover = null;
+    if (selectedAccountIds.length > 1) {
+      showStatus("编辑账号前请只选择一个账号");
+      return;
+    }
+    if (!hasSelectedDevice || !selectedAccount.id) {
+      showStatus("请先选择账号");
+      return;
+    }
     accountForm = {
       id: selectedAccount.id,
-      title: selectedAccount.username || selectedAccount.title,
       username: selectedAccount.username,
       password: selectedAccount.password,
-      website: selectedAccount.website,
       notes: selectedAccount.notes,
     };
     activeDialog = "account";
   }
 
   function saveAccount() {
-    if (!selectedItem.id) return;
+    if (!hasSelectedDevice) {
+      showStatus("请先选择设备");
+      return;
+    }
     const now = formatDateTime(new Date());
     const nextId = accountForm.id ?? Math.max(0, ...selectedAccounts.map((account) => account.id)) + 1;
-    const nextAccount = createAccountFromForm(nextId, now);
+    const nextAccount = createAccountFromFormData(accountForm, nextId, now);
     const nextAccounts = accountForm.id
       ? selectedAccounts.map((account) =>
-          account.id === accountForm.id ? { ...nextAccount, history: account.history, updatedAt: now } : account
+          account.id === accountForm.id ? { ...nextAccount, tag: account.tag, history: account.history, updatedAt: now } : account
         )
-      : [...selectedAccounts, nextAccount];
+      : [...selectedAccounts.filter((account) => !isBlankPlaceholderAccount(account)), nextAccount];
 
     items = items.map((item) =>
       item.id === selectedItem.id ? syncItemWithAccounts(item, nextAccounts) : item
     );
     pushNavigationState();
     selectedAccountId = nextId;
+    selectedAccountIds = [];
     activeDialog = null;
   }
 
   function deleteSelectedAccount() {
-    if (!selectedItem.id || !selectedAccount.id) return;
-    if (selectedAccounts.length <= 1) {
-      showStatus("每台设备至少保留一个账号");
-      activePopover = null;
-      return;
-    }
+    const targetIds = selectedAccountTargets.map((account) => account.id);
+    if (!selectedItem.id || targetIds.length === 0) return;
 
-    const nextAccounts = selectedAccounts.filter((account) => account.id !== selectedAccount.id);
+    const nextAccounts = selectedAccounts.filter((account) => !targetIds.includes(account.id));
     items = items.map((item) =>
-      item.id === selectedItem.id ? syncItemWithAccounts(item, nextAccounts) : item
+      item.id === selectedItem.id
+        ? syncItemWithAccounts({ ...item, updatedAt: formatDateTime(new Date()) }, nextAccounts)
+        : item
     );
     pushNavigationState();
-    selectedAccountId = nextAccounts[0]?.id ?? 0;
+    selectedAccountId = nextAccounts.some((account) => account.id === selectedAccountId)
+      ? selectedAccountId
+      : nextAccounts[0]?.id ?? 0;
+    selectedAccountIds = selectedAccountIds.filter((id) => nextAccounts.some((account) => account.id === id));
     passwordVisible = false;
     visibleHistoryIds = [];
     activePopover = null;
-    showStatus("账号已删除");
+    showStatus(targetIds.length > 1 ? `${targetIds.length} 个账号已删除` : "账号已删除");
   }
 
   function requestDeleteSelectedAccount() {
-    if (!selectedItem.id || !selectedAccount.id) return;
-    if (selectedAccounts.length <= 1) {
-      showStatus("每台设备至少保留一个账号");
+    const targets = selectedAccountTargets;
+    if (!hasSelectedDevice || targets.length === 0) {
+      showStatus("请先选择账号");
       activePopover = null;
       return;
     }
     activePopover = null;
     activeDialog = null;
+    const targetLabel = targets.length > 1
+      ? `${targets.length} 个账号`
+      : `“${targets[0].username || targets[0].title || "当前账号"}”`;
     pendingConfirmation = {
       action: "delete-account",
       title: "删除账号",
-      message: `确认删除“${selectedAccount.username || selectedAccount.title || "当前账号"}”？`,
-      detail: "该账号的当前密码和历史密码记录都会从当前设备中移除。",
+      message: `确认删除${targetLabel}？`,
+      detail: targets.length >= selectedAccounts.length
+        ? "选中账号的当前密码和历史密码记录都会移除，设备将显示为暂无账号。"
+        : targets.length > 1 ? "选中账号的当前密码和历史密码记录都会从当前设备中移除。" : "该账号的当前密码和历史密码记录都会从当前设备中移除。",
       confirmLabel: "删除账号",
     };
   }
 
   function openPasswordDialog() {
     activePopover = null;
-    passwordForm = { password: selectedAccount.password, reason: "" };
+    if (!hasSelectedDevice || selectedAccountTargets.length === 0) {
+      showStatus("请先选择账号");
+      return;
+    }
+    passwordForm = { password: "", reason: "" };
     activeDialog = "password";
   }
 
@@ -1665,10 +1323,11 @@
     activePopover = null;
     openTypePicker = null;
     bulkTypeSearch = "";
+    bulkUsernameSearch = "";
     resetBulkPasswordSelection();
     bulkPasswordForm = {
       deviceType: selectedDeviceType,
-      username: selectedAccount.id ? selectedAccount.username : "",
+      username: "",
       password: useGenerated ? generatedPassword : "",
       reason: "",
     };
@@ -1676,14 +1335,23 @@
   }
 
   function setBulkPasswordDeviceType(deviceType: "全部设备" | DeviceType) {
-    bulkPasswordForm = { ...bulkPasswordForm, deviceType };
+    bulkPasswordForm = { ...bulkPasswordForm, deviceType, username: "" };
+    bulkUsernameSearch = "";
     resetBulkPasswordSelection();
     bulkTypeSearch = "";
     openTypePicker = null;
   }
 
-  function updateBulkPasswordUsername(username: string) {
-    if (bulkPasswordForm.username === username) return;
+  function updateBulkUsernameSearch(username: string) {
+    bulkUsernameSearch = username;
+    if (!bulkPasswordForm.username) return;
+    bulkPasswordForm = { ...bulkPasswordForm, username: "" };
+    resetBulkPasswordSelection();
+  }
+
+  function selectBulkUsername(suggestion: BulkUsernameSuggestion) {
+    const username = suggestion.username;
+    bulkUsernameSearch = username;
     bulkPasswordForm = { ...bulkPasswordForm, username };
     resetBulkPasswordSelection();
   }
@@ -1696,36 +1364,6 @@
 
   function toggleTypePicker(scope: TypePickerScope) {
     openTypePicker = openTypePicker === scope ? null : scope;
-  }
-
-  function matchesBulkUsername(account: DeviceAccount, username: string) {
-    const target = username.trim().toLowerCase();
-    if (!target) return true;
-    return account.username.trim().toLowerCase() === target;
-  }
-
-  function matchesBulkDeviceType(item: VaultItem, deviceType: "全部设备" | DeviceType) {
-    return deviceType === "全部设备" || item.deviceType === deviceType;
-  }
-
-  function getBulkPasswordMatches(form: BulkPasswordForm): BulkPasswordMatch[] {
-    return items.filter((item) => matchesBulkDeviceType(item, form.deviceType)).flatMap((item) =>
-      getAccounts(item)
-        .filter((account) => matchesBulkUsername(account, form.username))
-        .map((account) => ({
-          itemId: item.id,
-          accountId: account.id,
-          deviceName: item.deviceName,
-          deviceType: item.deviceType,
-          ipAddress: item.ipAddress,
-          username: account.username,
-          tag: account.tag,
-        }))
-    );
-  }
-
-  function getBulkPasswordMatchKey(match: Pick<BulkPasswordMatch, "itemId" | "accountId">) {
-    return `${match.itemId}:${match.accountId}`;
   }
 
   function isBulkPasswordMatchSelected(match: BulkPasswordMatch) {
@@ -1752,31 +1390,21 @@
     bulkPasswordDeselectedKeys = [];
   }
 
-  function updateAccountPassword(account: DeviceAccount, password: string, changedAt: string, reason: string) {
-    const historyEntry: PasswordHistory = {
-      id: Math.max(0, ...account.history.map((entry) => entry.id)) + 1,
-      password: account.password,
-      newPassword: password,
-      changedAt,
-      reason,
-    };
-    return {
-      ...account,
-      password,
-      updatedAt: changedAt,
-      history: account.password ? [historyEntry, ...account.history] : account.history,
-    };
-  }
-
   function savePasswordUpdate() {
-    if (!passwordForm.password) {
+    const targetIds = selectedAccountTargets.map((account) => account.id);
+    if (!hasSelectedDevice || targetIds.length === 0) {
+      showStatus("请先选择账号");
+      activeDialog = null;
+      return;
+    }
+    if (!passwordForm.password.trim()) {
       showStatus("请输入新密码");
       return;
     }
     const changedAt = formatDateTime(new Date());
     const reason = passwordForm.reason.trim();
     const nextAccounts = selectedAccounts.map((account) =>
-      account.id === selectedAccount.id
+      targetIds.includes(account.id)
         ? updateAccountPassword(account, passwordForm.password, changedAt, reason)
         : account
     );
@@ -1787,11 +1415,12 @@
     activeDialog = null;
     passwordVisible = true;
     visibleHistoryIds = [];
+    showStatus(targetIds.length > 1 ? `${targetIds.length} 个账号密码已更新` : `${selectedAccount.username || selectedAccount.title || "当前账号"}密码已更新`);
   }
 
   function saveBulkPasswordUpdate() {
-    const password = bulkPasswordForm.password.trim();
-    if (!password) {
+    const password = bulkPasswordForm.password;
+    if (!password.trim()) {
       showStatus("请输入新密码");
       return;
     }
@@ -1840,6 +1469,7 @@
     selectedDeviceType = nextDeviceType;
     selectedId = 0;
     selectedAccountId = 0;
+    selectedAccountIds = [];
     activePopover = null;
     showStatus("设备已删除");
   }
@@ -1860,75 +1490,85 @@
   function confirmPendingAction() {
     const confirmation = pendingConfirmation;
     if (!confirmation) return;
+    const configContent = pendingConfigContent;
+    const configFormat = pendingConfigFormat;
     pendingConfirmation = null;
+    pendingConfigContent = "";
     if (confirmation.action === "delete-device-type") {
       deleteDeviceType(confirmation.deviceType ?? selectedDeviceType);
     } else if (confirmation.action === "delete-account") {
       deleteSelectedAccount();
     } else if (confirmation.action === "delete-device") {
       deleteSelectedDevice();
+    } else if (confirmation.action === "import-config" && configContent) {
+      applyImportedConfig(configContent, configFormat);
     }
   }
 
-  function createBackupPayload() {
-    return JSON.stringify({ items: normalizeVaultItems(items), customDeviceTypes, hiddenDeviceTypes }, null, 2);
-  }
-
-  function createBackupFilename() {
-    return `设备密码管理工具备份-${new Date().toISOString().slice(0, 10)}.json`;
-  }
-
-  async function exportData() {
-    const payload = createBackupPayload();
-    const filename = createBackupFilename();
+  function openExportConfigDialog() {
     activePopover = null;
+    activeDialog = "export-config";
+  }
+
+  async function exportConfig(format: ConfigFormat = exportConfigFormat) {
+    const payload = createConfigPayload(items, customDeviceTypes, hiddenDeviceTypes, format);
+    const filename = createConfigFilename(format);
+    const formatLabel = format.toUpperCase();
+    activePopover = null;
+    activeDialog = null;
 
     if (isTauri()) {
       try {
         const path = await saveFileDialog({
-          title: "导出 JSON 备份",
+          title: `导出 ${formatLabel} 配置`,
           defaultPath: filename,
-          filters: [{ name: "JSON", extensions: ["json"] }],
+          filters: [{ name: formatLabel, extensions: [format] }],
         });
         if (!path) {
           showStatus("已取消导出");
           return;
         }
         await writeTextFile(path, payload);
-        showStatus("备份已导出");
+        showStatus(`${formatLabel} 配置已导出`);
       } catch {
-        showStatus("备份导出失败");
+        showStatus("配置导出失败");
       }
       return;
     }
 
-    const blob = new Blob([payload], { type: "application/json" });
+    const blob = new Blob([payload], { type: getConfigMimeType(format) });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
-    showStatus("备份已导出");
+    showStatus(`${formatLabel} 配置已导出`);
   }
 
-  async function triggerImport() {
+  async function chooseConfigFile() {
     activePopover = null;
     if (isTauri()) {
       try {
         const path = await openFileDialog({
-          title: "导入 JSON 备份",
+          title: "选择要导入的配置文件",
           multiple: false,
-          filters: [{ name: "JSON", extensions: ["json"] }],
+          filters: [{ name: "配置文件", extensions: ["json", "csv", "ini"] }],
         });
         if (!path || Array.isArray(path)) {
           showStatus("已取消导入");
           return;
         }
-        const content = await readTextFile(path);
-        applyImportedBackup(content);
+        let content = "";
+        try {
+          content = await readTextFile(path);
+        } catch {
+          showStatus("配置读取失败");
+          return;
+        }
+        tryRequestApplyConfig(content, inferConfigFormat(path));
       } catch {
-        showStatus("备份导入失败");
+        showStatus("配置读取失败");
       }
       return;
     }
@@ -1936,31 +1576,84 @@
     document.getElementById("import-file")?.click();
   }
 
-  function applyImportedBackup(content: string) {
-    const parsed = JSON.parse(content);
-    items = normalizeVaultItems(parsed.items);
-    customDeviceTypes = Array.isArray(parsed.customDeviceTypes) ? parsed.customDeviceTypes : [];
-    hiddenDeviceTypes = Array.isArray(parsed.hiddenDeviceTypes) ? parsed.hiddenDeviceTypes : [];
+  function tryRequestApplyConfig(content: string, format: ConfigFormat) {
+    try {
+      requestApplyConfig(content, format);
+    } catch {
+      pendingConfigContent = "";
+      pendingConfirmation = null;
+      showStatus("配置文件格式不正确");
+    }
+  }
+
+  function requestApplyConfig(content: string, preferredFormat: ConfigFormat) {
+    const { config, format } = parseConfigContentWithFallback(content, preferredFormat);
+    const summary = getConfigSummary(config);
+    const summaryItems = formatConfigSummary(summary);
+    const formatMismatchDetail = preferredFormat === format
+      ? ""
+      : `文件扩展名像是 ${preferredFormat.toUpperCase()}，已按内容识别为 ${format.toUpperCase()} 配置。`;
+    activePopover = null;
+    activeDialog = null;
+    pendingConfigContent = content;
+    pendingConfigFormat = format;
+    pendingConfirmation = {
+      action: "import-config",
+      title: "覆盖导入配置",
+      message: `导入这个 ${format.toUpperCase()} 配置并覆盖当前数据？`,
+      detail: `${formatMismatchDetail}${formatMismatchDetail ? " " : ""}当前设备、账号和密码历史会被导入文件替换。需要保留现有数据时，请先导出当前配置。`,
+      confirmLabel: "覆盖导入",
+      summaryItems,
+    };
+  }
+
+  function ensureDeviceTypeMetaForItems(targetItems: VaultItem[]) {
+    const knownLabels = new Set([
+      ...defaultDeviceTypeMeta.map((type) => type.label),
+      ...customDeviceTypes.map((type) => type.label),
+    ]);
+    const missingTypes = targetItems.reduce<DeviceTypeMeta[]>((types, item) => {
+      const label = item.deviceType.trim();
+      if (!label || label === "全部设备" || knownLabels.has(label)) return types;
+      knownLabels.add(label);
+      types.push({
+        label,
+        iconText: item.iconText.trim() || label.slice(0, 1),
+        color: "blue",
+      });
+      return types;
+    }, []);
+    if (missingTypes.length > 0) customDeviceTypes = [...customDeviceTypes, ...missingTypes];
+  }
+
+  function applyImportedConfig(content: string, format: ConfigFormat) {
+    const config = parseConfigContent(content, format);
+    items = config.items;
+    customDeviceTypes = config.customDeviceTypes;
+    ensureDeviceTypeMetaForItems(items);
+    hiddenDeviceTypes = normalizeHiddenDeviceTypes(config.hiddenDeviceTypes, items);
     selectedId = items[0]?.id ?? 0;
     selectedAccountId = 0;
+    selectedAccountIds = [];
     selectedDeviceType = "全部设备";
     searchQuery = "";
     sortMode = "updatedDesc";
     backStack = [];
     forwardStack = [];
     visibleHistoryIds = [];
-    showStatus("备份已导入");
+    showStatus(`${format.toUpperCase()} 配置已导入`);
   }
 
-  async function importData(event: Event) {
+  async function selectConfigFileFromBrowser(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
 
     try {
-      applyImportedBackup(await file.text());
+      const content = await file.text();
+      tryRequestApplyConfig(content, inferConfigFormat(file.name));
     } catch {
-      showStatus("备份导入失败");
+      showStatus("配置读取失败");
     } finally {
       input.value = "";
     }
@@ -1968,45 +1661,20 @@
 </script>
 
 <main class="app-shell" style={layoutStyle}>
-  <input id="import-file" class="hidden-file-input" type="file" accept="application/json" on:change={importData} />
-  <aside class="sidebar" aria-label="设备类型" on:contextmenu={openTypeBlankContextMenu}>
-    <div class="pane-header sidebar-pane-header">
-      <div class="sidebar-pane-title">
-        <span class="pane-kicker">密码库</span>
-        <h2>设备类型</h2>
-      </div>
-      <div class="pane-actions">
-        <button class="icon-button compact-action" aria-label="新增设备类型" data-tooltip="新增设备类型" on:click={openAddTypeDialog}><Plus size={18} /></button>
-        <button class="icon-button compact-action" aria-label="编辑设备类型" data-tooltip="编辑设备类型" disabled={selectedDeviceType === "全部设备"} on:click={() => openEditTypeDialog()}><Pencil size={17} /></button>
-        <button
-          class="icon-button compact-action"
-          aria-label="删除设备类型"
-          disabled={!canDeleteDeviceType(selectedDeviceType)}
-          data-tooltip={selectedDeviceType === "全部设备" ? "全部设备不能删除" : selectedTypeDeviceCount > 0 ? "该类型下还有设备，不能直接删除" : "删除设备类型"}
-          on:click={() => requestDeleteDeviceType(selectedDeviceType)}
-        ><Trash2 size={17} /></button>
-        <button class="icon-button compact-action" aria-label="排序设备类型" data-tooltip="排序设备类型" on:click={(event) => openPopover("type-sort", event)}><ListFilter size={18} /></button>
-      </div>
-    </div>
-
-    <div class="device-type-list">
-      {#each deviceTypeRows as type}
-        <button
-          class:selected={selectedDeviceType === type.label}
-          class="device-type-row"
-          on:click={() => selectDeviceType(type.label)}
-          on:contextmenu={(event) => openTypeContextMenu(type.label, event)}
-        >
-          <span class={`type-icon type-${type.color}`}>{type.iconText}</span>
-          <span class="type-copy">
-            <strong>{type.label}</strong>
-            <small>{type.count} 个设备</small>
-          </span>
-          <ChevronRight size={17} />
-        </button>
-      {/each}
-    </div>
-  </aside>
+  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.csv,.ini,application/json,text/csv,text/plain" on:change={selectConfigFileFromBrowser} />
+  <SidebarPane
+    {deviceTypeRows}
+    {selectedDeviceType}
+    {selectedTypeDeviceCount}
+    canDeleteSelectedDeviceType={canDeleteDeviceType(selectedDeviceType)}
+    {openTypeBlankContextMenu}
+    {openAddTypeDialog}
+    {openEditTypeDialog}
+    requestDeleteSelectedType={() => requestDeleteDeviceType(selectedDeviceType)}
+    openTypeSortPopover={(event) => openPopover("type-sort", event)}
+    {selectDeviceType}
+    {openTypeContextMenu}
+  />
 
   <button
     class:active={resizingPane === "sidebar"}
@@ -2017,88 +1685,34 @@
   ></button>
 
   <section class="workspace">
-    <header class="topbar">
-      <div class="history-buttons">
-        <button class="icon-button" aria-label="后退" data-tooltip="后退" aria-keyshortcuts="Meta+ArrowLeft Control+ArrowLeft" disabled={backStack.length === 0} on:click={goBack}><ChevronRight class="back-icon" size={24} /></button>
-        <button class="icon-button" aria-label="前进" data-tooltip="前进" aria-keyshortcuts="Meta+ArrowRight Control+ArrowRight" disabled={forwardStack.length === 0} on:click={goForward}><ChevronRight size={24} /></button>
-      </div>
-
-      <label class="search-box">
-        <Search size={22} />
-        <input bind:this={searchInput} value={searchQuery} on:input={updateSearch} placeholder={searchPlaceholder} aria-label="搜索设备" aria-keyshortcuts="Meta+F Control+F Meta+K Control+K" />
-      </label>
-
-      <button class="primary-button" data-tooltip="新增设备" aria-keyshortcuts="Meta+N Control+N" on:click={() => openAddDeviceDialog()}>
-        <Plus size={22} />
-        <span>新增设备</span>
-      </button>
-      <button class="tool-button topbar-tool" data-tooltip="批量改密" aria-keyshortcuts="Meta+B Control+B" on:click={() => openBulkPasswordDialog()}>
-        <RotateCcwKey size={20} />
-        <span>批量改密</span>
-      </button>
-      <button class="tool-button topbar-tool accent" data-tooltip="密码生成器" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
-        <Sparkles size={20} />
-        <span>密码生成器</span>
-      </button>
-    </header>
+    <Topbar
+      backDisabled={backStack.length === 0}
+      forwardDisabled={forwardStack.length === 0}
+      bind:searchInput
+      {searchQuery}
+      {searchPlaceholder}
+      {goBack}
+      {goForward}
+      {updateSearchValue}
+      openAddDeviceDialog={() => openAddDeviceDialog()}
+      openBulkPasswordDialog={() => openBulkPasswordDialog()}
+      openGeneratorPanel={() => openGeneratorPanel()}
+    />
 
     <div class="content-grid">
-      <section class="item-list" aria-label="设备名称">
-        <div class="list-toolbar pane-list-toolbar">
-          <div class="list-context" aria-label="当前设备范围">
-            {#if searchQuery.trim()}
-              <Search size={21} />
-            {:else}
-              <span class={`context-type-icon type-${listContextMeta.color}`}>{listContextMeta.iconText}</span>
-            {/if}
-            <span>{listContextLabel}</span>
-            <small>{filteredItems.length}</small>
-          </div>
-          <div class="toolbar-actions">
-            <button class="icon-button" aria-label="排序设备" data-tooltip="排序设备" on:click={(event) => openPopover("device-sort", event)}><ListFilter size={20} /></button>
-          </div>
-        </div>
-
-        <div class="list-scroll" role="group" aria-label="设备列表右键菜单区域" on:contextmenu={openDeviceListBlankContextMenu}>
-          {#if filteredItems.length === 0}
-            <div class="empty-list" class:onboarding-empty={!hasDevices}>
-              <Folder size={24} />
-              <div>
-                <strong>{hasDevices ? "没有匹配的设备" : "密码库还是空的"}</strong>
-                <span>{hasDevices ? "换个设备名或 IP 搜索，或新增一台设备。" : "新增第一台设备后，这里会保存账号、当前密码和历史密码。"}</span>
-              </div>
-            </div>
-          {:else}
-            <h2 class="list-heading">{searchQuery.trim() ? "搜索结果" : "设备名称"}</h2>
-            {#each filteredItems as item}
-              {@const itemAccounts = getAccounts(item)}
-              {@const primaryAccount = itemAccounts[0] ?? createBlankAccount()}
-              <button
-                class:selected={item.id === selectedItem.id}
-                class:no-type-pill={selectedDeviceType !== "全部设备" && !searchQuery.trim()}
-                class="item-row"
-                on:click={() => selectDevice(item.id)}
-                on:contextmenu={(event) => openDeviceContextMenu(item, event)}
-              >
-                <span class={`item-icon ${item.iconClass}`}>
-                  {#if item.id === 1}
-                    <KeyRound size={28} />
-                  {:else}
-                    {item.iconText}
-                  {/if}
-                </span>
-                <span class="item-copy">
-                  <strong>{item.deviceName}</strong>
-                  <small>{itemAccounts.length} 个账号 · {primaryAccount.username || "未填写用户名"}{#if item.ipAddress} · {item.ipAddress}{/if}</small>
-                </span>
-                {#if selectedDeviceType === "全部设备" || searchQuery.trim()}
-                  <span class="item-type-pill">{item.deviceType}</span>
-                {/if}
-              </button>
-            {/each}
-          {/if}
-        </div>
-      </section>
+      <DeviceListPane
+        {filteredItems}
+        selectedId={selectedItem.id}
+        {selectedDeviceType}
+        {searchQuery}
+        {hasDevices}
+        {listContextLabel}
+        {listContextMeta}
+        openDeviceSortPopover={(event) => openPopover("device-sort", event)}
+        {openDeviceListBlankContextMenu}
+        {selectDevice}
+        {openDeviceContextMenu}
+      />
 
       <button
         class:active={resizingPane === "list"}
@@ -2108,892 +1722,165 @@
         on:pointerdown={(event) => startPaneResize("list", event)}
       ></button>
 
-      <section class="detail-pane" aria-label="设备详情" on:contextmenu={openDetailBlankContextMenu}>
-        {#if hasSelectedDevice}
-        <div class="detail-topline">
-          <div class="breadcrumb" aria-label="当前详情设备类型">
-            <span class="device-type-badge"><ShieldCheck size={16} /></span>
-            <span>{selectedItem.deviceType}</span>
-          </div>
-          <div class="detail-actions">
-            <button class="tool-button" data-tooltip="新增账号" on:click={openAddAccountDialog}>
-              <Plus size={19} />
-              <span>新增账号</span>
-            </button>
-            <button class="tool-button update-password-action" data-tooltip="更新密码" on:click={openPasswordDialog}>
-              <KeyRound size={19} />
-              <span>更新密码</span>
-            </button>
-            <button class="tool-button" data-tooltip="复制账号信息" on:click={copySelectedAccountInfo}>
-              <Copy size={20} />
-              <span>复制账号信息</span>
-            </button>
-            <button class="tool-button" data-tooltip="编辑账号" on:click={openEditAccountDialog}>
-              <Pencil size={20} />
-              <span>编辑账号</span>
-            </button>
-            <button class="icon-button" aria-label="更多操作" data-tooltip="更多操作" on:click={(event) => openPopover("more", event)}><MoreVertical size={22} /></button>
-          </div>
-        </div>
-
-        <div class="detail-scroll" role="group" aria-label="当前设备右键菜单区域" on:contextmenu={openSelectedDeviceContextMenu}>
-          <div class="identity-row">
-            <span class={`detail-icon ${selectedItem.iconClass}`}>
-              {#if selectedItem.id === 1}
-                <KeyRound size={42} />
-              {:else}
-                {selectedItem.iconText}
-              {/if}
-            </span>
-            <div>
-              <h1>{selectedItem.deviceName}</h1>
-              <p class="identity-subtitle">{selectedItem.deviceType} · {selectedAccounts.length} 个账号</p>
-              <div class="identity-meta">
-                <span>{selectedAccount.tag || selectedItem.deviceType}</span>
-                {#if selectedItem.ipAddress}
-                  <span>IP {selectedItem.ipAddress}</span>
-                {/if}
-                <span>当前账号更新于 {selectedAccount.updatedAt}</span>
-              </div>
-            </div>
-          </div>
-
-          {#if selectedItem.ipAddress}
-            <div class="device-info-row">
-              <div>
-                <span class="field-label">IP 地址</span>
-                <p>{selectedItem.ipAddress}</p>
-              </div>
-              <button class="icon-button inline" aria-label="复制 IP 地址" data-tooltip="复制 IP 地址" on:click={() => copyText(selectedItem.ipAddress, "IP 地址")}>
-                <Copy size={18} />
-              </button>
-            </div>
-          {/if}
-
-          <section class="account-section" aria-label="设备账号">
-            <div class="panel-heading account-heading">
-              <UserRound size={19} />
-              <h2>账号</h2>
-              <button class="secondary-button account-add-action" on:click={openAddAccountDialog}>新增账号</button>
-            </div>
-            <div class="account-list" role="tablist" aria-label="当前设备账号">
-              {#each selectedAccounts as account}
-                <button
-                  class:selected={account.id === selectedAccount.id}
-                  role="tab"
-                  aria-selected={account.id === selectedAccount.id}
-                  on:click={() => selectAccount(account.id)}
-                >
-                  <strong>{account.username || account.title || "未填写用户名"}</strong>
-                  <span>{account.tag || "登录账号"}</span>
-                </button>
-              {/each}
-            </div>
-          </section>
-
-          <div class="field-group">
-            <div class="field-row">
-              <div>
-                <span class="field-label">用户名</span>
-                <p>{selectedAccount.username}</p>
-              </div>
-              <button class="icon-button inline" aria-label="复制用户名" data-tooltip="复制用户名" on:click={() => copyText(selectedAccount.username, "用户名")}>
-                <Copy size={18} />
-              </button>
-            </div>
-            <div class="field-row">
-              <div>
-                <span class="field-label">密码</span>
-                <p class="password-value">{passwordVisible ? selectedAccount.password : "••••••••••"}</p>
-              </div>
-              <div class="field-tools">
-                <span class={`strength ${passwordStrength === "较弱" ? "weak" : ""}`}>{passwordStrength}</span>
-                <button class="icon-button inline" aria-label={passwordVisible ? "隐藏密码" : "显示密码"} data-tooltip={passwordVisible ? "隐藏密码" : "显示密码"} on:click={() => (passwordVisible = !passwordVisible)}>
-                  {#if passwordVisible}
-                    <EyeOff size={18} />
-                  {:else}
-                    <Eye size={18} />
-                  {/if}
-                </button>
-                <button class="icon-button inline" aria-label="复制密码" data-tooltip="复制密码" on:click={() => copyText(selectedAccount.password, "密码")}>
-                  <Copy size={18} />
-                </button>
-                <button class="secondary-button inline-update" on:click={openPasswordDialog}>更新</button>
-              </div>
-            </div>
-            {#if selectedAccount.notes}
-              <div class="field-row">
-                <div>
-                  <span class="field-label">备注</span>
-                  <p>{selectedAccount.notes}</p>
-                </div>
-              </div>
-            {/if}
-          </div>
-
-          <button class="meta-row" on:click={() => (historyOpen = !historyOpen)}>
-            {#if historyOpen}
-              <ChevronDown size={19} />
-            {:else}
-              <ChevronRight size={19} />
-            {/if}
-            <Clock3 size={18} />
-            <span>当前账号最后编辑 {selectedAccount.updatedAt}</span>
-          </button>
-
-          {#if historyOpen}
-            <section class="history-section">
-              <div class="panel-heading">
-                <History size={19} />
-                <h2>密码历史</h2>
-              </div>
-              {#if selectedAccount.history.length === 0}
-                <p class="quiet-text">暂无旧密码记录</p>
-              {:else}
-                {#each sortedHistory as history}
-                  <div class="history-row">
-                    <div>
-                      <div class="history-password-pair">
-                        <span>旧密码</span>
-                        <strong class:masked={!visibleHistoryIds.includes(history.id)}>
-                          {visibleHistoryIds.includes(history.id) ? history.password : maskPassword(history.password)}
-                        </strong>
-                        {#if history.newPassword}
-                          <span>新密码</span>
-                          <strong class:masked={!visibleHistoryIds.includes(history.id)}>
-                            {visibleHistoryIds.includes(history.id) ? history.newPassword : maskPassword(history.newPassword)}
-                          </strong>
-                        {/if}
-                      </div>
-                      <span>{history.reason}</span>
-                    </div>
-                    <div class="history-actions">
-                      <button class="icon-button inline" aria-label={visibleHistoryIds.includes(history.id) ? "隐藏旧密码" : "显示旧密码"} data-tooltip={visibleHistoryIds.includes(history.id) ? "隐藏旧密码" : "显示旧密码"} on:click={() => toggleHistoryPassword(history.id)}>
-                        {#if visibleHistoryIds.includes(history.id)}
-                          <EyeOff size={17} />
-                        {:else}
-                          <Eye size={17} />
-                        {/if}
-                      </button>
-                      <button class="icon-button inline" aria-label="复制旧密码" data-tooltip="复制旧密码" on:click={() => copyText(history.password, "旧密码")}>
-                        <Copy size={17} />
-                      </button>
-                    </div>
-                    <time>{history.changedAt}</time>
-                  </div>
-                {/each}
-              {/if}
-            </section>
-          {/if}
-
-        </div>
-        {:else}
-          <div class="detail-topline">
-            <div class="breadcrumb" aria-label="当前详情设备类型">
-              <span class="device-type-badge"><ShieldCheck size={16} /></span>
-              <span>设备账号</span>
-            </div>
-          </div>
-
-          <div class="detail-empty-state">
-            <span class="empty-state-icon"><Folder size={34} /></span>
-            <h1>{hasDevices ? "没有匹配的设备" : "密码库还是空的"}</h1>
-            <p>{hasDevices ? "当前搜索会匹配设备名和 IP。清空搜索后可以回到全部设备。" : "新增第一台设备后，账号、当前密码和旧密码记录会在这里集中管理。"}</p>
-            <div class="empty-state-actions">
-              {#if searchQuery.trim()}
-                <button class="secondary-button" on:click={clearSearch}>清空搜索</button>
-              {/if}
-              <button class="primary-button" on:click={() => openAddDeviceDialog()}>新增设备</button>
-            </div>
-          </div>
-        {/if}
-      </section>
+      <DeviceDetailPane
+        bind:passwordVisible
+        bind:historyOpen
+        {hasSelectedDevice}
+        {hasDevices}
+        {searchQuery}
+        {selectedItem}
+        {selectedAccounts}
+        {selectedAccount}
+        {selectedAccountIds}
+        {selectedAccountTargetCount}
+        {canDeleteSelectedAccountTargets}
+        {sortedHistory}
+        {visibleHistoryIds}
+        {passwordStrength}
+        {openDetailBlankContextMenu}
+        {openAddAccountDialog}
+        {openPasswordDialog}
+        {copySelectedAccountInfo}
+        {openEditAccountDialog}
+        {requestDeleteSelectedAccount}
+        openMorePopover={(event) => openPopover("more", event)}
+        {openSelectedDeviceContextMenu}
+        {copyText}
+        {selectAccount}
+        {toggleAccountBatchSelection}
+        {selectAllCurrentAccounts}
+        {clearAccountBatchSelection}
+        {maskPassword}
+        {toggleHistoryPassword}
+        {clearSearch}
+        openAddDeviceDialog={() => openAddDeviceDialog()}
+      />
     </div>
   </section>
 
-  {#if activePopover}
-    <div class="action-popover" role="menu" tabindex="-1" style={`top: ${popoverPosition.top}px; left: ${popoverPosition.left}px;`} on:contextmenu={(event) => event.preventDefault()}>
-      {#if activePopover === "type-sort"}
-        <div class="context-menu-title">
-          <strong>设备类型</strong>
-          <span>排序规则</span>
-        </div>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "default"} on:click={() => { setDeviceTypeSortMode("default"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>默认顺序</span>
-        </button>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "nameAsc"} on:click={() => { setDeviceTypeSortMode("nameAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>类型名称 A-Z</span>
-        </button>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "countDesc"} on:click={() => { setDeviceTypeSortMode("countDesc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备数量优先</span>
-        </button>
-      {:else if activePopover === "device-sort"}
-        <div class="context-menu-title">
-          <strong>设备列表</strong>
-          <span>排序规则</span>
-        </div>
-        <button class="menu-item" class:selected={sortMode === "updatedDesc"} on:click={() => { setSortMode("updatedDesc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>最近更新优先</span>
-        </button>
-        <button class="menu-item" class:selected={sortMode === "nameAsc"} on:click={() => { setSortMode("nameAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备名称 A-Z</span>
-        </button>
-        <button class="menu-item" class:selected={sortMode === "typeAsc"} on:click={() => { setSortMode("typeAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备类型 A-Z</span>
-        </button>
-      {:else if activePopover === "type-context"}
-        <div class="context-menu-title">
-          <strong>{contextDeviceType}</strong>
-          <span>设备类型</span>
-        </div>
-        {#if contextDeviceType !== selectedDeviceType || searchQuery.trim()}
-          <button class="menu-item" on:click={() => { selectDeviceType(contextDeviceType); activePopover = null; }}>
-            <Search size={16} />
-            <span>显示此类型</span>
-          </button>
-        {/if}
-        {#if contextDeviceType !== "全部设备"}
-          <div class="menu-separator"></div>
-          <button class="menu-item" on:click={() => openEditTypeDialog(contextDeviceType)}>
-            <Pencil size={16} />
-            <span>编辑设备类型</span>
-          </button>
-          <button
-            class="menu-item danger-menu-item"
-            disabled={!canDeleteDeviceType(contextDeviceType)}
-            title={getDeviceTypeCount(contextDeviceType) > 0 ? "该类型下还有设备，不能直接删除" : "删除设备类型"}
-            on:click={() => requestDeleteDeviceType(contextDeviceType)}
-          >
-            <Trash2 size={16} />
-            <span>删除设备类型</span>
-          </button>
-        {/if}
-        <button class="menu-item" on:click={openAddTypeDialog}>
-          <Plus size={16} />
-          <span>新增设备类型</span>
-        </button>
-        <div class="menu-separator"></div>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "default"} on:click={() => { setDeviceTypeSortMode("default"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>默认顺序</span>
-        </button>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "nameAsc"} on:click={() => { setDeviceTypeSortMode("nameAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>类型名称 A-Z</span>
-        </button>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "countDesc"} on:click={() => { setDeviceTypeSortMode("countDesc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备数量优先</span>
-        </button>
-      {:else if activePopover === "type-blank-context"}
-        <div class="context-menu-title">
-          <strong>设备类型</strong>
-          <span>管理设备分类</span>
-        </div>
-        <button class="menu-item" on:click={openAddTypeDialog}>
-          <Plus size={16} />
-          <span>新增设备类型</span>
-        </button>
-        <div class="menu-separator"></div>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "default"} on:click={() => { setDeviceTypeSortMode("default"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>默认顺序</span>
-        </button>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "nameAsc"} on:click={() => { setDeviceTypeSortMode("nameAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>类型名称 A-Z</span>
-        </button>
-        <button class="menu-item" class:selected={deviceTypeSortMode === "countDesc"} on:click={() => { setDeviceTypeSortMode("countDesc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备数量优先</span>
-        </button>
-      {:else if activePopover === "list-blank-context" || activePopover === "detail-blank-context"}
-        <div class="context-menu-title">
-          <strong>{activePopover === "detail-blank-context" ? "设备账号" : listContextLabel}</strong>
-          <span>{activePopover === "detail-blank-context" ? "未选择设备" : "当前密码库范围"}</span>
-        </div>
-        {#if searchQuery.trim()}
-          <button class="menu-item" on:click={() => { clearSearch(); activePopover = null; }}>
-            <Search size={16} />
-            <span>清空搜索</span>
-          </button>
-        {/if}
-        <button
-          class="menu-item"
-          disabled={deviceTypeOptions.length === 0}
-          title={deviceTypeOptions.length === 0 ? "请先在左栏创建设备类型" : "新增设备"}
-          on:click={() => openAddDeviceDialog(contextDeviceType)}
-        >
-          <Plus size={16} />
-          <span>新增设备</span>
-        </button>
-        <div class="menu-separator"></div>
-        <button class="menu-item" class:selected={sortMode === "updatedDesc"} on:click={() => { setSortMode("updatedDesc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>最近更新优先</span>
-        </button>
-        <button class="menu-item" class:selected={sortMode === "nameAsc"} on:click={() => { setSortMode("nameAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备名称 A-Z</span>
-        </button>
-        <button class="menu-item" class:selected={sortMode === "typeAsc"} on:click={() => { setSortMode("typeAsc"); activePopover = null; }}>
-          <ListFilter size={16} />
-          <span>设备类型 A-Z</span>
-        </button>
-      {:else if activePopover === "device-context"}
-        <div class="context-menu-title">
-          <strong>{selectedItem.deviceName}</strong>
-          <span>{selectedItem.ipAddress ? `${selectedItem.deviceType} · ${selectedItem.ipAddress}` : selectedItem.deviceType}</span>
-        </div>
-        <button class="menu-item" on:click={openEditDeviceDialog}>
-          <Pencil size={16} />
-          <span>编辑设备信息</span>
-        </button>
-        <button class="menu-item" on:click={copySelectedDeviceInfo}>
-          <Copy size={16} />
-          <span>复制设备信息</span>
-        </button>
-        <div class="menu-separator"></div>
-        <button class="menu-item danger-menu-item" on:click={requestDeleteSelectedDevice}>
-          <Trash2 size={16} />
-          <span>删除设备</span>
-        </button>
-      {:else if activePopover === "more"}
-        <h3>更多操作</h3>
-        <button on:click={openAddAccountDialog}>新增账号</button>
-        <button on:click={openEditDeviceDialog}>编辑设备信息</button>
-        <button on:click={openEditAccountDialog}>编辑当前账号</button>
-        <button on:click={openPasswordDialog}>更新当前密码</button>
-        <button on:click={requestDeleteSelectedAccount} disabled={selectedAccounts.length <= 1}>删除当前账号</button>
-        <button on:click={() => { historyOpen = !historyOpen; activePopover = null; }}>{historyOpen ? "收起密码历史" : "展开密码历史"}</button>
-        <button on:click={() => { historySortDesc = !historySortDesc; activePopover = null; }}>切换历史顺序</button>
-        <button on:click={triggerImport}>导入 JSON 备份</button>
-        <button on:click={exportData}>导出 JSON 备份</button>
-        <button class="danger-menu-item" on:click={requestDeleteSelectedDevice}>删除当前设备</button>
-      {/if}
-    </div>
-  {/if}
+  <ActionPopover
+    {activePopover}
+    {popoverPosition}
+    {deviceTypeSortMode}
+    {sortMode}
+    {contextDeviceType}
+    {selectedDeviceType}
+    {selectedItem}
+    {selectedAccountTargetCount}
+    {searchQuery}
+    {listContextLabel}
+    deviceTypeOptionsLength={deviceTypeOptions.length}
+    {historyOpen}
+    {setDeviceTypeSortMode}
+    {setSortMode}
+    {selectDeviceType}
+    {openEditTypeDialog}
+    {requestDeleteDeviceType}
+    {canDeleteDeviceType}
+    {getDeviceTypeCount}
+    {openAddTypeDialog}
+    {clearSearch}
+    {openAddDeviceDialog}
+    {openEditDeviceDialog}
+    {copySelectedDeviceInfo}
+    {requestDeleteSelectedDevice}
+    {openEditAccountDialog}
+    {openPasswordDialog}
+    {chooseConfigFile}
+    {openExportConfigDialog}
+    setActivePopover={(popover) => (activePopover = popover)}
+    toggleHistoryOpen={() => { historyOpen = !historyOpen; activePopover = null; }}
+    toggleHistorySort={() => { historySortDesc = !historySortDesc; activePopover = null; }}
+  />
 
-  {#if activeDialog}
-    <div class="modal-backdrop">
-      <div class="modal" class:type-modal={activeDialog === "type"} class:bulk-modal={activeDialog === "bulk-password"} role="dialog" aria-modal="true">
-        <header class="modal-header">
-          <h2>
-            {#if activeDialog === "type"}
-              {typeForm.originalLabel ? "编辑设备类型" : "新增设备类型"}
-            {:else if activeDialog === "password"}
-              修改密码
-            {:else if activeDialog === "bulk-password"}
-              批量改密
-            {:else if activeDialog === "account"}
-              {accountForm.id ? "编辑账号" : "新增账号"}
-            {:else if deviceForm.id}
-              编辑设备信息
-            {:else}
-              新增设备
-            {/if}
-          </h2>
-          <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" on:click={closeOverlays}><X size={20} /></button>
-        </header>
+  <AppDialog
+    bind:typeForm
+    bind:passwordForm
+    bind:bulkPasswordForm
+    bind:accountForm
+    bind:deviceForm
+    bind:exportConfigFormat
+    bind:openTypePicker
+    bind:bulkTypeSearch
+    bind:bulkUsernameSearch
+    bind:deviceTypeSearch
+    {activeDialog}
+    {selectedItem}
+    {selectedAccount}
+    {selectedAccountTargets}
+    {selectedBulkTypeMeta}
+    {selectedDeviceFormTypeMeta}
+    {filteredBulkTypeRows}
+    {filteredDeviceTypeOptions}
+    deviceTypeOptionsLength={deviceTypeOptions.length}
+    {bulkUsernameSuggestions}
+    {bulkPasswordMatches}
+    {bulkPasswordSelectedMatches}
+    {closeOverlays}
+    {saveDeviceType}
+    {openGeneratorPanel}
+    setActiveDialog={(dialog) => (activeDialog = dialog)}
+    {toggleTypePicker}
+    {setBulkPasswordDeviceType}
+    {updateBulkUsernameSearch}
+    {selectBulkUsername}
+    {selectAllBulkPasswordMatches}
+    {clearBulkPasswordMatches}
+    {isBulkPasswordMatchSelected}
+    {toggleBulkPasswordMatch}
+    {saveBulkPasswordUpdate}
+    {savePasswordUpdate}
+    {saveAccount}
+    {setDeviceFormType}
+    {saveDevice}
+    {exportConfig}
+  />
 
-        {#if activeDialog === "type"}
-          <div class="type-editor-layout">
-            <div class="type-preview-card">
-              <span class={`type-icon type-${typeForm.color} type-preview-icon`}>{typeForm.iconText.trim() || typeForm.label.trim().slice(0, 1) || "类"}</span>
-              <div>
-                <strong>{typeForm.label.trim() || "设备类型"}</strong>
-                <small>预览</small>
-              </div>
-            </div>
-            <div class="type-editor-fields">
-              <label>
-                <span>类型名称</span>
-                <input bind:value={typeForm.label} placeholder="例如：交换机" />
-              </label>
-              <label>
-                <span>图标文字</span>
-                <input bind:value={typeForm.iconText} placeholder="例如：交" maxlength="2" />
-              </label>
-            </div>
-            <div class="form-control type-color-control">
-              <span>颜色</span>
-              <div class="color-swatch-grid" role="group" aria-label="设备类型颜色">
-                {#each typeColorOptions as option}
-                  <button
-                    type="button"
-                    class:selected={typeForm.color === option.value}
-                    class="color-swatch-button"
-                    aria-label={option.label}
-                    on:click={() => (typeForm.color = option.value)}
-                  >
-                    <span class={`swatch-dot type-${option.value}`}></span>
-                  </button>
-                {/each}
-              </div>
-            </div>
-          </div>
-          <footer class="modal-actions">
-            <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" on:click={saveDeviceType}>{typeForm.originalLabel ? "保存修改" : "保存类型"}</button>
-          </footer>
-        {:else if activeDialog === "password"}
-          <div class="form-grid">
-            <section class="password-target-card wide-field" aria-label="当前更新账号">
-              <span class={`type-icon ${selectedItem.iconClass}`}>{selectedItem.iconText}</span>
-              <div>
-                <strong>{selectedAccount.username || selectedAccount.title || "未填写用户名"}</strong>
-                <span>{selectedItem.deviceName} · {selectedAccount.tag || selectedItem.deviceType}</span>
-              </div>
-            </section>
-            <section class="password-change-card wide-field" aria-label="密码变更预览">
-              <div>
-                <span>旧密码</span>
-                <strong>{selectedAccount.password || "未填写密码"}</strong>
-              </div>
-              <div>
-                <span>新密码</span>
-                <strong>{passwordForm.password || "待输入"}</strong>
-              </div>
-            </section>
-            <label class="wide-field">
-              <span>新密码</span>
-              <input bind:value={passwordForm.password} />
-            </label>
-            <label class="wide-field">
-              <span>更新原因</span>
-              <input bind:value={passwordForm.reason} />
-            </label>
-            <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("current-account"); activeDialog = null; }}>使用随机密码</button>
-          </div>
-          <footer class="modal-actions">
-            <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" on:click={savePasswordUpdate}>保存修改</button>
-          </footer>
-        {:else if activeDialog === "bulk-password"}
-          <div class="form-grid bulk-password-grid">
-            <div class="form-control type-combo-field wide-field">
-              <span>设备类型</span>
-              <div class="type-combo">
-                {#if selectedBulkTypeMeta}
-                  <button
-                    type="button"
-                    class="type-combo-trigger"
-                    aria-expanded={openTypePicker === "bulk"}
-                    aria-controls="bulk-type-options"
-                    on:click={() => toggleTypePicker("bulk")}
-                  >
-                    <span class={`type-combo-icon type-${selectedBulkTypeMeta.color}`}>{selectedBulkTypeMeta.iconText}</span>
-                    <span class="type-combo-copy">
-                      <strong>{selectedBulkTypeMeta.label}</strong>
-                      <small>{selectedBulkTypeMeta.count} 个设备</small>
-                    </span>
-                    <ChevronDown size={18} />
-                  </button>
-                {/if}
-                {#if openTypePicker === "bulk"}
-                  <div class="type-combo-popover" id="bulk-type-options">
-                    <div class="type-combo-search">
-                      <Search size={15} />
-                      <input bind:value={bulkTypeSearch} placeholder="搜索设备类型" aria-label="搜索批量改密设备类型" />
-                    </div>
-                    <div class="type-combo-list" role="listbox" aria-label="批量改密设备类型">
-                      {#if filteredBulkTypeRows.length === 0}
-                        <div class="type-combo-empty">没有匹配的设备类型</div>
-                      {:else}
-                        {#each filteredBulkTypeRows as type}
-                          <button
-                            type="button"
-                            class:selected={bulkPasswordForm.deviceType === type.label}
-                            role="option"
-                            aria-selected={bulkPasswordForm.deviceType === type.label}
-                            on:click={() => setBulkPasswordDeviceType(type.label)}
-                          >
-                            <span class={`type-combo-icon type-${type.color}`}>{type.iconText}</span>
-                            <span class="type-combo-copy">
-                              <strong>{type.label}</strong>
-                              <small>{type.count} 个设备</small>
-                            </span>
-                          </button>
-                        {/each}
-                      {/if}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-            </div>
-            <label>
-              <span>指定用户名</span>
-              <input
-                value={bulkPasswordForm.username}
-                placeholder="留空则更新全部账号"
-                on:input={(event) => updateBulkPasswordUsername((event.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            <label>
-              <span>新密码</span>
-              <input bind:value={bulkPasswordForm.password} />
-            </label>
-            <label class="wide-field">
-              <span>更新原因</span>
-              <input bind:value={bulkPasswordForm.reason} />
-            </label>
-            <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("bulk-password"); activeDialog = null; }}>使用随机密码</button>
-
-            <section class="bulk-preview wide-field" aria-label="批量更新命中账号">
-              <div class="bulk-preview-head">
-                <div>
-                  <strong>已选择 {bulkPasswordSelectedMatches.length} / {bulkPasswordMatches.length} 个账号</strong>
-                  <span>{bulkPasswordForm.deviceType === "全部设备" ? "全部设备" : `类型：${bulkPasswordForm.deviceType}`} · {bulkPasswordForm.username.trim() ? `用户名：${bulkPasswordForm.username.trim()}` : "全部账号"}</span>
-                </div>
-                {#if bulkPasswordMatches.length > 0}
-                  <div class="bulk-selection-actions" aria-label="批量改密账号选择">
-                    <button type="button" class="compact-button" on:click={selectAllBulkPasswordMatches}>全选</button>
-                    <button type="button" class="compact-button" on:click={clearBulkPasswordMatches}>清空</button>
-                  </div>
-                {/if}
-              </div>
-              {#if bulkPasswordMatches.length === 0}
-                <p class="quiet-text">没有匹配的账号。可以换一个用户名，或留空更新全部账号。</p>
-              {:else}
-                <div class="bulk-match-list">
-                  {#each bulkPasswordMatches as match}
-                    <label class="bulk-match-row">
-                      <input
-                        type="checkbox"
-                        checked={isBulkPasswordMatchSelected(match)}
-                        on:change={() => toggleBulkPasswordMatch(match)}
-                      />
-                      <span class="bulk-match-copy">
-                        <strong>{match.deviceName}</strong>
-                        <span>{match.username || "未填写用户名"} · {match.ipAddress || match.deviceType} · {match.tag || "账号"}</span>
-                      </span>
-                    </label>
-                  {/each}
-                </div>
-                {#if bulkPasswordSelectedMatches.length === 0}
-                  <p class="quiet-text">请选择至少一个需要改密的账号。</p>
-                {/if}
-              {/if}
-            </section>
-          </div>
-          <footer class="modal-actions">
-            <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" disabled={!bulkPasswordForm.password.trim() || bulkPasswordSelectedMatches.length === 0} on:click={saveBulkPasswordUpdate}>确认更新</button>
-          </footer>
-        {:else if activeDialog === "account"}
-          <div class="form-grid">
-            <label>
-              <span>用户名</span>
-              <input bind:value={accountForm.username} />
-            </label>
-            <label>
-              <span>密码</span>
-              <input bind:value={accountForm.password} />
-            </label>
-            <div class="readonly-field" aria-label="所属设备">
-              <span>所属设备</span>
-              <strong>{selectedItem.deviceName || "未选择设备"}</strong>
-            </div>
-            <label class="wide-field">
-              <span>备注</span>
-              <textarea bind:value={accountForm.notes}></textarea>
-            </label>
-          </div>
-          <footer class="modal-actions">
-            <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" on:click={saveAccount}>{accountForm.id ? "保存账号" : "新增账号"}</button>
-          </footer>
-        {:else}
-          <div class="form-grid">
-            <label>
-              <span>设备名称</span>
-              <input bind:value={deviceForm.deviceName} />
-            </label>
-            <div class="form-control type-combo-field">
-              <span>设备类型</span>
-              {#if deviceTypeOptions.length === 0}
-                <div class="type-combo-empty-state">请先新增设备类型</div>
-              {:else}
-                <div class="type-combo">
-                  {#if selectedDeviceFormTypeMeta}
-                    <button
-                      type="button"
-                      class="type-combo-trigger"
-                      aria-expanded={openTypePicker === "device"}
-                      aria-controls="device-type-options"
-                      on:click={() => toggleTypePicker("device")}
-                    >
-                      <span class={`type-combo-icon type-${selectedDeviceFormTypeMeta.color}`}>{selectedDeviceFormTypeMeta.iconText}</span>
-                      <span class="type-combo-copy">
-                        <strong>{selectedDeviceFormTypeMeta.label || "选择设备类型"}</strong>
-                      </span>
-                      <ChevronDown size={18} />
-                    </button>
-                  {/if}
-                  {#if openTypePicker === "device"}
-                    <div class="type-combo-popover" id="device-type-options">
-                      <div class="type-combo-search">
-                        <Search size={15} />
-                        <input bind:value={deviceTypeSearch} placeholder="搜索设备类型" aria-label="搜索设备类型" />
-                      </div>
-                      <div class="type-combo-list" role="listbox" aria-label="设备类型">
-                        {#if filteredDeviceTypeOptions.length === 0}
-                          <div class="type-combo-empty">没有匹配的设备类型</div>
-                        {:else}
-                          {#each filteredDeviceTypeOptions as type}
-                            <button
-                              type="button"
-                              class:selected={deviceForm.deviceType === type.label}
-                              role="option"
-                              aria-selected={deviceForm.deviceType === type.label}
-                              on:click={() => setDeviceFormType(type.label)}
-                            >
-                              <span class={`type-combo-icon type-${type.color}`}>{type.iconText}</span>
-                              <span class="type-combo-copy">
-                                <strong>{type.label}</strong>
-                              </span>
-                            </button>
-                          {/each}
-                        {/if}
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-            </div>
-            <label>
-              <span>IP 地址</span>
-              <input bind:value={deviceForm.ipAddress} placeholder="例如：192.168.1.1" />
-            </label>
-            {#if !deviceForm.id}
-              <label>
-                <span>用户名</span>
-                <input bind:value={deviceForm.username} />
-              </label>
-              <label>
-                <span>密码</span>
-                <input bind:value={deviceForm.password} />
-              </label>
-              <label>
-                <span>标签</span>
-                <input bind:value={deviceForm.tag} />
-              </label>
-              <label class="wide-field">
-                <span>备注</span>
-                <textarea bind:value={deviceForm.notes}></textarea>
-              </label>
-            {/if}
-          </div>
-          <footer class="modal-actions">
-            <button class="secondary-button" on:click={closeOverlays}>取消</button>
-            <button class="primary-button" disabled={!deviceForm.deviceName.trim() || !deviceForm.deviceType.trim()} on:click={saveDevice}>{deviceForm.id ? "保存设备" : "新增设备"}</button>
-          </footer>
-        {/if}
-      </div>
-    </div>
-  {/if}
-
-  {#if pendingConfirmation}
-    <div class="modal-backdrop">
-      <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <header class="modal-header">
-          <h2 id="confirm-title">{pendingConfirmation.title}</h2>
-          <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" on:click={closeOverlays}><X size={20} /></button>
-        </header>
-        <div class="confirmation-body">
-          <strong>{pendingConfirmation.message}</strong>
-          <p>{pendingConfirmation.detail}</p>
-        </div>
-        <footer class="modal-actions">
-          <button class="secondary-button" on:click={closeOverlays}>取消</button>
-          <button class="danger-button" on:click={confirmPendingAction}>{pendingConfirmation.confirmLabel}</button>
-        </footer>
-      </div>
-    </div>
-  {/if}
+  <ConfirmationDialog
+    {pendingConfirmation}
+    {closeOverlays}
+    {confirmPendingAction}
+  />
 
   {#if generatorPanelOpen}
-    <button class="drawer-scrim" aria-label="关闭密码生成器" on:click={() => closeGeneratorPanel(true)}></button>
-    <aside class="generator-drawer" aria-label="密码生成器">
-      <button
-        type="button"
-        class="drawer-resizer"
-        aria-label="调整密码生成器宽度"
-        on:pointerdown={(event) => startPaneResize("generator", event)}
-      ></button>
-      <header class="drawer-header">
-        <div>
-          <span class="drawer-kicker">密码工具</span>
-          <h2>密码生成器</h2>
-        </div>
-        <button class="icon-button" aria-label="关闭密码生成器" data-tooltip="关闭密码生成器" on:click={() => closeGeneratorPanel(true)}>
-          <X size={21} />
-        </button>
-      </header>
-
-      <div class="generator-result">
-        <div>
-          <span>随机密码</span>
-          <code>{generatedPassword || "未选择可用字符"}</code>
-        </div>
-        <div class="result-actions">
-          <button class="icon-button inline" aria-label="重新生成" data-tooltip="重新生成" on:click={generatePassword}>
-            <RefreshCcw size={18} />
-          </button>
-          <button class="icon-button inline" aria-label="复制生成密码" data-tooltip="复制生成密码" disabled={!generatedPassword} on:click={() => copyText(generatedPassword, "生成密码")}>
-            <Copy size={18} />
-          </button>
-        </div>
-      </div>
-
-      <div class="drawer-body">
-        <section class="drawer-section">
-          <div class="drawer-section-title">
-            <Sparkles size={18} />
-            <h3>常用预设</h3>
-          </div>
-
-          <div class="preset-grid" role="group" aria-label="密码生成预设">
-            <button class:selected={generatorPreset === "balanced"} on:click={() => applyGeneratorPreset("balanced")}>
-              <strong>日常</strong>
-              <span>8 位，字母数字符号</span>
-            </button>
-            <button class:selected={generatorPreset === "readable"} on:click={() => applyGeneratorPreset("readable")}>
-              <strong>易读</strong>
-              <span>排除易混字符，无符号</span>
-            </button>
-            <button class:selected={generatorPreset === "strong"} on:click={() => applyGeneratorPreset("strong")}>
-              <strong>高强度</strong>
-              <span>24 位，更多数字符号</span>
-            </button>
-            <button class:selected={generatorPreset === "pin"} on:click={() => applyGeneratorPreset("pin")}>
-              <strong>PIN</strong>
-              <span>12 位纯数字</span>
-            </button>
-          </div>
-        </section>
-
-        <section class="drawer-section">
-          <div class="drawer-section-title">
-            <SlidersHorizontal size={18} />
-            <h3>基础规则</h3>
-          </div>
-
-          <div class="quick-lengths" role="group" aria-label="常用密码长度">
-            {#each [3, 8, 16, 24] as length}
-              <button class:selected={generatorLength === length} on:click={() => setGeneratorLength(length)}>{length}</button>
-            {/each}
-          </div>
-
-          <label class="range-control drawer-range">
-            <span>长度</span>
-            <input
-              type="range"
-              min="3"
-              max="24"
-              value={generatorLength}
-              aria-label="拖动调整密码长度"
-              on:input={updateGeneratorLengthFromSlider}
-            />
-            <input
-              class="length-input"
-              type="number"
-              min="3"
-              max="24"
-              bind:value={generatorLengthInput}
-              aria-label="密码长度"
-              on:input={(event) => handleGeneratorLengthInput((event.currentTarget as HTMLInputElement).value)}
-              on:blur={commitGeneratorLengthInput}
-              on:keydown={handleGeneratorLengthKeydown}
-            />
-          </label>
-
-          <div class="stepper-grid">
-            <label class="number-control">
-              <span>最少数字</span>
-              <input type="number" min="0" max={generatorLength} bind:value={minimumNumbers} disabled={!useNumbers} on:input={generatePassword} />
-            </label>
-            <label class="number-control">
-              <span>最少符号</span>
-              <input type="number" min="0" max={generatorLength} bind:value={minimumSymbols} disabled={!useSymbols} on:input={generatePassword} />
-            </label>
-          </div>
-        </section>
-
-        <section class="drawer-section">
-          <div class="drawer-section-title">
-            <Grid2X2 size={18} />
-            <h3>使用哪些字符</h3>
-          </div>
-
-          <div class="switch-list">
-            <label><input type="checkbox" bind:checked={useUpper} on:change={generatePassword} /> 大写字母 A-Z</label>
-            <label><input type="checkbox" bind:checked={useLower} on:change={generatePassword} /> 小写字母 a-z</label>
-            <label><input type="checkbox" bind:checked={useNumbers} on:change={generatePassword} /> 数字 0-9</label>
-            <label><input type="checkbox" bind:checked={useSymbols} on:change={generatePassword} /> 符号</label>
-          </div>
-
-          <label class="text-control">
-            <span>允许使用的符号</span>
-            <input bind:value={allowedSymbols} disabled={!useSymbols} on:input={generatePassword} />
-          </label>
-        </section>
-
-        <section class="drawer-section">
-          <div class="drawer-section-title">
-            <KeyRound size={18} />
-            <h3>排除哪些字符</h3>
-          </div>
-
-          <div class="switch-list">
-            <label><input type="checkbox" bind:checked={excludeSimilar} on:change={generatePassword} /> 排除易混字符 0 O 1 I l</label>
-            <label><input type="checkbox" bind:checked={preventRepeats} on:change={generatePassword} /> 避免相邻重复字符</label>
-          </div>
-
-          <label class="text-control">
-            <span>额外排除字符</span>
-            <input bind:value={excludedCharacters} placeholder="例如：@ / \\ &quot; 空格" on:input={generatePassword} />
-          </label>
-        </section>
-      </div>
-
-      <footer class="drawer-footer">
-        <button class="drawer-action primary-action" aria-label="重新生成" data-tooltip="重新生成" on:click={generatePassword}>
-          <RefreshCcw size={20} />
-          <span>重新生成</span>
-        </button>
-        {#if canUseGeneratorForCurrentAccount}
-          <button class="drawer-action" aria-label="填入当前账号" data-tooltip="填入当前账号" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={useGeneratedPasswordForCurrentDevice}>
-            <KeyRound size={18} />
-            <span>填入当前账号</span>
-          </button>
-        {/if}
-        {#if canUseGeneratorForBulkUpdate}
-          <button class="drawer-action" aria-label="批量改密" data-tooltip="批量改密" disabled={!generatedPassword || items.length === 0} on:click={useGeneratedPasswordForBulkUpdate}>
-            <RotateCcwKey size={20} />
-            <span>批量改密</span>
-          </button>
-        {/if}
-        <button class="drawer-action" aria-label="复制密码" data-tooltip="复制密码" disabled={!generatedPassword} on:click={() => copyText(generatedPassword, "生成密码")}>
-          <Copy size={18} />
-          <span>复制密码</span>
-        </button>
-      </footer>
-    </aside>
+    <PasswordGeneratorDrawer
+      bind:generatorPreset
+      bind:generatedPassword
+      bind:generatorLength
+      bind:generatorLengthInput
+      bind:useUpper
+      bind:useLower
+      bind:useNumbers
+      bind:useSymbols
+      bind:excludeSimilar
+      bind:preventRepeats
+      bind:minimumNumbers
+      bind:minimumSymbols
+      bind:allowedSymbols
+      bind:excludedCharacters
+      {canUseGeneratorForCurrentAccount}
+      {canUseGeneratorForBulkUpdate}
+      {selectedItem}
+      {selectedAccount}
+      itemCount={items.length}
+      {closeGeneratorPanel}
+      startGeneratorResize={(event) => startPaneResize("generator", event)}
+      {generatePassword}
+      copyGeneratedPassword={() => copyText(generatedPassword, "生成密码")}
+      {applyGeneratorPreset}
+      {setGeneratorLength}
+      {setGeneratorMinimumNumbers}
+      {setGeneratorMinimumSymbols}
+      {setAllowedSymbols}
+      {setExcludedCharacters}
+      {updateGeneratorLengthFromSlider}
+      {handleGeneratorLengthInput}
+      {commitGeneratorLengthInput}
+      {handleGeneratorLengthKeydown}
+      {useGeneratedPasswordForCurrentDevice}
+      {useGeneratedPasswordForBulkUpdate}
+    />
   {/if}
 
-  {#if copyStatus}
-    <div class="toast" role="status" on:pointerenter={pauseStatusDismiss} on:pointerleave={resumeStatusDismiss}>
-      <span>{copyStatus}</span>
-      <button class="toast-close" aria-label="关闭提示" on:click={dismissStatus}>
-        <X size={16} />
-      </button>
-    </div>
-  {/if}
+  <StatusToast {copyStatus} {pauseStatusDismiss} {resumeStatusDismiss} {dismissStatus} />
 </main>
