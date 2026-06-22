@@ -1237,6 +1237,7 @@
       id: selectedAccount.id,
       username: selectedAccount.username,
       password: selectedAccount.password,
+      tag: selectedAccount.tag,
       notes: selectedAccount.notes,
     };
     activeDialog = "account";
@@ -1252,7 +1253,7 @@
     const nextAccount = createAccountFromFormData(accountForm, nextId, now);
     const nextAccounts = accountForm.id
       ? selectedAccounts.map((account) =>
-          account.id === accountForm.id ? { ...nextAccount, tag: account.tag, history: account.history, updatedAt: now } : account
+          account.id === accountForm.id ? { ...nextAccount, history: account.history, updatedAt: now } : account
         )
       : [...selectedAccounts.filter((account) => !isBlankPlaceholderAccount(account)), nextAccount];
 

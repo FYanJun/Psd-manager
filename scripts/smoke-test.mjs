@@ -372,7 +372,7 @@ test("a device can hold multiple account credentials", () => {
   assert.match(vault, /export function isBlankPlaceholderAccount\(account: DeviceAccount\)/);
   assert.match(app, /function saveAccount\(\)[\s\S]*if \(!hasSelectedDevice\) \{/);
   assert.match(app, /\[\.\.\.selectedAccounts\.filter\(\(account\) => !isBlankPlaceholderAccount\(account\)\), nextAccount\]/);
-  assert.match(app, /account\.id === accountForm\.id \? \{ \.\.\.nextAccount, tag: account\.tag, history: account\.history, updatedAt: now \} : account/);
+  assert.match(app, /account\.id === accountForm\.id \? \{ \.\.\.nextAccount, history: account\.history, updatedAt: now \} : account/);
   assert.match(app, /function deleteSelectedAccount\(\)/);
   assert.match(app, /const nextAccounts = selectedAccounts\.filter\(\(account\) => !targetIds\.includes\(account\.id\)\)/);
   assert.doesNotMatch(app, /已保留空白账号|保留一个空白账号|方便后续录入/);
@@ -406,13 +406,17 @@ test("a device can hold multiple account credentials", () => {
   assert.match(deviceDetailPane + appDialog, /新增账号/);
   assert.match(appDialog, /class="readonly-field" aria-label="所属设备"/);
   assert.match(appDialog, /\{selectedItem\.deviceName \|\| "未选择设备"\}/);
-  assert.doesNotMatch(appDialog, /accountForm\.tag/);
-  assert.doesNotMatch(appDialog, /<input bind:value=\{accountForm\.tag\}/);
-  assert.doesNotMatch(appDialog, /账号标签|deviceForm\.tag/);
+  assert.match(types, /export type AccountForm = \{[\s\S]*tag: string;[\s\S]*\};\n\nexport type BulkPasswordForm/);
+  assert.match(vault, /tag: DEFAULT_ACCOUNT_TAG/);
+  assert.match(app, /tag: selectedAccount\.tag/);
+  assert.match(deviceCommands, /const tag = accountForm\.tag\.trim\(\) \|\| DEFAULT_ACCOUNT_TAG/);
+  assert.match(deviceCommands, /tag,/);
+  assert.match(appDialog, /<span>账号标签<\/span>[\s\S]*bind:value=\{accountForm\.tag\}/);
+  assert.match(appDialog, /placeholder="例如：登录账号、管理账号、只读账号"/);
+  assert.doesNotMatch(appDialog, /deviceForm\.tag/);
   assert.match(constants, /export const DEFAULT_ACCOUNT_TAG = "登录账号"/);
   assert.match(app, /tag: DEFAULT_ACCOUNT_TAG/);
   assert.match(app, /tag: deviceForm\.deviceType/);
-  assert.match(deviceCommands, /tag: DEFAULT_ACCOUNT_TAG/);
   assert.match(vault, /const tagFallback = inheritLegacyItemFields \? fallback\.tag : DEFAULT_ACCOUNT_TAG/);
   assert.match(vault, /export function formatAccountTag/);
   assert.doesNotMatch(vault, /tag: primaryAccount\.tag/);
@@ -424,7 +428,6 @@ test("a device can hold multiple account credentials", () => {
   assert.doesNotMatch(deviceCommands, /tag: selectedItem\.deviceName/);
   assert.doesNotMatch(deviceCommands, /reassignImportedItemIds/);
   assert.doesNotMatch(types, /export type AccountForm = \{[\s\S]*title: string;[\s\S]*\};\n\nexport type BulkPasswordForm/);
-  assert.doesNotMatch(types, /export type AccountForm = \{[\s\S]*tag: string;[\s\S]*\};\n\nexport type BulkPasswordForm/);
   assert.doesNotMatch(app, /tag: account\.tag === item\.deviceType \? deviceForm\.deviceType : account\.tag/);
   assert.doesNotMatch(app, /tag: account\.tag === originalLabel \? label : account\.tag/);
 });

@@ -335,6 +335,10 @@
             <span>密码</span>
             <ClearableInput bind:value={accountForm.password} type="password" />
           </label>
+          <label>
+            <span>账号标签</span>
+            <ClearableInput bind:value={accountForm.tag} placeholder="例如：登录账号、管理账号、只读账号" />
+          </label>
           <div class="readonly-field" aria-label="所属设备">
             <span>所属设备</span>
             <strong>{selectedItem.deviceName || "未选择设备"}</strong>

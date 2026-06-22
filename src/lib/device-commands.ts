@@ -18,12 +18,13 @@ export function createAccountFromForm(
   updatedAt: string
 ): DeviceAccount {
   const username = accountForm.username.trim();
+  const tag = accountForm.tag.trim() || DEFAULT_ACCOUNT_TAG;
   return {
     id,
     title: username || "未填写用户名",
     username,
     password: accountForm.password,
-    tag: DEFAULT_ACCOUNT_TAG,
+    tag,
     notes: accountForm.notes.trim(),
     updatedAt,
     history: [],

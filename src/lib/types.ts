@@ -101,6 +101,7 @@ export type AccountForm = {
   id: number | null;
   username: string;
   password: string;
+  tag: string;
   notes: string;
 };
 

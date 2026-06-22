@@ -198,6 +198,7 @@ export function createEmptyAccountForm(): AccountForm {
     id: null,
     username: "",
     password: "",
+    tag: DEFAULT_ACCOUNT_TAG,
     notes: "",
   };
 }
