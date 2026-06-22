@@ -406,7 +406,7 @@ test("a device can hold multiple account credentials", () => {
   assert.match(deviceDetailPane + appDialog, /新增账号/);
   assert.match(appDialog, /class="readonly-field" aria-label="所属设备"/);
   assert.match(appDialog, /\{selectedItem\.deviceName \|\| "未选择设备"\}/);
-  assert.match(types, /export type AccountForm = \{[\s\S]*tag: string;[\s\S]*\};\n\nexport type BulkPasswordForm/);
+  assert.match(types, /export type AccountForm = \{[\s\S]*tag: string;[\s\S]*\};\r?\n\r?\nexport type BulkPasswordForm/);
   assert.match(vault, /tag: DEFAULT_ACCOUNT_TAG/);
   assert.match(app, /tag: selectedAccount\.tag/);
   assert.match(deviceCommands, /const tag = accountForm\.tag\.trim\(\) \|\| DEFAULT_ACCOUNT_TAG/);
