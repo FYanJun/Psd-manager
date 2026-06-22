@@ -963,7 +963,6 @@ test("type editing exposes swatches and searchable custom comboboxes", () => {
 
 test("right-click context menus are available for types, devices, and details", () => {
   const deviceContextMenuMarkup = actionPopover.match(/\{:else if activePopover === "device-context"\}[\s\S]*?\{:else if activePopover === "more"\}/)?.[0] ?? "";
-  const moreMenuMarkup = actionPopover.match(/\{:else if activePopover === "more"\}[\s\S]*?\{\/if\}\n  <\/div>/)?.[0] ?? "";
   const typeBlankContextMenuMarkup = actionPopover.match(/\{:else if activePopover === "type-blank-context"\}[\s\S]*?\{:else if activePopover === "list-blank-context"/)?.[0] ?? "";
   const listBlankContextMenuMarkup = actionPopover.match(/\{:else if activePopover === "list-blank-context" \|\| activePopover === "detail-blank-context"\}[\s\S]*?\{:else if activePopover === "device-context"\}/)?.[0] ?? "";
 
@@ -996,13 +995,13 @@ test("right-click context menus are available for types, devices, and details", 
   assert.match(deviceContextMenuMarkup, /<span>删除设备<\/span>/);
   assert.doesNotMatch(deviceContextMenuMarkup, /复制用户名|复制密码|新增账号|更新密码|编辑当前账号|删除账号/);
   assert.match(actionPopover, /<strong>更多操作<\/strong>/);
-  assert.match(moreMenuMarkup, /<span>编辑当前账号<\/span>/);
-  assert.match(moreMenuMarkup, /disabled=\{!hasSelectedAccount\}/);
-  assert.match(moreMenuMarkup, /disabled=\{!hasSelectedDevice\}/);
-  assert.match(moreMenuMarkup, /<Upload size=\{16\} \/>/);
-  assert.match(moreMenuMarkup, /<Download size=\{16\} \/>/);
-  assert.match(moreMenuMarkup, /<span>删除当前设备<\/span>/);
-  assert.doesNotMatch(moreMenuMarkup, /新增账号|openAddAccountDialog|删除当前账号|requestDeleteSelectedAccount|每台设备至少保留一个账号/);
+  assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*<span>编辑当前账号<\/span>/);
+  assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*disabled=\{!hasSelectedAccount\}/);
+  assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*disabled=\{!hasSelectedDevice\}/);
+  assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*<Upload size=\{16\} \/>/);
+  assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*<Download size=\{16\} \/>/);
+  assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*<span>删除当前设备<\/span>/);
+  assert.doesNotMatch(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*(新增账号|openAddAccountDialog|删除当前账号|requestDeleteSelectedAccount|每台设备至少保留一个账号)/);
   assert.doesNotMatch(app + actionPopover, /编辑当前设备和账号/);
   assert.match(appDialog, /\{#if !deviceForm\.id\}[\s\S]*<span>用户名<\/span>[\s\S]*<span>密码<\/span>/);
   assert.match(appDialog, /deviceForm\.id \? "保存设备" : "新增设备"/);
