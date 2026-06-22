@@ -435,8 +435,9 @@ test("account display uses username without a separate account name field", () =
   assert.match(app, /title: accountUsername \|\| "未填写用户名"/);
   assert.match(deviceDetailPane, /<strong>\{account\.username \|\| account\.title \|\| "未填写用户名"\}<\/strong>/);
   assert.match(app, /function copyDeviceAccountInfo\(account = selectedAccount\)/);
-  assert.match(deviceCommands, /account\.username \? `用户名: \$\{account\.username\}` : ""/);
-  assert.match(deviceCommands, /account\.password \? `密码: \$\{account\.password\}` : ""/);
+  assert.match(deviceCommands, /account\.username \? `\$\{account\.username\}` : ""/);
+  assert.match(deviceCommands, /account\.password \? `\$\{account\.password\}` : ""/);
+  assert.doesNotMatch(deviceCommands, /用户名: \$\{account\.username\}|密码: \$\{account\.password\}/);
   assert.match(app, /copyText\(accountsWithPassword\.map\(\(account\) => copyDeviceAccountInfo\(account\)\)\.join\("\\n\\n"\), "账号密码"\)/);
   assert.match(deviceDetailPane, /selectedAccountTargetCount > 1 \? `复制 \$\{selectedAccountTargetCount\} 个` : "复制账号密码"/);
   assert.match(deviceCommands, /item\.ipAddress \? `IP: \$\{item\.ipAddress\}` : ""/);
