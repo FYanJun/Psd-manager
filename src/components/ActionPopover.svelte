@@ -52,7 +52,6 @@
   export let chooseConfigFile: () => void;
   export let openExportConfigDialog: () => void;
   export let setActivePopover: (popover: ActivePopover) => void;
-  export let toggleHistoryOpen: () => void;
   export let toggleHistorySort: () => void;
 </script>
 
@@ -225,10 +224,6 @@
       <button class="menu-item" disabled={!hasSelectedAccount} title={hasSelectedAccount ? "更新账号密码" : "请先选择账号"} on:click={() => openPasswordDialog()}>
         <KeyRound size={16} />
         <span>{selectedAccountTargetCount > 1 ? `更新 ${selectedAccountTargetCount} 个密码` : "更新当前密码"}</span>
-      </button>
-      <button class="menu-item" disabled={!hasSelectedAccount} title={hasSelectedAccount ? "密码历史显示状态" : "请先选择账号"} on:click={() => toggleHistoryOpen()}>
-        <History size={16} />
-        <span>{historyOpen ? "收起密码历史" : "展开密码历史"}</span>
       </button>
       <button class="menu-item" disabled={!hasSelectedAccount} title={hasSelectedAccount ? "切换历史顺序" : "请先选择账号"} on:click={() => toggleHistorySort()}>
         <ArrowDownUp size={16} />

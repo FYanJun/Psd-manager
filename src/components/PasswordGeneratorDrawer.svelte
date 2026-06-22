@@ -75,7 +75,7 @@
   </div>
 
   <div class="drawer-body">
-    <section class="drawer-section">
+    <!-- <section class="drawer-section">
       <div class="drawer-section-title">
         <Sparkles size={18} />
         <h3>常用预设</h3>
@@ -99,7 +99,7 @@
           <span>12 位纯数字</span>
         </button>
       </div>
-    </section>
+    </section>  -->
 
     <section class="drawer-section">
       <div class="drawer-section-title">
@@ -170,7 +170,7 @@
 
     <section class="drawer-section">
       <div class="drawer-section-title">
-        <Grid2X2 size={18} />
+        <Grid2X2 size={24} />
         <h3>使用哪些字符</h3>
       </div>
 

@@ -598,6 +598,9 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.match(app, /let exportConfigFormat: ConfigFormat = "json"/);
   assert.match(app, /function openExportConfigDialog\(\)/);
   assert.match(app, /async function exportConfig\(format: ConfigFormat = exportConfigFormat\)/);
+  assert.match(app, /function formatFileError\(action: "导入" \| "导出", error: unknown\)/);
+  assert.match(app, /showStatus\(formatFileError\("导出", error\), 5000\)/);
+  assert.match(app, /showStatus\(formatFileError\("导入", error\), 5000\)/);
   assert.match(actionPopover, /导入配置/);
   assert.match(actionPopover, /on:click=\{\(\) => openExportConfigDialog\(\)\}[\s\S]*<span>导出配置<\/span>/);
   assert.doesNotMatch(actionPopover, /导出 JSON 配置|导出 CSV 配置|导出 INI 配置/);
@@ -616,6 +619,10 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.doesNotMatch(app + actionPopover + confirmationDialog, /mergeImportedConfig|合并 JSON|覆盖恢复 JSON|skipDuplicateConfigItems/);
   assert.match(tauriLib, /tauri_plugin_fs::init\(\)/);
   assert.match(tauriLib, /tauri_plugin_dialog::init\(\)/);
+  assert.match(readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"), /"dialog:allow-open"/);
+  assert.match(readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"), /"fs:allow-read-text-file"/);
+  assert.match(readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"), /"fs:allow-write-text-file"/);
+  assert.match(readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"), /"identifier": "fs:scope"[\s\S]*"path": "\$HOME\/\*\*"/);
   assert.doesNotMatch(tauriLib, /osascript|export_config|import_config|generate_handler/);
 });
 

@@ -1510,6 +1510,15 @@
     activeDialog = "export-config";
   }
 
+  function formatFileError(action: "导入" | "导出", error: unknown) {
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    if (!message) return `配置${action}失败`;
+    if (/denied|forbidden|scope|permission|not allowed/i.test(message)) {
+      return `配置${action}失败：没有该文件位置的读写权限`;
+    }
+    return `配置${action}失败：${message}`;
+  }
+
   async function exportConfig(format: ConfigFormat = exportConfigFormat) {
     const payload = createConfigPayload(items, customDeviceTypes, hiddenDeviceTypes, format);
     const filename = createConfigFilename(format);
@@ -1530,8 +1539,8 @@
         }
         await writeTextFile(path, payload);
         showStatus(`${formatLabel} 配置已导出`);
-      } catch {
-        showStatus("配置导出失败");
+      } catch (error) {
+        showStatus(formatFileError("导出", error), 5000);
       }
       return;
     }
@@ -1562,13 +1571,13 @@
         let content = "";
         try {
           content = await readTextFile(path);
-        } catch {
-          showStatus("配置读取失败");
+        } catch (error) {
+          showStatus(formatFileError("导入", error), 5000);
           return;
         }
         tryRequestApplyConfig(content, inferConfigFormat(path));
-      } catch {
-        showStatus("配置读取失败");
+      } catch (error) {
+        showStatus(formatFileError("导入", error), 5000);
       }
       return;
     }
@@ -1789,7 +1798,6 @@
     {chooseConfigFile}
     {openExportConfigDialog}
     setActivePopover={(popover) => (activePopover = popover)}
-    toggleHistoryOpen={() => { historyOpen = !historyOpen; activePopover = null; }}
     toggleHistorySort={() => { historySortDesc = !historySortDesc; activePopover = null; }}
   />
 

@@ -32,8 +32,8 @@ export function createAccountFromForm(
 
 export function formatDeviceAccountInfo(account: DeviceAccount) {
   return [
-    account.username ? `用户名: ${account.username}` : "",
-    account.password ? `密码: ${account.password}` : "",
+    account.username ? `${account.username}` : "",
+    account.password ? `${account.password}` : "",
   ]
     .filter(Boolean)
     .join("\n");
