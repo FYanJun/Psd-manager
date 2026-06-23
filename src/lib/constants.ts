@@ -1,6 +1,6 @@
 import type { DeviceType, DeviceTypeMeta } from "./types";
 
-export const APP_TITLE = "设备资产凭据管理工具";
+export const APP_TITLE = "密码管理器";
 export const CONFIG_FORMAT_VERSION = 1;
 export const STORAGE_KEY = "device-password-manager-state-v1";
 export const DEFAULT_ACCOUNT_TAG = "登录账号";

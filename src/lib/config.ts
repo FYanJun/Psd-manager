@@ -44,7 +44,7 @@ export function createConfigFilename(format: ConfigFormat) {
     padDatePart(now.getHours()),
     padDatePart(now.getMinutes()),
   ].join("-");
-  return `设备资产凭据配置-${timestamp}.${format}`;
+  return `密码管理器配置-${timestamp}.${format}`;
 }
 
 export function parseConfigContent(content: string, format: ConfigFormat): ConfigData {

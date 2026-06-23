@@ -29,11 +29,11 @@ const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8"
 const tauriConfig = readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8");
 const tauriCargo = readFileSync(new URL("../src-tauri/Cargo.toml", import.meta.url), "utf8");
 
-test("app shell uses asset credential manager naming", () => {
-  assert.match(indexHtml, /<title>设备资产凭据管理工具<\/title>/);
-  assert.match(tauriConfig, /"productName": "设备资产凭据管理工具"/);
-  assert.match(tauriConfig, /"title": "设备资产凭据管理工具"/);
-  assert.match(tauriCargo, /description = "设备资产凭据管理工具"/);
+test("app shell uses password manager naming", () => {
+  assert.match(indexHtml, /<title>密码管理器<\/title>/);
+  assert.match(tauriConfig, /"productName": "密码管理器"/);
+  assert.match(tauriConfig, /"title": "密码管理器"/);
+  assert.match(tauriCargo, /description = "密码管理器"/);
 });
 
 test("frontend is split into page components and command modules", () => {
@@ -554,7 +554,7 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.match(config, /if \(format === "csv"\) return createCsvConfigPayload\(config\)/);
   assert.match(config, /if \(format === "ini"\) return createIniConfigPayload\(config\)/);
   assert.match(app, /createConfigPayload\(items, customDeviceTypes, hiddenDeviceTypes, format\)/);
-  assert.match(config, /return `设备资产凭据配置-\$\{timestamp\}\.\$\{format\}`/);
+  assert.match(config, /return `密码管理器配置-\$\{timestamp\}\.\$\{format\}`/);
   assert.match(config, /"deviceNotes"/);
   assert.match(config, /item\.notes/);
   assert.match(config, /readRecordValue\(record, "deviceNotes", "设备备注"\)/);
@@ -573,7 +573,7 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.doesNotMatch(vault, /notes: primaryAccount\.notes/);
   assert.match(vault, /hasExplicitAccounts \? item\.accounts \?\? \[\] : \[item\]/);
   assert.match(vault, /inheritLegacyItemFields \? fallback\.notes : ""/);
-  assert.match(constants, /export const APP_TITLE = "设备资产凭据管理工具"/);
+  assert.match(constants, /export const APP_TITLE = "密码管理器"/);
   assert.match(constants, /export const CONFIG_FORMAT_VERSION = 1/);
   assert.match(config, /export function parseConfigContent\(content: string, format: ConfigFormat\): ConfigData/);
   assert.match(config, /export function parseConfigContentWithFallback\(content: string, preferredFormat: ConfigFormat\): \{ config: ConfigData; format: ConfigFormat \}/);
@@ -632,9 +632,9 @@ test("configuration import and export support json csv ini with overwrite confir
 
 test("configuration payloads roundtrip key vault fields across json csv and ini", async () => {
   const { createConfigPayload, inferConfigFormat, parseConfigContent, parseConfigContentWithFallback } = await importSourceModule("lib/config.ts");
-  assert.equal(inferConfigFormat("设备资产凭据配置.CSV"), "csv");
-  assert.equal(inferConfigFormat("设备资产凭据配置.INI"), "ini");
-  assert.equal(inferConfigFormat("设备资产凭据配置.JSON"), "json");
+  assert.equal(inferConfigFormat("密码管理器配置.CSV"), "csv");
+  assert.equal(inferConfigFormat("密码管理器配置.INI"), "ini");
+  assert.equal(inferConfigFormat("密码管理器配置.JSON"), "json");
 
   const items = [
     {
