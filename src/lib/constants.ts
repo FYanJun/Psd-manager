@@ -3,7 +3,7 @@ import type { DeviceType, DeviceTypeMeta } from "./types";
 export const APP_TITLE = "密码管理器";
 export const CONFIG_FORMAT_VERSION = 1;
 export const STORAGE_KEY = "device-password-manager-state-v1";
-export const DEFAULT_ACCOUNT_TAG = "登录账号";
+export const DEFAULT_ACCOUNT_TAG = "";
 
 export const SIDEBAR_DEFAULT_WIDTH = 252;
 export const SIDEBAR_MIN_WIDTH = 208;

@@ -211,7 +211,6 @@
     {:else if activePopover === "more"}
       <div class="context-menu-title">
         <strong>更多操作</strong>
-        <span>{hasSelectedDevice ? selectedItem.deviceName : "设备资产"}</span>
       </div>
       <button class="menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "编辑设备信息" : "请先选择设备"} on:click={() => openEditDeviceDialog()}>
         <Pencil size={16} />

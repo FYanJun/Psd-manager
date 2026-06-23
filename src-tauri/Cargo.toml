@@ -1,8 +1,8 @@
 [package]
 name = "device-password-manager"
-version = "0.1.6"
+version = "0.1.7"
 description = "密码管理器"
-authors = ["fan"]
+authors = ["FanYanJun"]
 edition = "2021"
 
 [lib]

@@ -65,7 +65,7 @@
 
 {#if activeDialog}
   <div class="modal-backdrop">
-    <div class="modal" class:type-modal={activeDialog === "type"} class:bulk-modal={activeDialog === "bulk-password"} role="dialog" aria-modal="true">
+    <div class="modal" class:type-modal={activeDialog === "type"} class:bulk-modal={activeDialog === "bulk-password"} class:type-picker-open={Boolean(openTypePicker)} role="dialog" aria-modal="true">
       <header class="modal-header">
         <h2>
           {#if activeDialog === "type"}
@@ -161,7 +161,7 @@
           <button class="primary-button" disabled={!passwordForm.password.trim()} on:click={() => savePasswordUpdate()}>保存修改</button>
         </footer>
       {:else if activeDialog === "bulk-password"}
-        <div class="form-grid bulk-password-grid">
+        <div class="form-grid bulk-password-grid" class:type-picker-open={openTypePicker === "bulk"}>
           <div class="form-control type-combo-field wide-field">
             <span>设备类型</span>
             <div class="type-combo">
@@ -337,7 +337,7 @@
           </label>
           <label>
             <span>账号标签</span>
-            <ClearableInput bind:value={accountForm.tag} placeholder="例如：登录账号、管理账号、只读账号" />
+            <ClearableInput bind:value={accountForm.tag} placeholder="例如：普通账号、管理账号" />
           </label>
           <div class="readonly-field" aria-label="所属设备">
             <span>所属设备</span>
@@ -353,7 +353,7 @@
           <button class="primary-button" on:click={() => saveAccount()}>{accountForm.id ? "保存账号" : "新增账号"}</button>
         </footer>
       {:else}
-        <div class="form-grid">
+        <div class="form-grid" class:type-picker-open={openTypePicker === "device"}>
           <label>
             <span>设备名称</span>
             <ClearableInput bind:value={deviceForm.deviceName} />

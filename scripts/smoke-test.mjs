@@ -412,9 +412,9 @@ test("a device can hold multiple account credentials", () => {
   assert.match(deviceCommands, /const tag = accountForm\.tag\.trim\(\) \|\| DEFAULT_ACCOUNT_TAG/);
   assert.match(deviceCommands, /tag,/);
   assert.match(appDialog, /<span>账号标签<\/span>[\s\S]*bind:value=\{accountForm\.tag\}/);
-  assert.match(appDialog, /placeholder="例如：登录账号、管理账号、只读账号"/);
+  assert.match(appDialog, /placeholder="例如：普通账号、管理账号"/);
   assert.doesNotMatch(appDialog, /deviceForm\.tag/);
-  assert.match(constants, /export const DEFAULT_ACCOUNT_TAG = "登录账号"/);
+  assert.match(constants, /export const DEFAULT_ACCOUNT_TAG = ""/);
   assert.match(app, /tag: DEFAULT_ACCOUNT_TAG/);
   assert.match(app, /tag: deviceForm\.deviceType/);
   assert.match(vault, /const tagFallback = inheritLegacyItemFields \? fallback\.tag : DEFAULT_ACCOUNT_TAG/);
@@ -555,20 +555,23 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.match(config, /if \(format === "ini"\) return createIniConfigPayload\(config\)/);
   assert.match(app, /createConfigPayload\(items, customDeviceTypes, hiddenDeviceTypes, format\)/);
   assert.match(config, /return `密码管理器配置-\$\{timestamp\}\.\$\{format\}`/);
-  assert.match(config, /"deviceNotes"/);
-  assert.match(config, /item\.notes/);
-  assert.match(config, /readRecordValue\(record, "deviceNotes", "设备备注"\)/);
-  assert.match(config, /deviceNotes=\$\{escapeIniValue\(item\.notes\)\}/);
-  assert.match(config, /notes: deviceNotes/);
-  assert.match(config, /rows\.length === 0 && \(config\.customDeviceTypes\.length > 0 \|\| config\.hiddenDeviceTypes\.length > 0\)/);
-  assert.match(config, /const hasExplicitConfigHeader = headers\.some/);
-  assert.match(config, /const hasLegacyDeviceNameHeader = headers\.includes\("name"\)/);
-  assert.match(config, /const hasKnownHeader = hasExplicitConfigHeader \|\| hasLegacyDeviceNameHeader/);
-  assert.match(config, /if \(!hasKnownHeader\) throw new Error\("invalid config"\)/);
-  assert.match(config, /const hasKnownMeta = \["appName", "formatVersion", "exportedAt", "customDeviceTypes", "hiddenDeviceTypes"\]\.some/);
-  assert.match(config, /const hasKnownAccount = accountSections\.some/);
-  assert.match(config, /if \(!hasKnownMeta && !hasKnownAccount\)/);
-  assert.match(config, /customDeviceTypes = mergeStructuredList\(customDeviceTypes, readRecordValue\(record, "customDeviceTypes", "设备类型配置"\)\)/);
+  assert.match(config, /const CSV_DEVICE_HEADERS = \["设备ID", "设备名称", "设备类型", "IP地址", "设备备注", "图标文字", "更新时间"\]/);
+  assert.match(config, /const CSV_ACCOUNT_HEADERS = \["设备ID", "账号ID", "用户名", "密码", "账号标签", "账号备注", "更新时间"\]/);
+  assert.match(config, /const CSV_HISTORY_HEADERS = \["设备ID", "账号ID", "历史ID", "旧密码", "新密码", "修改时间", "修改原因"\]/);
+  assert.match(config, /createCsvSection\(`设备类型\.\$\{type\.label\}\.设备`, CSV_DEVICE_HEADERS/);
+  assert.match(config, /createCsvSection\(`设备类型\.\$\{type\.label\}\.账号`, CSV_ACCOUNT_HEADERS/);
+  assert.match(config, /createCsvSection\(`设备类型\.\$\{type\.label\}\.密码历史`, CSV_HISTORY_HEADERS/);
+  assert.match(config, /function parseSectionedCsvConfigRows/);
+  assert.doesNotMatch(config, /function parseLegacyCsvConfigRows/);
+  assert.match(config, /if \(!rows\.some\(\(row\) => row\[0\]\?\.trim\(\)\.startsWith\(CSV_SECTION_PREFIX\)\)\) throw new Error\("invalid config"\)/);
+  assert.match(config, /function createJsonConfigPayload/);
+  assert.match(config, /function parseChineseJsonConfig/);
+  assert.match(config, /\[设备类型\.\$\{typeNumber\}\.设备\.\$\{deviceNumber\}\]/);
+  assert.match(config, /\[设备类型\.\$\{typeNumber\}\.设备\.\$\{deviceNumber\}\.账号\.\$\{accountNumber\}\]/);
+  assert.match(config, /\[设备类型\.\$\{typeNumber\}\.设备\.\$\{deviceNumber\}\.账号\.\$\{accountNumber\}\.密码历史\.\$\{historyIndex \+ 1\}\]/);
+  assert.match(config, /function normalizeIniSectionNames/);
+  assert.match(config, /function parseStructuredIniSections/);
+  assert.doesNotMatch(config, /function parseLegacyIniSections/);
   assert.match(vault, /iconClass: readString\(item\.iconClass\)\.trim\(\) \|\| iconClassForColor\(fallbackDeviceTypeMeta\.color\)/);
   assert.doesNotMatch(vault, /notes: primaryAccount\.notes/);
   assert.match(vault, /hasExplicitAccounts \? item\.accounts \?\? \[\] : \[item\]/);
@@ -584,9 +587,9 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.match(app, /文件扩展名像是 \$\{preferredFormat\.toUpperCase\(\)\}，已按内容识别为 \$\{format\.toUpperCase\(\)\} 配置。/);
   assert.match(config, /function parseCsvConfigContent\(content: string\): ConfigData/);
   assert.match(config, /function parseIniConfigContent\(content: string\): ConfigData/);
-  assert.match(config, /const isLegacyArrayConfig = Array\.isArray\(parsed\)/);
-  assert.match(config, /customDeviceTypes: normalizeDeviceTypeMetaList\(isLegacyArrayConfig \? \[\] : parsed\?\.customDeviceTypes\)/);
-  assert.match(config, /hiddenDeviceTypes: normalizeHiddenDeviceTypes\(isLegacyArrayConfig \? \[\] : parsed\?\.hiddenDeviceTypes, configItems\)/);
+  assert.doesNotMatch(config, /const isLegacyArrayConfig = Array\.isArray\(parsed\)/);
+  assert.match(config, /customDeviceTypes: normalizeDeviceTypeMetaList\(rawTypes\)/);
+  assert.match(config, /hiddenDeviceTypes: normalizeHiddenDeviceTypes\(parsed\["隐藏设备类型"\], configItems\)/);
   assert.match(config, /export function getConfigSummary\(config: ConfigData\): ConfigSummary/);
   assert.match(app, /function chooseConfigFile\(\)/);
   assert.match(app, /function requestApplyConfig\(content: string, preferredFormat: ConfigFormat\)/);
@@ -688,7 +691,35 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
 
   for (const format of ["json", "csv", "ini"]) {
     const payload = createConfigPayload(items, customDeviceTypes, hiddenDeviceTypes, format);
+    if (format === "json") {
+      assert.match(payload, /"元信息"/);
+      assert.match(payload, /"设备名称": "核心路由器"/);
+      assert.match(payload, /"账号标签": "管理账号"/);
+      assert.match(payload, /"密码历史"/);
+      assert.doesNotMatch(payload, /"items"/);
+      assert.doesNotMatch(payload, /"customDeviceTypes"/);
+    }
     if (format === "csv") assert.equal(payload.charCodeAt(0), 0xfeff, "csv should include a UTF-8 BOM for spreadsheet apps");
+    if (format === "csv") {
+      assert.match(payload, /# 格式说明\n项目,内容/);
+      assert.match(payload, /密码管理器 CSV 配置文件/);
+      assert.match(payload, /每个设备类型下的设备ID和账号ID用来关联账号和密码历史/);
+      assert.match(payload, /# 元信息\n项目,内容/);
+      assert.match(payload, /# 设备类型\.路由器\.设备\n设备ID,设备名称,设备类型,IP地址,设备备注,图标文字,更新时间/);
+      assert.match(payload, /# 设备类型\.路由器\.账号\n设备ID,账号ID,用户名,密码,账号标签,账号备注,更新时间/);
+      assert.match(payload, /# 设备类型\.路由器\.密码历史\n设备ID,账号ID,历史ID,旧密码,新密码,修改时间,修改原因/);
+      assert.doesNotMatch(payload, /passwordHistory,customDeviceTypes,hiddenDeviceTypes/);
+    }
+    if (format === "ini") {
+      assert.match(payload, /; 密码管理器 INI 配置文件/);
+      assert.match(payload, /; 设备类型\.N 表示设备类型；设备类型\.N\.设备\.M 表示该类型下的设备。/);
+      assert.match(payload, /\[设备类型\.1\]/);
+      assert.match(payload, /\[设备类型\.1\.设备\.1\]/);
+      assert.match(payload, /\[设备类型\.1\.设备\.1\.账号\.1\]/);
+      assert.match(payload, /\[设备类型\.1\.设备\.1\.账号\.1\.密码历史\.1\]/);
+      assert.doesNotMatch(payload, /passwordHistory=\[/);
+      assert.doesNotMatch(payload, /customDeviceTypes=\[/);
+    }
     const importPayload = format === "json" ? `\uFEFF${payload}` : payload;
     const parsed = parseConfigContent(importPayload, format);
     assert.equal(parsed.items.length, 1, `${format} should preserve the device`);
@@ -718,48 +749,11 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
   assert.equal(parsedIniFallback.config.items[0].accounts[1].username, "ops");
 });
 
-test("legacy json config can contain website without reintroducing it to the active model", async () => {
+test("old config shapes are rejected instead of being silently imported", async () => {
   const { parseConfigContent } = await importSourceModule("lib/config.ts");
-  const parsed = parseConfigContent(
-    JSON.stringify({
-      meta: { appName: "旧版", formatVersion: 0, exportedAt: "2026-06-12T00:00:00.000Z" },
-      items: [
-        {
-          id: 1,
-          title: "legacy",
-          deviceName: "旧版设备",
-          deviceType: "路由器",
-          username: "admin",
-          password: "admin-pass",
-          website: "https://legacy.example",
-          ipAddress: "10.0.0.2",
-          tag: "登录账号",
-          updatedAt: "2026/6/12 10:00:00",
-          notes: "",
-          history: [],
-          accounts: [
-            {
-              id: 1,
-              title: "admin",
-              username: "admin",
-              password: "admin-pass",
-              website: "https://legacy.example",
-              tag: "登录账号",
-              notes: "",
-              updatedAt: "2026/6/12 10:00:00",
-              history: [],
-            },
-          ],
-        },
-      ],
-    }),
-    "json"
-  );
-
-  assert.equal(parsed.items[0].deviceName, "旧版设备");
-  assert.equal(parsed.items[0].accounts[0].username, "admin");
-  assert.equal("website" in parsed.items[0], false);
-  assert.equal("website" in parsed.items[0].accounts[0], false);
+  assert.throws(() => parseConfigContent(JSON.stringify({ items: [] }), "json"), /invalid config/);
+  assert.throws(() => parseConfigContent("deviceName,deviceType,username,password\n旧路由,路由器,admin,pass", "csv"), /invalid config/);
+  assert.throws(() => parseConfigContent("[account.1]\ndeviceName=旧交换机\nusername=admin\n", "ini"), /invalid config/);
 });
 
 test("configuration payloads preserve type settings without device rows", async () => {
@@ -784,10 +778,9 @@ test("configuration import accepts empty vault files with type metadata", async 
 
   const json = parseConfigContent(
     JSON.stringify({
-      meta: { appName: "设备资产凭据管理工具", formatVersion: 1, exportedAt: "" },
-      items: [],
-      customDeviceTypes: [{ label: "交换机", iconText: "交", color: "cyan" }],
-      hiddenDeviceTypes: ["旧分类"],
+      元信息: { 应用名称: "密码管理器", 格式版本: 1, 导出时间: "" },
+      设备类型: [{ 设备类型: "交换机", 图标文字: "交", 颜色: "cyan", 设备: [] }],
+      隐藏设备类型: ["旧分类"],
     }),
     "json"
   );
@@ -797,11 +790,17 @@ test("configuration import accepts empty vault files with type metadata", async 
 
   const ini = parseConfigContent(
     `\uFEFF${[
-      "[meta]",
-      "appName=设备资产凭据管理工具",
-      "formatVersion=1",
-      'customDeviceTypes=[{"label":"交换机","iconText":"交","color":"cyan"}]',
-      'hiddenDeviceTypes=["旧分类"]',
+      "[元信息]",
+      "应用名称=密码管理器",
+      "格式版本=1",
+      "",
+      "[设备类型.1]",
+      "设备类型=交换机",
+      "图标文字=交",
+      "颜色=cyan",
+      "",
+      "[隐藏设备类型.1]",
+      "设备类型=旧分类",
       "",
     ].join("\n")}`,
     "ini"
@@ -809,6 +808,73 @@ test("configuration import accepts empty vault files with type metadata", async 
   assert.equal(ini.items.length, 0);
   assert.equal(ini.customDeviceTypes[0].label, "交换机");
   assert.equal(ini.hiddenDeviceTypes[0], "旧分类");
+});
+
+test("csv and ini import require the grouped Chinese config shape", async () => {
+  const { parseConfigContent } = await importSourceModule("lib/config.ts");
+  const csv = parseConfigContent([
+    "# 元信息",
+    "项目,内容",
+    "应用名称,密码管理器",
+    "格式版本,1",
+    "",
+    "# 设备类型",
+    "设备类型,图标文字,颜色",
+    "路由器,路,cyan",
+    "",
+    "# 设备类型.路由器.设备",
+    "设备ID,设备名称,设备类型,IP地址,设备备注,图标文字,更新时间",
+    "1,核心路由器,路由器,10.0.0.9,CSV 备注,路,2026/6/12 12:00:00",
+    "",
+    "# 设备类型.路由器.账号",
+    "设备ID,账号ID,用户名,密码,账号标签,账号备注,更新时间",
+    "1,1,admin,new-pass,管理账号,账号备注,2026/6/12 12:00:00",
+    "",
+    "# 设备类型.路由器.密码历史",
+    "设备ID,账号ID,历史ID,旧密码,新密码,修改时间,修改原因",
+    "1,1,1,old-pass,new-pass,2026/6/11 12:00:00,",
+  ].join("\n"), "csv");
+  assert.equal(csv.items[0].deviceName, "核心路由器");
+  assert.equal(csv.items[0].accounts[0].history[0].password, "old-pass");
+  assert.equal(csv.customDeviceTypes[0].label, "路由器");
+
+  const ini = parseConfigContent([
+    "[元信息]",
+    "应用名称=密码管理器",
+    "格式版本=1",
+    "",
+    "[设备类型.1]",
+    "设备类型=交换机",
+    "图标文字=交",
+    "颜色=cyan",
+    "",
+    "[设备类型.1.设备.1]",
+    "设备ID=1",
+    "设备名称=核心交换机",
+    "设备类型=交换机",
+    "IP地址=10.0.0.10",
+    "设备备注=INI 备注",
+    "图标文字=交",
+    "更新时间=2026/6/12 12:00:00",
+    "",
+    "[设备类型.1.设备.1.账号.1]",
+    "账号ID=1",
+    "用户名=admin",
+    "密码=admin-pass",
+    "账号标签=管理账号",
+    "账号备注=账号备注",
+    "更新时间=2026/6/12 12:00:00",
+    "",
+    "[设备类型.1.设备.1.账号.1.密码历史.1]",
+    "历史ID=1",
+    "旧密码=before",
+    "新密码=admin-pass",
+    "修改时间=2026/6/11 12:00:00",
+    "修改原因=",
+  ].join("\n"), "ini");
+  assert.equal(ini.items[0].deviceName, "核心交换机");
+  assert.equal(ini.items[0].accounts[0].history[0].newPassword, "admin-pass");
+  assert.equal(ini.customDeviceTypes[0].label, "交换机");
 });
 
 test("configuration import rejects unrelated csv and ini files", async () => {
@@ -824,21 +890,29 @@ test("configuration import rejects unrelated csv and ini files", async () => {
 test("account arrays do not inherit device notes during import", async () => {
   const { parseConfigContent } = await importSourceModule("lib/config.ts");
   const payload = JSON.stringify({
-    items: [
+    元信息: { 应用名称: "密码管理器", 格式版本: 1, 导出时间: "" },
+    设备类型: [
       {
-        id: 1,
-        deviceName: "核心交换机",
-        deviceType: "交换机",
-        ipAddress: "10.0.0.2",
-        notes: "设备安装在机柜 B2",
-        accounts: [
+        设备类型: "交换机",
+        图标文字: "交",
+        颜色: "cyan",
+        设备: [
           {
-            id: 1,
-            username: "admin",
-            password: "admin-pass",
-            tag: "管理账号",
-            updatedAt: "2026/6/12 11:00:00",
-            history: [],
+            设备ID: 1,
+            设备名称: "核心交换机",
+            设备类型: "交换机",
+            IP地址: "10.0.0.2",
+            设备备注: "设备安装在机柜 B2",
+            账号: [
+              {
+                账号ID: 1,
+                用户名: "admin",
+                密码: "admin-pass",
+                账号标签: "管理账号",
+                更新时间: "2026/6/12 11:00:00",
+                密码历史: [],
+              },
+            ],
           },
         ],
       },
@@ -856,8 +930,22 @@ test("account tags stay account-scoped instead of becoming device metadata", asy
 
   const parsedCsv = parseConfigContent(
     [
-      "deviceName,deviceType,ipAddress,username,password",
-      "核心路由器,路由器,10.0.0.1,admin,admin-pass",
+      "# 元信息",
+      "项目,内容",
+      "应用名称,密码管理器",
+      "格式版本,1",
+      "",
+      "# 设备类型",
+      "设备类型,图标文字,颜色",
+      "路由器,路,cyan",
+      "",
+      "# 设备类型.路由器.设备",
+      "设备ID,设备名称,设备类型,IP地址,设备备注,图标文字,更新时间",
+      "1,核心路由器,路由器,10.0.0.1,,路,2026/6/12 12:00:00",
+      "",
+      "# 设备类型.路由器.账号",
+      "设备ID,账号ID,用户名,密码,账号标签,账号备注,更新时间",
+      "1,1,admin,admin-pass,登录账号,,2026/6/12 12:00:00",
     ].join("\n"),
     "csv"
   );
@@ -867,11 +955,26 @@ test("account tags stay account-scoped instead of becoming device metadata", asy
 
   const parsedIni = parseConfigContent(
     [
-      "[account.1]",
-      "deviceName=核心路由器",
-      "deviceType=路由器",
-      "username=admin",
-      "password=admin-pass",
+      "[元信息]",
+      "应用名称=密码管理器",
+      "格式版本=1",
+      "",
+      "[设备类型.1]",
+      "设备类型=路由器",
+      "图标文字=路",
+      "颜色=cyan",
+      "",
+      "[设备类型.1.设备.1]",
+      "设备ID=1",
+      "设备名称=核心路由器",
+      "设备类型=路由器",
+      "图标文字=路",
+      "",
+      "[设备类型.1.设备.1.账号.1]",
+      "账号ID=1",
+      "用户名=admin",
+      "密码=admin-pass",
+      "账号标签=登录账号",
       "",
     ].join("\n"),
     "ini"
@@ -887,7 +990,7 @@ test("account tags stay account-scoped instead of becoming device metadata", asy
       accounts: [{ id: 1, username: "admin", password: "admin-pass" }],
     },
   ]);
-  assert.equal(normalized[0].accounts[0].tag, "登录账号");
+  assert.equal(normalized[0].accounts[0].tag, "");
 
   const migrated = normalizeVaultItems([
     {
@@ -935,8 +1038,8 @@ test("account tags stay account-scoped instead of becoming device metadata", asy
   assert.equal(synced.accounts[0].tag, "管理账号");
 
   const { formatAccountTag } = await importSourceModule("lib/vault.ts");
-  assert.equal(formatAccountTag({ tag: "路由器" }, "路由器"), "登录账号");
-  assert.equal(formatAccountTag({ tag: "网络设备" }, "路由器", "网络设备"), "登录账号");
+  assert.equal(formatAccountTag({ tag: "路由器" }, "路由器"), "");
+  assert.equal(formatAccountTag({ tag: "网络设备" }, "路由器", "网络设备"), "");
   assert.equal(formatAccountTag({ tag: "管理账号" }, "路由器", "路由器"), "管理账号");
   assert.equal(formatAccountTag({ tag: "管理账号" }, "路由器"), "管理账号");
 });

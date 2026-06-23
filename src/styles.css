@@ -1815,6 +1815,10 @@ button:disabled {
   box-shadow: 0 24px 70px rgba(24, 28, 32, 0.22);
 }
 
+.modal.type-picker-open {
+  overflow: visible;
+}
+
 .type-modal {
   width: min(520px, calc(100vw - 42px));
   border-radius: 14px;
@@ -1849,6 +1853,10 @@ button:disabled {
   max-height: calc(100vh - 210px);
   overflow: auto;
   padding: 18px;
+}
+
+.form-grid.type-picker-open {
+  overflow: visible;
 }
 
 .form-grid label,
@@ -2015,7 +2023,7 @@ button:disabled {
 
 .type-combo-popover {
   position: absolute;
-  z-index: 48;
+  z-index: 80;
   top: calc(100% + 6px);
   left: 0;
   right: 0;
