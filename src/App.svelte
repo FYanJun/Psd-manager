@@ -16,17 +16,16 @@
   import {
     APP_TITLE,
     DEFAULT_ACCOUNT_TAG,
-    DETAIL_MIN_WIDTH,
-    GENERATOR_DEFAULT_WIDTH,
-    GENERATOR_MAX_WIDTH,
-    GENERATOR_MIN_WIDTH,
-    LIST_DEFAULT_WIDTH,
-    LIST_MAX_WIDTH,
-    LIST_MIN_WIDTH,
-    RESIZER_WIDTH,
-    SIDEBAR_DEFAULT_WIDTH,
-    SIDEBAR_MAX_WIDTH,
-    SIDEBAR_MIN_WIDTH,
+    GENERATOR_DEFAULT_RATIO,
+    GENERATOR_MAX_RATIO,
+    GENERATOR_MIN_RATIO,
+    LIST_DEFAULT_RATIO,
+    LIST_MAX_RATIO,
+    LIST_MIN_RATIO,
+    RESIZER_RATIO,
+    SIDEBAR_DEFAULT_RATIO,
+    SIDEBAR_MAX_RATIO,
+    SIDEBAR_MIN_RATIO,
     STORAGE_KEY,
     defaultDeviceTypeMeta,
     fallbackDeviceTypeMeta,
@@ -42,11 +41,10 @@
     updateAccountPassword,
   } from "./lib/device-commands";
   import {
-    clampPaneWidth as clampPaneWidthValue,
+    clampPaneRatio,
     sortDeviceTypeOptions,
   } from "./lib/layout";
   import {
-    applyGeneratorPresetOptions,
     buildGeneratorPool,
     generatePasswordValue,
     normalizeGeneratorLength,
@@ -65,7 +63,6 @@
     DeviceType,
     DeviceTypeMeta,
     DeviceTypeSortMode,
-    GeneratorPreset,
     GeneratorTarget,
     PendingConfirmation,
     PopoverPosition,
@@ -132,6 +129,7 @@
   let passwordForm = { password: "", reason: "" };
   let bulkPasswordForm: BulkPasswordForm = { deviceType: "全部设备", username: "", password: "", reason: "" };
   let bulkUsernameSearch = "";
+  let bulkUsernameSuggestionsOpen = false;
   let bulkPasswordDeselectedKeys: string[] = [];
   let openTypePicker: TypePickerScope | null = null;
   let deviceTypeSearch = "";
@@ -143,7 +141,6 @@
   let visibleHistoryIds: number[] = [];
   let generatorPanelOpen = false;
   let generatorTarget: GeneratorTarget = null;
-  let generatorPreset: GeneratorPreset = "balanced";
   let generatedPassword = "";
   let generatorLength = 8;
   let generatorLengthInput = "8";
@@ -165,14 +162,14 @@
   let forwardStack: ViewState[] = [];
   let restoringView = false;
   let searchInput: HTMLInputElement | null = null;
-  let sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
-  let listWidth = LIST_DEFAULT_WIDTH;
-  let generatorWidth = GENERATOR_DEFAULT_WIDTH;
+  let sidebarRatio = SIDEBAR_DEFAULT_RATIO;
+  let listRatio = LIST_DEFAULT_RATIO;
+  let generatorRatio = GENERATOR_DEFAULT_RATIO;
   let resizingPane: ResizePane | null = null;
   let resizeStartX = 0;
-  let resizeStartSidebarWidth = SIDEBAR_DEFAULT_WIDTH;
-  let resizeStartListWidth = LIST_DEFAULT_WIDTH;
-  let resizeStartGeneratorWidth = GENERATOR_DEFAULT_WIDTH;
+  let resizeStartSidebarRatio = SIDEBAR_DEFAULT_RATIO;
+  let resizeStartListRatio = LIST_DEFAULT_RATIO;
+  let resizeStartGeneratorRatio = GENERATOR_DEFAULT_RATIO;
 
   onMount(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -184,9 +181,9 @@
         ensureDeviceTypeMetaForItems(items);
         hiddenDeviceTypes = normalizeHiddenDeviceTypes(parsed.hiddenDeviceTypes, items);
         if (parsed.paneLayout) {
-          sidebarWidth = clampPaneWidth(readNumber(parsed.paneLayout.sidebarWidth, SIDEBAR_DEFAULT_WIDTH), "sidebar");
-          listWidth = clampPaneWidth(readNumber(parsed.paneLayout.listWidth, LIST_DEFAULT_WIDTH), "list");
-          generatorWidth = clampPaneWidth(readNumber(parsed.paneLayout.generatorWidth, GENERATOR_DEFAULT_WIDTH), "generator");
+          sidebarRatio = readPaneLayoutRatio(parsed.paneLayout, "sidebar");
+          listRatio = readPaneLayoutRatio(parsed.paneLayout, "list");
+          generatorRatio = readPaneLayoutRatio(parsed.paneLayout, "generator");
         }
       } catch {
         showStatus("本地数据读取失败，已使用默认数据");
@@ -211,11 +208,22 @@
   $: if (hydrated) {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes, paneLayout: { sidebarWidth, listWidth, generatorWidth } })
+      JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes, paneLayout: { sidebarRatio, listRatio, generatorRatio } })
     );
   }
 
-  $: layoutStyle = `--sidebar-width: ${sidebarWidth}px; --list-width: ${listWidth}px; --generator-width: ${generatorWidth}px;`;
+  $: layoutStyle = [
+    `--sidebar-share: ${formatPanePercent(sidebarRatio)}`,
+    `--sidebar-min-share: ${formatPanePercent(SIDEBAR_MIN_RATIO)}`,
+    `--sidebar-max-share: ${formatPanePercent(SIDEBAR_MAX_RATIO)}`,
+    `--list-share: ${formatPanePercent(listRatio)}`,
+    `--list-min-share: ${formatPanePercent(LIST_MIN_RATIO)}`,
+    `--list-max-share: ${formatPanePercent(LIST_MAX_RATIO)}`,
+    `--generator-share: ${formatPanePercent(generatorRatio)}`,
+    `--generator-min-share: ${formatPanePercent(GENERATOR_MIN_RATIO)}`,
+    `--generator-max-share: ${formatPanePercent(GENERATOR_MAX_RATIO)}`,
+    `--resizer-share: ${formatPanePercent(RESIZER_RATIO)}`,
+  ].join("; ");
 
   $: filteredItems = items.filter((item) => {
     const query = searchQuery.trim().toLowerCase();
@@ -494,24 +502,6 @@
     if (target === "current-account") activeDialog = "password";
   }
 
-  function applyGeneratorPreset(preset: GeneratorPreset) {
-    const presetOptions = applyGeneratorPresetOptions(preset);
-    generatorPreset = presetOptions.preset;
-    generatorLength = presetOptions.length;
-    useUpper = presetOptions.useUpper;
-    useLower = presetOptions.useLower;
-    useNumbers = presetOptions.useNumbers;
-    useSymbols = presetOptions.useSymbols;
-    excludeSimilar = presetOptions.excludeSimilar;
-    preventRepeats = presetOptions.preventRepeats;
-    minimumNumbers = presetOptions.minimumNumbers;
-    minimumSymbols = presetOptions.minimumSymbols;
-    allowedSymbols = presetOptions.allowedSymbols;
-    excludedCharacters = presetOptions.excludedCharacters;
-    generatorLengthInput = String(generatorLength);
-    generatePassword();
-  }
-
   function setGeneratorLength(length: number, syncInput = true) {
     generatorLength = normalizeGeneratorLength(length);
     if (syncInput) generatorLengthInput = String(generatorLength);
@@ -583,30 +573,42 @@
     deviceTypeSortMode = mode;
   }
 
-  function clampPaneWidth(width: number, pane: ResizePane) {
-    const viewportWidth =
-      typeof window === "undefined"
-        ? DETAIL_MIN_WIDTH + SIDEBAR_MAX_WIDTH + LIST_MAX_WIDTH + RESIZER_WIDTH * 2
-        : window.innerWidth;
-    return clampPaneWidthValue(width, pane, viewportWidth, sidebarWidth, listWidth);
+  function getViewportWidth() {
+    return typeof window === "undefined" ? 1440 : Math.max(1, window.innerWidth);
+  }
+
+  function getWorkspaceWidth() {
+    const viewportWidth = getViewportWidth();
+    return Math.max(1, viewportWidth * (1 - sidebarRatio - RESIZER_RATIO));
+  }
+
+  function formatPanePercent(ratio: number) {
+    return `${Number((ratio * 100).toFixed(2))}%`;
+  }
+
+  function readPaneLayoutRatio(layout: Record<string, unknown>, pane: ResizePane) {
+    const ratioKey = pane === "sidebar" ? "sidebarRatio" : pane === "list" ? "listRatio" : "generatorRatio";
+    const ratio = readNumber(layout[ratioKey], Number.NaN);
+    if (Number.isFinite(ratio)) return clampPaneRatio(ratio, pane);
+    return clampPaneRatio(Number.NaN, pane);
   }
 
   function clampPaneLayout() {
-    generatorWidth = clampPaneWidth(generatorWidth, "generator");
-    listWidth = clampPaneWidth(listWidth, "list");
-    sidebarWidth = clampPaneWidth(sidebarWidth, "sidebar");
-    listWidth = clampPaneWidth(listWidth, "list");
+    sidebarRatio = clampPaneRatio(sidebarRatio, "sidebar");
+    listRatio = clampPaneRatio(listRatio, "list");
+    generatorRatio = clampPaneRatio(generatorRatio, "generator");
   }
 
   function startPaneResize(pane: ResizePane, event: PointerEvent) {
     event.preventDefault();
     activePopover = null;
     openTypePicker = null;
+    bulkUsernameSuggestionsOpen = false;
     resizingPane = pane;
     resizeStartX = event.clientX;
-    resizeStartSidebarWidth = sidebarWidth;
-    resizeStartListWidth = listWidth;
-    resizeStartGeneratorWidth = generatorWidth;
+    resizeStartSidebarRatio = sidebarRatio;
+    resizeStartListRatio = listRatio;
+    resizeStartGeneratorRatio = generatorRatio;
     document.body.classList.add("is-resizing-pane");
     window.addEventListener("pointermove", handlePaneResize);
     window.addEventListener("pointerup", stopPaneResize);
@@ -617,11 +619,11 @@
     if (!resizingPane) return;
     const deltaX = event.clientX - resizeStartX;
     if (resizingPane === "sidebar") {
-      sidebarWidth = clampPaneWidth(resizeStartSidebarWidth + deltaX, "sidebar");
+      sidebarRatio = clampPaneRatio(resizeStartSidebarRatio + deltaX / getViewportWidth(), "sidebar");
     } else if (resizingPane === "list") {
-      listWidth = clampPaneWidth(resizeStartListWidth + deltaX, "list");
+      listRatio = clampPaneRatio(resizeStartListRatio + deltaX / getWorkspaceWidth(), "list");
     } else {
-      generatorWidth = clampPaneWidth(resizeStartGeneratorWidth - deltaX, "generator");
+      generatorRatio = clampPaneRatio(resizeStartGeneratorRatio - deltaX / getViewportWidth(), "generator");
     }
   }
 
@@ -845,10 +847,15 @@
     pendingConfirmation = null;
     pendingConfigContent = "";
     openTypePicker = null;
+    bulkUsernameSuggestionsOpen = false;
   }
 
   function handleGlobalPointerDown(event: PointerEvent) {
     closePopoverWhenPointerLeavesMenu(event);
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (openTypePicker && !target.closest(".type-combo")) openTypePicker = null;
+    if (bulkUsernameSuggestionsOpen && !target.closest(".bulk-username-field")) bulkUsernameSuggestionsOpen = false;
   }
 
   function handleGlobalContextMenu(event: MouseEvent) {
@@ -862,6 +869,10 @@
   function closeKeyboardSurface() {
     if (openTypePicker) {
       openTypePicker = null;
+      return true;
+    }
+    if (bulkUsernameSuggestionsOpen) {
+      bulkUsernameSuggestionsOpen = false;
       return true;
     }
     if (pendingConfirmation) {
@@ -1064,7 +1075,37 @@
       showStatus("设备类型已存在");
       return;
     }
+    const affectedDeviceCount = originalLabel && originalLabel !== label ? getDeviceTypeCount(originalLabel) : 0;
+    if (affectedDeviceCount > 0) {
+      activePopover = null;
+      pendingConfirmation = {
+        action: "rename-device-type",
+        title: "重命名设备类型",
+        message: `确认将“${originalLabel}”改为“${label}”？`,
+        detail: "该类型下的设备会一起改到新类型名，设备本身和账号密码不会删除。",
+        confirmLabel: "确认重命名",
+        summaryItems: [
+          { label: "影响设备", value: `${affectedDeviceCount} 台` },
+          { label: "新类型", value: label },
+        ],
+      };
+      return;
+    }
 
+    executeSaveDeviceType();
+  }
+
+  function executeSaveDeviceType() {
+    const label = typeForm.label.trim();
+    const originalLabel = typeForm.originalLabel;
+    if (!label) {
+      showStatus("请输入设备类型名称");
+      return;
+    }
+    if (deviceTypeRows.some((type) => type.label === label && type.label !== originalLabel)) {
+      showStatus("设备类型已存在");
+      return;
+    }
     const nextMeta: DeviceTypeMeta = {
       label,
       iconText: typeForm.iconText.trim() || label.slice(0, 1),
@@ -1131,12 +1172,22 @@
       id: selectedItem.id,
       deviceName: selectedItem.deviceName,
       deviceType: selectedItem.deviceType,
-      username: selectedAccount.username,
-      password: selectedAccount.password,
+      assetCode: selectedItem.assetCode,
+      location: selectedItem.location,
       ipAddress: selectedItem.ipAddress,
-      notes: selectedAccount.notes,
+      notes: selectedItem.notes,
     };
     activeDialog = "device";
+  }
+
+  function hasDuplicateDeviceName(name: string, deviceType: string, currentId: number | null) {
+    const normalizedName = name.trim();
+    const normalizedType = deviceType.trim();
+    return items.some((item) =>
+      item.id !== currentId &&
+      item.deviceName.trim() === normalizedName &&
+      item.deviceType.trim() === normalizedType
+    );
   }
 
   function saveDevice() {
@@ -1149,9 +1200,13 @@
       showStatus("请先新增设备类型");
       return;
     }
+    if (hasDuplicateDeviceName(name, deviceForm.deviceType, deviceForm.id)) {
+      showStatus("同一设备类型下已存在同名设备");
+      return;
+    }
     const now = new Date();
     const typeMeta = getTypeMeta(deviceForm.deviceType);
-    const accountUpdatedAt = formatDateTime(now);
+    const updatedAt = formatDateTime(now);
 
     if (deviceForm.id) {
       items = items.map((item) => {
@@ -1161,9 +1216,12 @@
             ...item,
             deviceName: name,
             deviceType: deviceForm.deviceType,
+            assetCode: deviceForm.assetCode.trim(),
+            location: deviceForm.location.trim(),
             ipAddress: deviceForm.ipAddress.trim(),
             iconText: typeMeta.iconText,
             iconClass: iconClassForType(deviceForm.deviceType),
+            notes: deviceForm.notes.trim(),
           },
           getAccounts(item)
         );
@@ -1176,39 +1234,30 @@
       return;
     }
 
-    const accountUsername = deviceForm.username.trim();
-    const nextAccount: DeviceAccount = {
-      id: 1,
-      title: accountUsername || "未填写用户名",
-      username: accountUsername,
-      password: deviceForm.password,
-      tag: DEFAULT_ACCOUNT_TAG,
-      notes: deviceForm.notes.trim(),
-      updatedAt: accountUpdatedAt,
-      history: [],
-    };
     const nextItem: VaultItem = {
       id: Math.max(0, ...items.map((item) => item.id)) + 1,
-      title: nextAccount.title,
+      title: name,
       deviceName: name,
       deviceType: deviceForm.deviceType,
-      username: nextAccount.username,
-      password: nextAccount.password,
+      assetCode: deviceForm.assetCode.trim(),
+      location: deviceForm.location.trim(),
+      username: "",
+      password: "",
       ipAddress: deviceForm.ipAddress.trim(),
       tag: deviceForm.deviceType,
       iconText: typeMeta.iconText,
       iconClass: iconClassForType(deviceForm.deviceType),
-      updatedAt: accountUpdatedAt,
-      notes: nextAccount.notes,
-      history: nextAccount.history,
-      accounts: [nextAccount],
+      updatedAt,
+      notes: deviceForm.notes.trim(),
+      history: [],
+      accounts: [],
     };
 
     items = [nextItem, ...items];
     pushNavigationState();
     selectedId = nextItem.id;
     selectedDeviceType = nextItem.deviceType;
-    selectedAccountId = nextAccount.id;
+    selectedAccountId = 0;
     selectedAccountIds = [];
     activeDialog = null;
   }
@@ -1248,6 +1297,49 @@
       showStatus("请先选择设备");
       return;
     }
+    const username = accountForm.username.trim();
+    if (!username) {
+      showStatus("请输入用户名");
+      return;
+    }
+    if (hasDuplicateAccountUsername(username, accountForm.id)) {
+      showStatus("当前设备下已存在同名账号");
+      return;
+    }
+    const currentAccount = accountForm.id ? selectedAccounts.find((account) => account.id === accountForm.id) : null;
+    if (currentAccount && currentAccount.password !== accountForm.password) {
+      activePopover = null;
+      pendingConfirmation = {
+        action: "save-account-password",
+        title: "保存账号密码变更",
+        message: `确认直接修改“${currentAccount.username || currentAccount.title || "当前账号"}”的密码？`,
+        detail: "这会覆盖账号当前密码，不会生成密码历史。需要保留旧密码记录时，请使用“更新密码”。",
+        confirmLabel: "仍然保存",
+        summaryItems: [
+          { label: "所属设备", value: selectedItem.deviceName },
+          { label: "账号", value: currentAccount.username || currentAccount.title || "未填写用户名" },
+        ],
+      };
+      return;
+    }
+
+    executeSaveAccount();
+  }
+
+  function executeSaveAccount() {
+    if (!hasSelectedDevice) {
+      showStatus("请先选择设备");
+      return;
+    }
+    const username = accountForm.username.trim();
+    if (!username) {
+      showStatus("请输入用户名");
+      return;
+    }
+    if (hasDuplicateAccountUsername(username, accountForm.id)) {
+      showStatus("当前设备下已存在同名账号");
+      return;
+    }
     const now = formatDateTime(new Date());
     const nextId = accountForm.id ?? Math.max(0, ...selectedAccounts.map((account) => account.id)) + 1;
     const nextAccount = createAccountFromFormData(accountForm, nextId, now);
@@ -1264,6 +1356,14 @@
     selectedAccountId = nextId;
     selectedAccountIds = [];
     activeDialog = null;
+  }
+
+  function hasDuplicateAccountUsername(username: string, currentId: number | null) {
+    const normalizedUsername = username.trim();
+    return selectedAccounts.some((account) =>
+      account.id !== currentId &&
+      account.username.trim() === normalizedUsername
+    );
   }
 
   function deleteSelectedAccount() {
@@ -1325,6 +1425,7 @@
     openTypePicker = null;
     bulkTypeSearch = "";
     bulkUsernameSearch = "";
+    bulkUsernameSuggestionsOpen = false;
     resetBulkPasswordSelection();
     bulkPasswordForm = {
       deviceType: selectedDeviceType,
@@ -1338,6 +1439,7 @@
   function setBulkPasswordDeviceType(deviceType: "全部设备" | DeviceType) {
     bulkPasswordForm = { ...bulkPasswordForm, deviceType, username: "" };
     bulkUsernameSearch = "";
+    bulkUsernameSuggestionsOpen = false;
     resetBulkPasswordSelection();
     bulkTypeSearch = "";
     openTypePicker = null;
@@ -1345,6 +1447,7 @@
 
   function updateBulkUsernameSearch(username: string) {
     bulkUsernameSearch = username;
+    bulkUsernameSuggestionsOpen = Boolean(username.trim());
     if (!bulkPasswordForm.username) return;
     bulkPasswordForm = { ...bulkPasswordForm, username: "" };
     resetBulkPasswordSelection();
@@ -1353,6 +1456,7 @@
   function selectBulkUsername(suggestion: BulkUsernameSuggestion) {
     const username = suggestion.username;
     bulkUsernameSearch = username;
+    bulkUsernameSuggestionsOpen = false;
     bulkPasswordForm = { ...bulkPasswordForm, username };
     resetBulkPasswordSelection();
   }
@@ -1402,6 +1506,32 @@
       showStatus("请输入新密码");
       return;
     }
+    pendingConfirmation = {
+      action: "update-password",
+      title: targetIds.length > 1 ? "批量更新所选账号密码" : "更新账号密码",
+      message: targetIds.length > 1
+        ? `确认更新 ${targetIds.length} 个账号的密码？`
+        : `确认更新“${selectedAccount.username || selectedAccount.title || "当前账号"}”的密码？`,
+      detail: "确认后会替换当前密码，并把旧密码写入密码历史。",
+      confirmLabel: "确认更新",
+      summaryItems: [
+        { label: "所属设备", value: selectedItem.deviceName },
+        { label: "影响账号", value: `${targetIds.length} 个` },
+      ],
+    };
+  }
+
+  function executePasswordUpdate() {
+    const targetIds = selectedAccountTargets.map((account) => account.id);
+    if (!hasSelectedDevice || targetIds.length === 0) {
+      showStatus("请先选择账号");
+      activeDialog = null;
+      return;
+    }
+    if (!passwordForm.password.trim()) {
+      showStatus("请输入新密码");
+      return;
+    }
     const changedAt = formatDateTime(new Date());
     const reason = passwordForm.reason.trim();
     const nextAccounts = selectedAccounts.map((account) =>
@@ -1420,6 +1550,35 @@
   }
 
   function saveBulkPasswordUpdate() {
+    const password = bulkPasswordForm.password;
+    if (!password.trim()) {
+      showStatus("请输入新密码");
+      return;
+    }
+    const matches = bulkPasswordSelectedMatches;
+    if (bulkPasswordMatches.length === 0) {
+      showStatus("没有匹配账号");
+      return;
+    }
+    if (matches.length === 0) {
+      showStatus("请选择需要改密的账号");
+      return;
+    }
+    pendingConfirmation = {
+      action: "bulk-update-password",
+      title: "批量更新密码",
+      message: `确认更新 ${matches.length} 个账号的密码？`,
+      detail: "确认后会批量替换当前密码，并为每个账号写入旧密码历史。",
+      confirmLabel: "确认批量更新",
+      summaryItems: [
+        { label: "设备范围", value: bulkPasswordForm.deviceType },
+        { label: "匹配用户名", value: bulkPasswordForm.username },
+        { label: "影响账号", value: `${matches.length} 个` },
+      ],
+    };
+  }
+
+  function executeBulkPasswordUpdate() {
     const password = bulkPasswordForm.password;
     if (!password.trim()) {
       showStatus("请输入新密码");
@@ -1503,6 +1662,14 @@
       deleteSelectedDevice();
     } else if (confirmation.action === "import-config" && configContent) {
       applyImportedConfig(configContent, configFormat);
+    } else if (confirmation.action === "update-password") {
+      executePasswordUpdate();
+    } else if (confirmation.action === "bulk-update-password") {
+      executeBulkPasswordUpdate();
+    } else if (confirmation.action === "save-account-password") {
+      executeSaveAccount();
+    } else if (confirmation.action === "rename-device-type") {
+      executeSaveDeviceType();
     }
   }
 
@@ -1780,7 +1947,6 @@
     {searchQuery}
     {listContextLabel}
     deviceTypeOptionsLength={deviceTypeOptions.length}
-    {historyOpen}
     {setDeviceTypeSortMode}
     {setSortMode}
     {selectDeviceType}
@@ -1813,6 +1979,7 @@
     bind:bulkTypeSearch
     bind:bulkUsernameSearch
     bind:deviceTypeSearch
+    {bulkUsernameSuggestionsOpen}
     {activeDialog}
     {selectedItem}
     {selectedAccount}
@@ -1853,7 +2020,6 @@
 
   {#if generatorPanelOpen}
     <PasswordGeneratorDrawer
-      bind:generatorPreset
       bind:generatedPassword
       bind:generatorLength
       bind:generatorLengthInput
@@ -1876,7 +2042,6 @@
       startGeneratorResize={(event) => startPaneResize("generator", event)}
       {generatePassword}
       copyGeneratedPassword={() => copyText(generatedPassword, "生成密码")}
-      {applyGeneratorPreset}
       {setGeneratorLength}
       {setGeneratorMinimumNumbers}
       {setGeneratorMinimumSymbols}

@@ -1,12 +1,13 @@
 import {
-  DETAIL_MIN_WIDTH,
-  GENERATOR_MAX_WIDTH,
-  GENERATOR_MIN_WIDTH,
-  LIST_MAX_WIDTH,
-  LIST_MIN_WIDTH,
-  RESIZER_WIDTH,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MIN_WIDTH,
+  GENERATOR_DEFAULT_RATIO,
+  GENERATOR_MAX_RATIO,
+  GENERATOR_MIN_RATIO,
+  LIST_DEFAULT_RATIO,
+  LIST_MAX_RATIO,
+  LIST_MIN_RATIO,
+  SIDEBAR_DEFAULT_RATIO,
+  SIDEBAR_MAX_RATIO,
+  SIDEBAR_MIN_RATIO,
 } from "./constants";
 import type { DeviceTypeMeta, DeviceTypeSortMode, ResizePane, VaultItem } from "./types";
 
@@ -26,32 +27,21 @@ export function sortDeviceTypeOptions(types: DeviceTypeMeta[], mode: DeviceTypeS
   return rows.map(({ index, count, ...type }) => type);
 }
 
-export function getMaxPaneWidth(
-  pane: ResizePane,
-  viewportWidth: number,
-  sidebarWidth: number,
-  listWidth: number
-) {
-  if (pane === "generator") {
-    return Math.max(GENERATOR_MIN_WIDTH, Math.min(GENERATOR_MAX_WIDTH, viewportWidth - 120));
-  }
-  const availableWidth = viewportWidth - DETAIL_MIN_WIDTH - RESIZER_WIDTH * 2;
-  if (pane === "sidebar") return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - listWidth));
-  return Math.max(LIST_MIN_WIDTH, Math.min(LIST_MAX_WIDTH, availableWidth - sidebarWidth));
+export function getDefaultPaneRatio(pane: ResizePane) {
+  if (pane === "sidebar") return SIDEBAR_DEFAULT_RATIO;
+  if (pane === "list") return LIST_DEFAULT_RATIO;
+  return GENERATOR_DEFAULT_RATIO;
 }
 
-export function getPaneMinWidth(pane: ResizePane) {
-  if (pane === "sidebar") return SIDEBAR_MIN_WIDTH;
-  if (pane === "list") return LIST_MIN_WIDTH;
-  return GENERATOR_MIN_WIDTH;
+export function getPaneRatioBounds(pane: ResizePane) {
+  if (pane === "sidebar") return { min: SIDEBAR_MIN_RATIO, max: SIDEBAR_MAX_RATIO };
+  if (pane === "list") return { min: LIST_MIN_RATIO, max: LIST_MAX_RATIO };
+  return { min: GENERATOR_MIN_RATIO, max: GENERATOR_MAX_RATIO };
 }
 
-export function clampPaneWidth(
-  width: number,
-  pane: ResizePane,
-  viewportWidth: number,
-  sidebarWidth: number,
-  listWidth: number
-) {
-  return Math.round(Math.min(Math.max(width, getPaneMinWidth(pane)), getMaxPaneWidth(pane, viewportWidth, sidebarWidth, listWidth)));
+export function clampPaneRatio(ratio: number, pane: ResizePane) {
+  const fallback = getDefaultPaneRatio(pane);
+  const nextRatio = Number.isFinite(ratio) ? ratio : fallback;
+  const { min, max } = getPaneRatioBounds(pane);
+  return Number(Math.min(Math.max(nextRatio, min), max).toFixed(4));
 }

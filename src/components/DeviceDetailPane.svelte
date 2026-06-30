@@ -77,9 +77,6 @@
             {:else}
               <span>暂无账号</span>
             {/if}
-            {#if selectedItem.ipAddress}
-              <span>IP {selectedItem.ipAddress}</span>
-            {/if}
             {#if selectedAccount.id}
               <span>当前账号更新于 {selectedAccount.updatedAt}</span>
             {/if}
@@ -87,15 +84,43 @@
         </div>
       </div>
 
-      {#if selectedItem.ipAddress}
-        <div class="device-info-row">
-          <div>
-            <span class="field-label">IP 地址</span>
-            <p>{selectedItem.ipAddress}</p>
-          </div>
-          <button class="icon-button inline" aria-label="复制 IP 地址" data-tooltip="复制 IP 地址" on:click={() => copyText(selectedItem.ipAddress, "IP 地址")}>
-            <Copy size={18} />
-          </button>
+      {#if selectedItem.ipAddress || selectedItem.assetCode || selectedItem.location}
+        <div class="device-info-card" aria-label="设备信息">
+          {#if selectedItem.ipAddress}
+            <div class="device-info-item">
+              <div>
+                <span class="field-label">IP 地址</span>
+                <p>{selectedItem.ipAddress}</p>
+              </div>
+              <button class="icon-button inline" aria-label="复制 IP 地址" data-tooltip="复制 IP 地址" on:click={() => copyText(selectedItem.ipAddress, "IP 地址")}>
+                <Copy size={18} />
+              </button>
+            </div>
+          {/if}
+
+          {#if selectedItem.assetCode}
+            <div class="device-info-item">
+              <div>
+                <span class="field-label">资产编号</span>
+                <p>{selectedItem.assetCode}</p>
+              </div>
+              <button class="icon-button inline" aria-label="复制资产编号" data-tooltip="复制资产编号" on:click={() => copyText(selectedItem.assetCode, "资产编号")}>
+                <Copy size={18} />
+              </button>
+            </div>
+          {/if}
+
+          {#if selectedItem.location}
+            <div class="device-info-item">
+              <div>
+                <span class="field-label">设备位置</span>
+                <p>{selectedItem.location}</p>
+              </div>
+              <button class="icon-button inline" aria-label="复制设备位置" data-tooltip="复制设备位置" on:click={() => copyText(selectedItem.location, "设备位置")}>
+                <Copy size={18} />
+              </button>
+            </div>
+          {/if}
         </div>
       {/if}
 

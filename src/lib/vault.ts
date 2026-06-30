@@ -102,6 +102,8 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
     title: readString(item.title, "管理员账号") || "管理员账号",
     deviceName: readString(item.deviceName, readString(item.title, `设备 ${index + 1}`)) || `设备 ${index + 1}`,
     deviceType,
+    assetCode: readString(item.assetCode),
+    location: readString(item.location),
     username: readString(item.username),
     password: readString(item.password),
     ipAddress: readString(item.ipAddress, readString((item as { ip?: unknown }).ip)),
@@ -146,7 +148,12 @@ export function getVaultItemUpdatedTimestamp(item: VaultItem) {
 export function matchesVaultItemSearch(item: VaultItem, query: string) {
   const deviceName = normalizeSearchValue(item.deviceName);
   const ipAddress = normalizeSearchValue(item.ipAddress);
-  return fuzzyContains(deviceName, query) || fuzzyContains(ipAddress, query);
+  const assetCode = normalizeSearchValue(item.assetCode);
+  const location = normalizeSearchValue(item.location);
+  return fuzzyContains(deviceName, query) ||
+    fuzzyContains(ipAddress, query) ||
+    fuzzyContains(assetCode, query) ||
+    fuzzyContains(location, query);
 }
 
 export function createBlankItem(): VaultItem {
@@ -155,6 +162,8 @@ export function createBlankItem(): VaultItem {
     title: "未选择设备",
     deviceName: "未选择设备",
     deviceType: "",
+    assetCode: "",
+    location: "",
     username: "",
     password: "",
     ipAddress: "",
@@ -186,8 +195,8 @@ export function createEmptyDeviceForm(): DeviceForm {
     id: null,
     deviceName: "",
     deviceType: "",
-    username: "",
-    password: "",
+    assetCode: "",
+    location: "",
     ipAddress: "",
     notes: "",
   };

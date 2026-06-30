@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { Copy, Grid2X2, KeyRound, RefreshCcw, RotateCcwKey, SlidersHorizontal, Sparkles, X } from "@lucide/svelte";
+  import { Copy, Grid2X2, KeyRound, RefreshCcw, RotateCcwKey, SlidersHorizontal, X } from "@lucide/svelte";
   import ClearableInput from "./ClearableInput.svelte";
-  import type { DeviceAccount, GeneratorPreset, VaultItem } from "../lib/types";
+  import type { DeviceAccount, VaultItem } from "../lib/types";
 
-  export let generatorPreset: GeneratorPreset;
   export let generatedPassword = "";
   export let generatorLength = 8;
   export let generatorLengthInput = "8";
@@ -27,7 +26,6 @@
   export let startGeneratorResize: (event: PointerEvent) => void;
   export let generatePassword: () => void;
   export let copyGeneratedPassword: () => void;
-  export let applyGeneratorPreset: (preset: GeneratorPreset) => void;
   export let setGeneratorLength: (length: number) => void;
   export let setGeneratorMinimumNumbers: (value: number | string) => void;
   export let setGeneratorMinimumSymbols: (value: number | string) => void;
@@ -75,32 +73,6 @@
   </div>
 
   <div class="drawer-body">
-    <!-- <section class="drawer-section">
-      <div class="drawer-section-title">
-        <Sparkles size={18} />
-        <h3>常用预设</h3>
-      </div>
-
-      <div class="preset-grid" role="group" aria-label="密码生成预设">
-        <button class:selected={generatorPreset === "balanced"} on:click={() => applyGeneratorPreset("balanced")}>
-          <strong>日常</strong>
-          <span>8 位，字母数字符号</span>
-        </button>
-        <button class:selected={generatorPreset === "readable"} on:click={() => applyGeneratorPreset("readable")}>
-          <strong>易读</strong>
-          <span>排除易混字符，无符号</span>
-        </button>
-        <button class:selected={generatorPreset === "strong"} on:click={() => applyGeneratorPreset("strong")}>
-          <strong>高强度</strong>
-          <span>24 位，更多数字符号</span>
-        </button>
-        <button class:selected={generatorPreset === "pin"} on:click={() => applyGeneratorPreset("pin")}>
-          <strong>PIN</strong>
-          <span>12 位纯数字</span>
-        </button>
-      </div>
-    </section>  -->
-
     <section class="drawer-section">
       <div class="drawer-section-title">
         <SlidersHorizontal size={18} />

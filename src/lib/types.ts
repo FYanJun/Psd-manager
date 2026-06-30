@@ -12,7 +12,15 @@ export type ActivePopover =
   | "detail-blank-context"
   | "more"
   | null;
-export type ConfirmationAction = "delete-device" | "delete-account" | "delete-device-type" | "import-config";
+export type ConfirmationAction =
+  | "delete-device"
+  | "delete-account"
+  | "delete-device-type"
+  | "import-config"
+  | "update-password"
+  | "bulk-update-password"
+  | "save-account-password"
+  | "rename-device-type";
 
 export type PopoverPosition = {
   top: number;
@@ -68,6 +76,8 @@ export type VaultItem = {
   title: string;
   deviceName: string;
   deviceType: DeviceType;
+  assetCode: string;
+  location: string;
   username: string;
   password: string;
   ipAddress: string;
@@ -84,8 +94,8 @@ export type DeviceForm = {
   id: number | null;
   deviceName: string;
   deviceType: string;
-  username: string;
-  password: string;
+  assetCode: string;
+  location: string;
   ipAddress: string;
   notes: string;
 };

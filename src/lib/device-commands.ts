@@ -44,6 +44,8 @@ export function formatDeviceInfo(item: VaultItem) {
   return [
     item.deviceName,
     item.deviceType ? `类型: ${item.deviceType}` : "",
+    item.assetCode ? `资产编号: ${item.assetCode}` : "",
+    item.location ? `位置: ${item.location}` : "",
     item.ipAddress ? `IP: ${item.ipAddress}` : "",
     `${getAccounts(item).length} 个账号`,
   ]

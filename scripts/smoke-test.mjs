@@ -56,7 +56,7 @@ test("frontend is split into page components and command modules", () => {
   assert.match(clearableTextarea, /aria-label="清空输入"/);
   assert.match(deviceCommands, /export function getBulkPasswordMatches/);
   assert.match(passwordGenerator, /export function generatePasswordValue/);
-  assert.match(layout, /export function clampPaneWidth/);
+  assert.match(layout, /export function clampPaneRatio/);
   assert.match(app, /generatorPool = buildGeneratorPool\(getGeneratorOptions\(\)\)/);
   assert.doesNotMatch(app, /generatorPool = buildGeneratorPool\(\)/);
   assert.doesNotMatch(app, /<div class="type-editor-layout">/);
@@ -65,26 +65,75 @@ test("frontend is split into page components and command modules", () => {
   assert.doesNotMatch(app, /function updateAccountPassword\(account: DeviceAccount/);
 });
 
+test("add device dialog only edits device fields", () => {
+  assert.match(vault, /export function createEmptyDeviceForm\(\)/);
+  assert.match(vault, /id: null/);
+  assert.match(vault, /deviceName: ""/);
+  assert.match(vault, /deviceType: ""/);
+  assert.match(vault, /assetCode: ""/);
+  assert.match(vault, /location: ""/);
+  assert.match(vault, /ipAddress: ""/);
+  assert.match(vault, /notes: ""/);
+  assert.match(app, /function hasDuplicateDeviceName\(name: string, deviceType: string, currentId: number \| null\)/);
+  assert.match(app, /item\.deviceName\.trim\(\) === normalizedName/);
+  assert.match(app, /item\.deviceType\.trim\(\) === normalizedType/);
+  assert.match(app, /if \(hasDuplicateDeviceName\(name, deviceForm\.deviceType, deviceForm\.id\)\) \{[\s\S]*showStatus\("同一设备类型下已存在同名设备"\)/);
+  assert.doesNotMatch(appDialog, /bind:value=\{deviceForm\.username\}/);
+  assert.doesNotMatch(appDialog, /bind:value=\{deviceForm\.password\}/);
+  assert.match(appDialog, /<span>IP 地址<\/span>[\s\S]*bind:value=\{deviceForm\.ipAddress\}[\s\S]*<span>资产编号<\/span>[\s\S]*bind:value=\{deviceForm\.assetCode\}[\s\S]*<span>设备位置<\/span>[\s\S]*bind:value=\{deviceForm\.location\}/);
+  assert.match(app, /notes: selectedItem\.notes/);
+  assert.match(app, /assetCode: selectedItem\.assetCode/);
+  assert.match(app, /location: selectedItem\.location/);
+  assert.match(app, /accounts: \[\]/);
+  assert.match(app, /const nextItem: VaultItem = \{[\s\S]*assetCode: deviceForm\.assetCode\.trim\(\),[\s\S]*location: deviceForm\.location\.trim\(\),[\s\S]*username: "",[\s\S]*password: "",[\s\S]*accounts: \[\]/);
+  assert.match(appDialog, /<span>备注<\/span>[\s\S]*bind:value=\{deviceForm\.notes\}/);
+});
+
 test("workspace keeps the requested three-pane information architecture", () => {
   assert.match(sidebarPane, /<aside class="sidebar" aria-label="设备类型"/);
   assert.match(deviceListPane, /<section class="item-list" aria-label="设备名称">/);
   assert.match(deviceDetailPane, /<section class="detail-pane" aria-label="设备详情"/);
   assert.match(types, /export type ResizePane = "sidebar" \| "list" \| "generator"/);
-  assert.match(constants, /export const RESIZER_WIDTH = 8/);
-  assert.match(constants, /export const GENERATOR_DEFAULT_WIDTH = 460/);
+  assert.match(constants, /export const RESIZER_RATIO = 0\.005/);
+  assert.match(constants, /export const SIDEBAR_DEFAULT_RATIO = 0\.14/);
+  assert.match(constants, /export const SIDEBAR_MIN_RATIO = 0\.12/);
+  assert.match(constants, /export const SIDEBAR_MAX_RATIO = 0\.2/);
+  assert.match(constants, /export const LIST_DEFAULT_RATIO = 0\.21/);
+  assert.match(constants, /export const LIST_MIN_RATIO = 0\.18/);
+  assert.match(constants, /export const LIST_MAX_RATIO = 0\.34/);
+  assert.match(constants, /export const GENERATOR_DEFAULT_RATIO = 0\.32/);
+  assert.match(constants, /export const GENERATOR_MIN_RATIO = 0\.24/);
+  assert.match(constants, /export const GENERATOR_MAX_RATIO = 0\.48/);
   assert.match(app, /style=\{layoutStyle\}/);
   assert.match(app, /class="pane-resizer"/);
   assert.match(app, /startPaneResize\("sidebar", event\)/);
   assert.match(app, /startPaneResize\("list", event\)/);
   assert.match(app, /startPaneResize\("generator", event\)/);
-  assert.match(layout, /viewportWidth - DETAIL_MIN_WIDTH - RESIZER_WIDTH \* 2/);
-  assert.match(layout, /viewportWidth - 120/);
-  assert.match(styles, /--sidebar-width:\s*252px/);
-  assert.match(styles, /--list-width:\s*368px/);
-  assert.match(styles, /--resizer-width:\s*8px/);
-  assert.match(app, /--generator-width: \$\{generatorWidth\}px/);
-  assert.match(styles, /grid-template-columns:\s*minmax\(208px, var\(--sidebar-width\)\) var\(--resizer-width\) minmax\(0, 1fr\)/);
-  assert.match(styles, /grid-template-columns:\s*minmax\(300px, var\(--list-width\)\) var\(--resizer-width\) minmax\(420px, 1fr\)/);
+  assert.doesNotMatch(layout, /legacyWidthToPaneRatio|workspaceWidth|RESIZER_WIDTH/);
+  assert.match(styles, /--sidebar-share:\s*14%/);
+  assert.match(styles, /--sidebar-min-share:\s*12%/);
+  assert.match(styles, /--sidebar-max-share:\s*20%/);
+  assert.match(styles, /--list-share:\s*21%/);
+  assert.match(styles, /--list-min-share:\s*18%/);
+  assert.match(styles, /--list-max-share:\s*34%/);
+  assert.match(styles, /--generator-share:\s*32%/);
+  assert.match(styles, /--generator-min-share:\s*24%/);
+  assert.match(styles, /--generator-max-share:\s*48%/);
+  assert.match(styles, /--resizer-share:\s*0\.5%/);
+  assert.match(app, /--sidebar-share: \$\{formatPanePercent\(sidebarRatio\)\}/);
+  assert.match(app, /--sidebar-min-share: \$\{formatPanePercent\(SIDEBAR_MIN_RATIO\)\}/);
+  assert.match(app, /--sidebar-max-share: \$\{formatPanePercent\(SIDEBAR_MAX_RATIO\)\}/);
+  assert.match(app, /--list-share: \$\{formatPanePercent\(listRatio\)\}/);
+  assert.match(app, /--list-min-share: \$\{formatPanePercent\(LIST_MIN_RATIO\)\}/);
+  assert.match(app, /--list-max-share: \$\{formatPanePercent\(LIST_MAX_RATIO\)\}/);
+  assert.match(app, /--generator-share: \$\{formatPanePercent\(generatorRatio\)\}/);
+  assert.match(app, /--generator-min-share: \$\{formatPanePercent\(GENERATOR_MIN_RATIO\)\}/);
+  assert.match(app, /--generator-max-share: \$\{formatPanePercent\(GENERATOR_MAX_RATIO\)\}/);
+  assert.match(app, /--resizer-share: \$\{formatPanePercent\(RESIZER_RATIO\)\}/);
+  assert.match(app, /viewportWidth \* \(1 - sidebarRatio - RESIZER_RATIO\)/);
+  assert.match(styles, /grid-template-columns:\s*clamp\(var\(--sidebar-min-share\), var\(--sidebar-share\), var\(--sidebar-max-share\)\) var\(--resizer-share\) minmax\(0, 1fr\)/);
+  assert.match(styles, /grid-template-columns:\s*clamp\(var\(--list-min-share\), var\(--list-share\), var\(--list-max-share\)\) var\(--resizer-share\) minmax\(0, 1fr\)/);
+  assert.doesNotMatch(app + layout + styles, /--sidebar-width|--list-width|--generator-width|sidebarWidth|listWidth|generatorWidth|RESIZER_WIDTH|minmax\(208px|minmax\(300px|minmax\(420px|calc\(100% - (100|24|16)px\)/);
   assert.match(sidebarPane, /class="sidebar-pane-title"/);
   assert.match(deviceListPane, /\{item\.iconText\}/);
   assert.match(deviceDetailPane, /\{selectedItem\.iconText\}/);
@@ -152,14 +201,16 @@ test("empty vault renders onboarding instead of blank device details", () => {
   assert.doesNotMatch(app + deviceDetailPane, /密码库还是空的|<span class="pane-kicker">密码库<\/span>/);
 });
 
-test("search fuzzily matches device names and IP addresses", () => {
+test("search fuzzily matches device names, IP addresses, asset codes, and locations", () => {
   assert.match(utils, /export function compactSearchValue\(value: string\)/);
   assert.match(utils, /replace\(\/\[\\s\._:\/\\\\-\]\+\/g, ""\)/);
   assert.match(utils, /export function fuzzyContains\(source: string, query: string\)/);
   assert.match(vault, /export function matchesVaultItemSearch\(item: VaultItem, query: string\)/);
   assert.match(vault, /const deviceName = normalizeSearchValue\(item\.deviceName\)/);
   assert.match(vault, /const ipAddress = normalizeSearchValue\(item\.ipAddress\)/);
-  assert.match(vault, /return fuzzyContains\(deviceName, query\) \|\| fuzzyContains\(ipAddress, query\)/);
+  assert.match(vault, /const assetCode = normalizeSearchValue\(item\.assetCode\)/);
+  assert.match(vault, /const location = normalizeSearchValue\(item\.location\)/);
+  assert.match(vault, /fuzzyContains\(deviceName, query\)[\s\S]*fuzzyContains\(ipAddress, query\)[\s\S]*fuzzyContains\(assetCode, query\)[\s\S]*fuzzyContains\(location, query\)/);
   assert.match(app, /matchesVaultItemSearch\(item, query\)/);
   assert.match(app, /搜索设备名或 IP，快速定位资产/);
   assert.doesNotMatch(app, /item\.website\.toLowerCase\(\)\.includes\(query\)/);
@@ -260,6 +311,7 @@ test("bulk password updates target usernames and reuse generated passwords", asy
   assert.match(app, /username: ""/);
   assert.doesNotMatch(app, /username: selectedAccount\.id \? selectedAccount\.username : ""/);
   assert.match(app, /let bulkUsernameSearch = ""/);
+  assert.match(app, /let bulkUsernameSuggestionsOpen = false/);
   assert.match(app, /\$: bulkUsernameSuggestions = bulkUsernameSearch\.trim\(\) && !bulkPasswordForm\.username\.trim\(\)[\s\S]*\? getBulkUsernameSuggestions\(items, bulkPasswordForm, bulkUsernameSearch\)[\s\S]*: \[\]/);
   assert.match(app, /\$: bulkPasswordMatches = bulkPasswordForm\.username\.trim\(\) \? getBulkPasswordMatchesData\(items, bulkPasswordForm\) : \[\]/);
   assert.match(app, /password: useGenerated \? generatedPassword : ""/);
@@ -272,6 +324,8 @@ test("bulk password updates target usernames and reuse generated passwords", asy
   assert.match(deviceCommands, /updatedAt: account\.updatedAt \|\| item\.updatedAt/);
   assert.match(appDialog, />匹配用户名</);
   assert.match(appDialog, /placeholder="输入用户名，先选择完整用户名"/);
+  assert.match(appDialog, /export let bulkUsernameSuggestionsOpen = false/);
+  assert.match(appDialog, /bulkUsernameSuggestionsOpen && bulkUsernameSearch\.trim\(\) && !bulkPasswordForm\.username\.trim\(\) && bulkUsernameSuggestions\.length > 0/);
   assert.match(appDialog, /class="bulk-username-suggestions" role="listbox" aria-label="完整用户名候选"/);
   assert.match(appDialog, /bulkUsernameSuggestions\.slice\(0, 8\)/);
   assert.match(appDialog, /on:click=\{\(\) => selectBulkUsername\(suggestion\)\}/);
@@ -371,6 +425,10 @@ test("a device can hold multiple account credentials", () => {
   assert.match(app, /function openEditAccountDialog\(\)[\s\S]*if \(!hasSelectedDevice \|\| !selectedAccount\.id\) \{[\s\S]*showStatus\("请先选择账号"\)/);
   assert.match(vault, /export function isBlankPlaceholderAccount\(account: DeviceAccount\)/);
   assert.match(app, /function saveAccount\(\)[\s\S]*if \(!hasSelectedDevice\) \{/);
+  assert.match(app, /function hasDuplicateAccountUsername\(username: string, currentId: number \| null\)/);
+  assert.match(app, /account\.username\.trim\(\) === normalizedUsername/);
+  assert.match(app, /if \(hasDuplicateAccountUsername\(username, accountForm\.id\)\) \{[\s\S]*showStatus\("当前设备下已存在同名账号"\)/);
+  assert.match(app, /function executeSaveAccount\(\)[\s\S]*if \(hasDuplicateAccountUsername\(username, accountForm\.id\)\)/);
   assert.match(app, /\[\.\.\.selectedAccounts\.filter\(\(account\) => !isBlankPlaceholderAccount\(account\)\), nextAccount\]/);
   assert.match(app, /account\.id === accountForm\.id \? \{ \.\.\.nextAccount, history: account\.history, updatedAt: now \} : account/);
   assert.match(app, /function deleteSelectedAccount\(\)/);
@@ -415,8 +473,12 @@ test("a device can hold multiple account credentials", () => {
   assert.match(appDialog, /placeholder="例如：普通账号、管理账号"/);
   assert.doesNotMatch(appDialog, /deviceForm\.tag/);
   assert.match(constants, /export const DEFAULT_ACCOUNT_TAG = ""/);
-  assert.match(app, /tag: DEFAULT_ACCOUNT_TAG/);
   assert.match(app, /tag: deviceForm\.deviceType/);
+  assert.match(app, /title: name/);
+  assert.match(app, /username: ""/);
+  assert.match(app, /password: ""/);
+  assert.match(app, /selectedAccountId = 0/);
+  assert.doesNotMatch(app, /const nextAccount: DeviceAccount = \{/);
   assert.match(vault, /const tagFallback = inheritLegacyItemFields \? fallback\.tag : DEFAULT_ACCOUNT_TAG/);
   assert.match(vault, /export function formatAccountTag/);
   assert.doesNotMatch(vault, /tag: primaryAccount\.tag/);
@@ -435,7 +497,7 @@ test("a device can hold multiple account credentials", () => {
 test("account display uses username without a separate account name field", () => {
   assert.doesNotMatch(app + appDialog + deviceDetailPane, /账号名称|项目名称|<span class="field-label">项目<\/span>/);
   assert.match(deviceCommands, /title: username \|\| "未填写用户名"/);
-  assert.match(app, /title: accountUsername \|\| "未填写用户名"/);
+  assert.doesNotMatch(app, /title: accountUsername \|\| "未填写用户名"/);
   assert.match(deviceDetailPane, /<strong>\{account\.username \|\| account\.title \|\| "未填写用户名"\}<\/strong>/);
   assert.match(app, /function copyDeviceAccountInfo\(account = selectedAccount\)/);
   assert.match(deviceCommands, /account\.username \? `\$\{account\.username\}` : ""/);
@@ -447,7 +509,7 @@ test("account display uses username without a separate account name field", () =
 });
 
 test("destructive delete actions require an in-app confirmation", () => {
-  assert.match(types, /export type ConfirmationAction = "delete-device" \| "delete-account" \| "delete-device-type" \| "import-config"/);
+  assert.match(types, /export type ConfirmationAction =[\s\S]*"delete-device"[\s\S]*"delete-account"[\s\S]*"delete-device-type"[\s\S]*"import-config"/);
   assert.match(app, /let pendingConfirmation: PendingConfirmation \| null = null/);
   assert.match(app, /function requestDeleteDeviceType\(deviceType: "全部设备" \| DeviceType = selectedDeviceType\)/);
   assert.match(app, /function requestDeleteSelectedAccount\(\)/);
@@ -462,12 +524,70 @@ test("destructive delete actions require an in-app confirmation", () => {
   assert.doesNotMatch(app, /on:click=\{\(\) => deleteDeviceType\(selectedDeviceType\)\}/);
 });
 
-test("ip address is device information and website is not part of the active model", () => {
+test("high-risk write actions require confirmation before changing data", () => {
+  assert.match(types, /"update-password"/);
+  assert.match(types, /"bulk-update-password"/);
+  assert.match(types, /"save-account-password"/);
+  assert.match(types, /"rename-device-type"/);
+  assert.match(app, /function savePasswordUpdate\(\)[\s\S]*pendingConfirmation = \{[\s\S]*action: "update-password"[\s\S]*confirmLabel: "确认更新"/);
+  assert.match(app, /function executePasswordUpdate\(\)[\s\S]*updateAccountPassword\(account, passwordForm\.password, changedAt, reason\)/);
+  assert.match(app, /function saveBulkPasswordUpdate\(\)[\s\S]*pendingConfirmation = \{[\s\S]*action: "bulk-update-password"[\s\S]*confirmLabel: "确认批量更新"/);
+  assert.match(app, /function executeBulkPasswordUpdate\(\)[\s\S]*updateAccountPassword\(account, password, changedAt, reason\)/);
+  assert.match(app, /function saveAccount\(\)[\s\S]*currentAccount && currentAccount\.password !== accountForm\.password[\s\S]*action: "save-account-password"[\s\S]*不会生成密码历史/);
+  assert.match(app, /function executeSaveAccount\(\)[\s\S]*createAccountFromFormData\(accountForm, nextId, now\)/);
+  assert.match(app, /function saveDeviceType\(\)[\s\S]*const affectedDeviceCount = originalLabel && originalLabel !== label \? getDeviceTypeCount\(originalLabel\) : 0[\s\S]*action: "rename-device-type"/);
+  assert.match(app, /function executeSaveDeviceType\(\)[\s\S]*items = items\.map\(\(item\) =>/);
+  assert.match(app, /confirmation\.action === "update-password"[\s\S]*executePasswordUpdate\(\)/);
+  assert.match(app, /confirmation\.action === "bulk-update-password"[\s\S]*executeBulkPasswordUpdate\(\)/);
+  assert.match(app, /confirmation\.action === "save-account-password"[\s\S]*executeSaveAccount\(\)/);
+  assert.match(app, /confirmation\.action === "rename-device-type"[\s\S]*executeSaveDeviceType\(\)/);
+});
+
+test("device asset fields stay with device information and website is not part of the active model", () => {
   assert.match(types, /ipAddress: string/);
+  assert.match(types, /assetCode: string/);
+  assert.match(types, /location: string/);
   assert.match(vault, /ipAddress: readString\(item\.ipAddress/);
+  assert.match(vault, /assetCode: readString\(item\.assetCode\)/);
+  assert.match(vault, /location: readString\(item\.location\)/);
   assert.match(appDialog, /bind:value=\{deviceForm\.ipAddress\}/);
+  assert.match(appDialog, /bind:value=\{deviceForm\.assetCode\}/);
+  assert.match(appDialog, /bind:value=\{deviceForm\.location\}/);
   assert.match(deviceDetailPane, /selectedItem\.ipAddress/);
+  assert.match(deviceDetailPane, /selectedItem\.assetCode/);
+  assert.match(deviceDetailPane, /selectedItem\.location/);
+  assert.match(deviceDetailPane, /class="device-info-card" aria-label="设备信息"[\s\S]*<span class="field-label">IP 地址<\/span>[\s\S]*<span class="field-label">资产编号<\/span>[\s\S]*<span class="field-label">设备位置<\/span>/);
+  const detailWidthBlocks = [
+    styles.match(/\.device-info-card \{[^}]*\}/)?.[0] ?? "",
+    styles.match(/\n\.account-section \{[^}]*\}/)?.[0] ?? "",
+    styles.match(/\.field-group \{[^}]*\}/)?.[0] ?? "",
+    styles.match(/\.history-section \{[^}]*\}/)?.[0] ?? "",
+  ];
+  for (const block of detailWidthBlocks) {
+    assert.match(block, /width:\s*100%;/);
+    assert.doesNotMatch(block, /max-width:\s*760px/);
+  }
+  const deviceInfoValueBlock = styles.match(/\.device-info-item p \{[^}]*\}/)?.[0] ?? "";
+  assert.match(styles, /\.device-info-card \{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\);/);
+  assert.match(styles, /\.device-info-card:has\(\.device-info-item:nth-child\(2\):last-child\) \{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /\.device-info-card:has\(\.device-info-item:nth-child\(3\)\) \{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /\.device-info-item \{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[\s\S]*min-width:\s*0;/);
+  assert.match(styles, /\.device-info-item > div \{[\s\S]*min-width:\s*0;/);
+  assert.match(deviceInfoValueBlock, /overflow:\s*hidden;/);
+  assert.match(deviceInfoValueBlock, /text-overflow:\s*ellipsis;/);
+  assert.match(deviceInfoValueBlock, /white-space:\s*nowrap;/);
+  assert.doesNotMatch(styles, /\.device-info-card \{[\s\S]*repeat\(auto-fit, minmax\(180px, 1fr\)\)/);
+  assert.doesNotMatch(deviceInfoValueBlock, /overflow-wrap:\s*anywhere;/);
+  assert.match(styles, /\.identity-row h1 \{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/);
+  assert.match(styles, /\.account-tab \{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.3fr\) minmax\(0, 1fr\);/);
+  assert.match(styles, /\.field-row p,[\s\S]*\.single-field p \{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/);
+  assert.match(styles, /\.history-row strong \{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/);
+  assert.match(styles, /\.bulk-match-copy \{[\s\S]*grid-template-columns:\s*minmax\(0, 0\.82fr\) minmax\(0, 1\.1fr\) minmax\(0, 0\.78fr\);/);
   assert.match(deviceDetailPane, /aria-label="复制 IP 地址"/);
+  assert.match(deviceDetailPane, /aria-label="复制资产编号"/);
+  assert.match(deviceDetailPane, /aria-label="复制设备位置"/);
+  assert.match(deviceCommands, /item\.assetCode \? `资产编号: \$\{item\.assetCode\}` : ""/);
+  assert.match(deviceCommands, /item\.location \? `位置: \$\{item\.location\}` : ""/);
   assert.doesNotMatch(types, /website: string/);
   assert.doesNotMatch(app + appDialog + deviceDetailPane + deviceCommands + vault + config, /website:/);
   assert.doesNotMatch(app, /deviceForm\.website|accountForm\.website|selectedAccount\.website/);
@@ -475,18 +595,25 @@ test("ip address is device information and website is not part of the active mod
 });
 
 test("generator length is directly editable and clamped on commit", () => {
-  assert.match(app, /let generatorWidth = GENERATOR_DEFAULT_WIDTH/);
-  assert.match(app, /generatorWidth = clampPaneWidth\(readNumber\(parsed\.paneLayout\.generatorWidth, GENERATOR_DEFAULT_WIDTH\), "generator"\)/);
-  assert.match(app, /paneLayout: \{ sidebarWidth, listWidth, generatorWidth \}/);
-  assert.match(app, /resizeStartGeneratorWidth = generatorWidth/);
-  assert.match(app, /generatorWidth = clampPaneWidth\(resizeStartGeneratorWidth - deltaX, "generator"\)/);
+  assert.match(app, /let generatorRatio = GENERATOR_DEFAULT_RATIO/);
+  assert.match(app, /generatorRatio = readPaneLayoutRatio\(parsed\.paneLayout, "generator"\)/);
+  assert.match(app, /paneLayout: \{ sidebarRatio, listRatio, generatorRatio \}/);
+  assert.match(app, /resizeStartGeneratorRatio = generatorRatio/);
+  assert.match(app, /generatorRatio = clampPaneRatio\(resizeStartGeneratorRatio - deltaX \/ getViewportWidth\(\), "generator"\)/);
   assert.match(passwordGeneratorDrawer, /class="drawer-resizer"/);
   assert.match(passwordGeneratorDrawer, /aria-label="调整密码生成器宽度"/);
   assert.match(styles, /\.generator-drawer \{[\s\S]*grid-template-rows: auto auto minmax\(0, 1fr\) auto;/);
   assert.doesNotMatch(styles, /\.generator-drawer \{[\s\S]*grid-template-rows: auto auto auto minmax\(0, 1fr\) auto;/);
+  assert.match(styles, /\.generator-drawer \{[\s\S]*top:\s*12px;[\s\S]*right:\s*12px;[\s\S]*bottom:\s*12px;/);
   assert.match(styles, /\.drawer-body \{[\s\S]*min-height: 0;[\s\S]*overflow: auto;/);
   assert.match(styles, /\.drawer-footer \{[\s\S]*display: flex;[\s\S]*flex-wrap: nowrap;/);
-  assert.match(styles, /width:\s*min\(var\(--generator-width\), calc\(100vw - 88px\)\)/);
+  assert.match(styles, /@container \(max-width: 760px\) \{[\s\S]*\.drawer-footer \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /width:\s*clamp\(var\(--generator-min-share\), var\(--generator-share\), var\(--generator-max-share\)\)/);
+  assert.match(styles, /max-width:\s*var\(--generator-max-share\)/);
+  assert.match(styles, /border-radius:\s*24px/);
+  assert.match(styles, /\.drawer-resizer \{[\s\S]*left:\s*0;/);
+  assert.match(styles, /height:\s*auto/);
+  assert.match(styles, /@container \(max-width: 430px\) \{[\s\S]*\.drawer-footer \{[\s\S]*display:\s*flex;[\s\S]*flex-wrap:\s*nowrap;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*stretch;[\s\S]*\.drawer-action \{[\s\S]*display:\s*inline-flex;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*center;[\s\S]*flex:\s*1 1 0;[\s\S]*width:\s*100%;[\s\S]*height:\s*44px;[\s\S]*padding:\s*0;[\s\S]*\.drawer-action > span \{[\s\S]*display:\s*none;/);
   assert.match(passwordGeneratorDrawer, /class="drawer-action primary-action" aria-label="重新生成" data-tooltip="重新生成"/);
   assert.match(passwordGeneratorDrawer, /class="drawer-action" aria-label="填入当前账号" data-tooltip="填入当前账号"/);
   assert.match(passwordGeneratorDrawer, /class="drawer-action" aria-label="批量改密" data-tooltip="批量改密"/);
@@ -501,8 +628,6 @@ test("generator length is directly editable and clamped on commit", () => {
   assert.match(app, /clampGeneratorMinimums\("numbers"\)/);
   assert.match(app, /clampGeneratorMinimums\("symbols"\)/);
   assert.match(passwordGeneratorDrawer, /type="range"[\s\S]*min="3"[\s\S]*max="24"/);
-  assert.match(passwordGeneratorDrawer, /<span>8 位，字母数字符号<\/span>/);
-  assert.match(passwordGeneratorDrawer, /<span>24 位，更多数字符号<\/span>/);
   assert.match(passwordGeneratorDrawer, /\{#each \[3, 8, 16, 24\] as length\}/);
   assert.match(passwordGeneratorDrawer, /ariaLabel="密码长度"/);
   assert.match(passwordGeneratorDrawer, /inputClass="length-input"[\s\S]*clearable=\{false\}[\s\S]*fallbackValue=\{generatorLength\}/);
@@ -555,15 +680,12 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.match(config, /if \(format === "ini"\) return createIniConfigPayload\(config\)/);
   assert.match(app, /createConfigPayload\(items, customDeviceTypes, hiddenDeviceTypes, format\)/);
   assert.match(config, /return `密码管理器配置-\$\{timestamp\}\.\$\{format\}`/);
-  assert.match(config, /const CSV_DEVICE_HEADERS = \["设备ID", "设备名称", "设备类型", "IP地址", "设备备注", "图标文字", "更新时间"\]/);
-  assert.match(config, /const CSV_ACCOUNT_HEADERS = \["设备ID", "账号ID", "用户名", "密码", "账号标签", "账号备注", "更新时间"\]/);
-  assert.match(config, /const CSV_HISTORY_HEADERS = \["设备ID", "账号ID", "历史ID", "旧密码", "新密码", "修改时间", "修改原因"\]/);
-  assert.match(config, /createCsvSection\(`设备类型\.\$\{type\.label\}\.设备`, CSV_DEVICE_HEADERS/);
-  assert.match(config, /createCsvSection\(`设备类型\.\$\{type\.label\}\.账号`, CSV_ACCOUNT_HEADERS/);
-  assert.match(config, /createCsvSection\(`设备类型\.\$\{type\.label\}\.密码历史`, CSV_HISTORY_HEADERS/);
-  assert.match(config, /function parseSectionedCsvConfigRows/);
+  assert.match(config, /const CSV_HEADERS = \[[\s\S]*"设备类型"[\s\S]*"设备名称"[\s\S]*"用户名"[\s\S]*"密码历史"[\s\S]*\]/);
+  assert.match(config, /function parseFlatCsvConfigRows/);
+  assert.match(config, /function createCsvHistoryRecords/);
+  assert.match(config, /JSON\.stringify\(createCsvHistoryRecords\(account\.history\)\)/);
   assert.doesNotMatch(config, /function parseLegacyCsvConfigRows/);
-  assert.match(config, /if \(!rows\.some\(\(row\) => row\[0\]\?\.trim\(\)\.startsWith\(CSV_SECTION_PREFIX\)\)\) throw new Error\("invalid config"\)/);
+  assert.doesNotMatch(config, /CSV_SECTION_PREFIX|createCsvSection|parseSectionedCsvConfigRows/);
   assert.match(config, /function createJsonConfigPayload/);
   assert.match(config, /function parseChineseJsonConfig/);
   assert.match(config, /\[设备类型\.\$\{typeNumber\}\.设备\.\$\{deviceNumber\}\]/);
@@ -589,7 +711,7 @@ test("configuration import and export support json csv ini with overwrite confir
   assert.match(config, /function parseIniConfigContent\(content: string\): ConfigData/);
   assert.doesNotMatch(config, /const isLegacyArrayConfig = Array\.isArray\(parsed\)/);
   assert.match(config, /customDeviceTypes: normalizeDeviceTypeMetaList\(rawTypes\)/);
-  assert.match(config, /hiddenDeviceTypes: normalizeHiddenDeviceTypes\(parsed\["隐藏设备类型"\], configItems\)/);
+  assert.match(config, /hiddenDeviceTypes: \[\]/);
   assert.match(config, /export function getConfigSummary\(config: ConfigData\): ConfigSummary/);
   assert.match(app, /function chooseConfigFile\(\)/);
   assert.match(app, /function requestApplyConfig\(content: string, preferredFormat: ConfigFormat\)/);
@@ -645,6 +767,8 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
       title: "root",
       deviceName: "核心路由器",
       deviceType: "路由器",
+      assetCode: "RT-A1",
+      location: "机柜 A1",
       username: "root",
       password: "old-pass",
       ipAddress: "10.0.0.1",
@@ -694,21 +818,22 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
     if (format === "json") {
       assert.match(payload, /"元信息"/);
       assert.match(payload, /"设备名称": "核心路由器"/);
+      assert.match(payload, /"资产编号": "RT-A1"/);
+      assert.match(payload, /"设备位置": "机柜 A1"/);
       assert.match(payload, /"账号标签": "管理账号"/);
       assert.match(payload, /"密码历史"/);
+      assert.doesNotMatch(payload, /"隐藏设备类型"/);
       assert.doesNotMatch(payload, /"items"/);
       assert.doesNotMatch(payload, /"customDeviceTypes"/);
     }
     if (format === "csv") assert.equal(payload.charCodeAt(0), 0xfeff, "csv should include a UTF-8 BOM for spreadsheet apps");
     if (format === "csv") {
-      assert.match(payload, /# 格式说明\n项目,内容/);
-      assert.match(payload, /密码管理器 CSV 配置文件/);
-      assert.match(payload, /每个设备类型下的设备ID和账号ID用来关联账号和密码历史/);
-      assert.match(payload, /# 元信息\n项目,内容/);
-      assert.match(payload, /# 设备类型\.路由器\.设备\n设备ID,设备名称,设备类型,IP地址,设备备注,图标文字,更新时间/);
-      assert.match(payload, /# 设备类型\.路由器\.账号\n设备ID,账号ID,用户名,密码,账号标签,账号备注,更新时间/);
-      assert.match(payload, /# 设备类型\.路由器\.密码历史\n设备ID,账号ID,历史ID,旧密码,新密码,修改时间,修改原因/);
-      assert.doesNotMatch(payload, /passwordHistory,customDeviceTypes,hiddenDeviceTypes/);
+      assert.match(payload, /^\uFEFF设备类型,类型图标,类型颜色,设备名称,资产编号,设备位置,设备信息,设备备注,设备图标,设备更新时间,用户名,账号标签,密码,账号备注,账号更新时间,密码历史\n/);
+      assert.match(payload, /路由器,路,cyan,核心路由器,RT-A1,机柜 A1,10\.0\.0\.1/);
+      assert.match(payload, /,ops,运维,ops-pass,只读巡检,2026\/6\/12 10:05:00,\[\]/);
+      assert.match(payload, /,root,管理账号,old-pass,主账号,2026\/6\/12 10:00:00,"\[\{""历史ID"":1,""旧密码"":""before-pass"",""新密码"":""old-pass"",""修改时间"":""2026\/6\/11 09:00:00"",""修改原因"":""""\}\]"/);
+      assert.doesNotMatch(payload, /# 格式说明|# 设备类型\.路由器\.账号/);
+      assert.doesNotMatch(payload, /隐藏设备类型|passwordHistory,customDeviceTypes,hiddenDeviceTypes/);
     }
     if (format === "ini") {
       assert.match(payload, /; 密码管理器 INI 配置文件/);
@@ -717,6 +842,7 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
       assert.match(payload, /\[设备类型\.1\.设备\.1\]/);
       assert.match(payload, /\[设备类型\.1\.设备\.1\.账号\.1\]/);
       assert.match(payload, /\[设备类型\.1\.设备\.1\.账号\.1\.密码历史\.1\]/);
+      assert.doesNotMatch(payload, /隐藏设备类型/);
       assert.doesNotMatch(payload, /passwordHistory=\[/);
       assert.doesNotMatch(payload, /customDeviceTypes=\[/);
     }
@@ -725,6 +851,8 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
     assert.equal(parsed.items.length, 1, `${format} should preserve the device`);
     assert.equal(parsed.items[0].deviceName, "核心路由器");
     assert.equal(parsed.items[0].deviceType, "路由器");
+    assert.equal(parsed.items[0].assetCode, "RT-A1");
+    assert.equal(parsed.items[0].location, "机柜 A1");
     assert.equal(parsed.items[0].ipAddress, "10.0.0.1");
     assert.equal(parsed.items[0].notes, "机柜 A1\n双线路出口");
     assert.notEqual(parsed.items[0].iconClass, "", `${format} should preserve or derive a visible icon class`);
@@ -735,7 +863,7 @@ test("configuration payloads roundtrip key vault fields across json csv and ini"
     assert.equal(parsed.items[0].accounts[0].history[0].newPassword, "old-pass");
     assert.equal(parsed.items[0].accounts[1].username, "ops");
     assert.equal(parsed.customDeviceTypes[0].label, "路由器");
-    assert.equal(parsed.hiddenDeviceTypes[0], "NAS");
+    assert.deepEqual(parsed.hiddenDeviceTypes, []);
   }
 
   const csvPayload = createConfigPayload(items, customDeviceTypes, hiddenDeviceTypes, "csv");
@@ -753,6 +881,7 @@ test("old config shapes are rejected instead of being silently imported", async 
   const { parseConfigContent } = await importSourceModule("lib/config.ts");
   assert.throws(() => parseConfigContent(JSON.stringify({ items: [] }), "json"), /invalid config/);
   assert.throws(() => parseConfigContent("deviceName,deviceType,username,password\n旧路由,路由器,admin,pass", "csv"), /invalid config/);
+  assert.throws(() => parseConfigContent("# 设备类型.路由器.账号\n设备ID,账号ID,用户名,密码\n1,1,admin,pass", "csv"), /invalid config/);
   assert.throws(() => parseConfigContent("[account.1]\ndeviceName=旧交换机\nusername=admin\n", "ini"), /invalid config/);
 });
 
@@ -769,7 +898,7 @@ test("configuration payloads preserve type settings without device rows", async 
     assert.equal(parsed.customDeviceTypes[0].label, "堡垒机");
     assert.equal(parsed.customDeviceTypes[0].iconText, "堡");
     assert.equal(parsed.customDeviceTypes[0].color, "indigo");
-    assert.equal(parsed.hiddenDeviceTypes[0], "NAS");
+    assert.deepEqual(parsed.hiddenDeviceTypes, []);
   }
 });
 
@@ -780,13 +909,12 @@ test("configuration import accepts empty vault files with type metadata", async 
     JSON.stringify({
       元信息: { 应用名称: "密码管理器", 格式版本: 1, 导出时间: "" },
       设备类型: [{ 设备类型: "交换机", 图标文字: "交", 颜色: "cyan", 设备: [] }],
-      隐藏设备类型: ["旧分类"],
     }),
     "json"
   );
   assert.equal(json.items.length, 0);
   assert.equal(json.customDeviceTypes[0].label, "交换机");
-  assert.equal(json.hiddenDeviceTypes[0], "旧分类");
+  assert.deepEqual(json.hiddenDeviceTypes, []);
 
   const ini = parseConfigContent(
     `\uFEFF${[
@@ -799,42 +927,33 @@ test("configuration import accepts empty vault files with type metadata", async 
       "图标文字=交",
       "颜色=cyan",
       "",
-      "[隐藏设备类型.1]",
-      "设备类型=旧分类",
-      "",
     ].join("\n")}`,
     "ini"
   );
   assert.equal(ini.items.length, 0);
   assert.equal(ini.customDeviceTypes[0].label, "交换机");
-  assert.equal(ini.hiddenDeviceTypes[0], "旧分类");
+  assert.deepEqual(ini.hiddenDeviceTypes, []);
+
+  const csv = parseConfigContent(
+    [
+      "设备类型,类型图标,类型颜色,设备名称,资产编号,设备位置,设备信息,设备备注,设备图标,设备更新时间,用户名,账号标签,密码,账号备注,账号更新时间,密码历史",
+      ["交换机", "交", "cyan", "", "", "", "", "", "", "", "", "", "", "", "", "[]"].join(","),
+    ].join("\n"),
+    "csv"
+  );
+  assert.equal(csv.items.length, 0);
+  assert.equal(csv.customDeviceTypes[0].label, "交换机");
+  assert.deepEqual(csv.hiddenDeviceTypes, []);
 });
 
-test("csv and ini import require the grouped Chinese config shape", async () => {
+test("csv import requires the flat Chinese account table and ini keeps grouped sections", async () => {
   const { parseConfigContent } = await importSourceModule("lib/config.ts");
   const csv = parseConfigContent([
-    "# 元信息",
-    "项目,内容",
-    "应用名称,密码管理器",
-    "格式版本,1",
-    "",
-    "# 设备类型",
-    "设备类型,图标文字,颜色",
-    "路由器,路,cyan",
-    "",
-    "# 设备类型.路由器.设备",
-    "设备ID,设备名称,设备类型,IP地址,设备备注,图标文字,更新时间",
-    "1,核心路由器,路由器,10.0.0.9,CSV 备注,路,2026/6/12 12:00:00",
-    "",
-    "# 设备类型.路由器.账号",
-    "设备ID,账号ID,用户名,密码,账号标签,账号备注,更新时间",
-    "1,1,admin,new-pass,管理账号,账号备注,2026/6/12 12:00:00",
-    "",
-    "# 设备类型.路由器.密码历史",
-    "设备ID,账号ID,历史ID,旧密码,新密码,修改时间,修改原因",
-    "1,1,1,old-pass,new-pass,2026/6/11 12:00:00,",
+    "设备类型,类型图标,类型颜色,设备名称,资产编号,设备位置,设备信息,设备备注,设备图标,设备更新时间,用户名,账号标签,密码,账号备注,账号更新时间,密码历史",
+    '路由器,路,cyan,核心路由器,,,10.0.0.9,CSV 备注,路,2026/6/12 12:00:00,admin,管理账号,new-pass,账号备注,2026/6/12 12:00:00,"[{""历史ID"":1,""旧密码"":""old-pass"",""新密码"":""new-pass"",""修改时间"":""2026/6/11 12:00:00"",""修改原因"":""""}]"',
   ].join("\n"), "csv");
   assert.equal(csv.items[0].deviceName, "核心路由器");
+  assert.equal(csv.items[0].ipAddress, "10.0.0.9");
   assert.equal(csv.items[0].accounts[0].history[0].password, "old-pass");
   assert.equal(csv.customDeviceTypes[0].label, "路由器");
 
@@ -877,7 +996,7 @@ test("csv and ini import require the grouped Chinese config shape", async () => 
   assert.equal(ini.customDeviceTypes[0].label, "交换机");
 });
 
-test("configuration import rejects unrelated csv and ini files", async () => {
+test("configuration import rejects unrelated files and duplicate names", async () => {
   const { parseConfigContent, parseConfigContentWithFallback } = await importSourceModule("lib/config.ts");
   assert.throws(() => parseConfigContent('{"hello":"world"}', "json"), /invalid config/);
   assert.throws(() => parseConfigContentWithFallback('{"hello":"world"}', "json"), /invalid config/);
@@ -885,6 +1004,35 @@ test("configuration import rejects unrelated csv and ini files", async () => {
   assert.throws(() => parseConfigContent("plain=value\nother=text\n", "ini"), /invalid config/);
   assert.throws(() => parseConfigContent("[meta]\nfoo=bar\n", "ini"), /invalid config/);
   assert.throws(() => parseConfigContent("[account.1]\nusername=admin\n", "ini"), /invalid config/);
+  assert.match(config, /function assertUniqueConfigNames\(items: VaultItem\[\]\)/);
+  assert.match(config, /const deviceName = item\.deviceName\.trim\(\)/);
+  assert.match(config, /const accountName = account\.username\.trim\(\)/);
+  assert.match(config, /const deviceKey = `\$\{deviceType\}\\u0000\$\{deviceName\}`/);
+  assert.match(config, /accountNames\.has\(accountName\)/);
+  assert.throws(() => parseConfigContent(JSON.stringify({
+    元信息: { 应用名称: "密码管理器", 格式版本: 1 },
+    设备类型: [
+      {
+        设备类型: "路由器",
+        图标文字: "路",
+        颜色: "cyan",
+        设备: [
+          { 设备ID: 1, 设备名称: "核心路由器", 设备类型: "路由器", 账号: [{ 账号ID: 1, 用户名: "admin", 密码: "pass" }] },
+          { 设备ID: 2, 设备名称: "核心路由器", 设备类型: "路由器", 账号: [{ 账号ID: 1, 用户名: "ops", 密码: "pass" }] },
+        ],
+      },
+    ],
+  }), "json"), /invalid config/);
+  assert.throws(() => parseConfigContent([
+    "设备类型,类型图标,类型颜色,设备名称,资产编号,设备位置,设备信息,设备备注,设备图标,设备更新时间,用户名,账号标签,密码,账号备注,账号更新时间,密码历史",
+    "路由器,路,cyan,核心路由器,,,10.0.0.1,,路,2026/6/12 12:00:00,admin,,pass,,2026/6/12 12:00:00,[]",
+    "路由器,路,cyan,核心路由器,,,10.0.0.1,,路,2026/6/12 12:00:00, admin ,,pass2,,2026/6/12 12:00:00,[]",
+  ].join("\n"), "csv"), /invalid config/);
+  assert.doesNotThrow(() => parseConfigContent([
+    "设备类型,类型图标,类型颜色,设备名称,资产编号,设备位置,设备信息,设备备注,设备图标,设备更新时间,用户名,账号标签,密码,账号备注,账号更新时间,密码历史",
+    "路由器,路,cyan,核心路由器,,,10.0.0.1,,路,2026/6/12 12:00:00,admin,,pass,,2026/6/12 12:00:00,[]",
+    "路由器,路,cyan,核心路由器,,,10.0.0.1,,路,2026/6/12 12:00:00,ADMIN,,pass2,,2026/6/12 12:00:00,[]",
+  ].join("\n"), "csv"));
 });
 
 test("account arrays do not inherit device notes during import", async () => {
@@ -930,22 +1078,8 @@ test("account tags stay account-scoped instead of becoming device metadata", asy
 
   const parsedCsv = parseConfigContent(
     [
-      "# 元信息",
-      "项目,内容",
-      "应用名称,密码管理器",
-      "格式版本,1",
-      "",
-      "# 设备类型",
-      "设备类型,图标文字,颜色",
-      "路由器,路,cyan",
-      "",
-      "# 设备类型.路由器.设备",
-      "设备ID,设备名称,设备类型,IP地址,设备备注,图标文字,更新时间",
-      "1,核心路由器,路由器,10.0.0.1,,路,2026/6/12 12:00:00",
-      "",
-      "# 设备类型.路由器.账号",
-      "设备ID,账号ID,用户名,密码,账号标签,账号备注,更新时间",
-      "1,1,admin,admin-pass,登录账号,,2026/6/12 12:00:00",
+      "设备类型,类型图标,类型颜色,设备名称,资产编号,设备位置,设备信息,设备备注,设备图标,设备更新时间,用户名,账号标签,密码,账号备注,账号更新时间,密码历史",
+      "路由器,路,cyan,核心路由器,,,10.0.0.1,,路,2026/6/12 12:00:00,admin,登录账号,admin-pass,,2026/6/12 12:00:00,[]",
     ].join("\n"),
     "csv"
   );
@@ -1058,6 +1192,8 @@ test("type editing exposes swatches and searchable custom comboboxes", () => {
   assert.match(utils, /export function filterDeviceTypeChoices<T extends \{ label: string \}>/);
   assert.match(app, /function setBulkPasswordDeviceType\(deviceType: "全部设备" \| DeviceType\)/);
   assert.match(app, /function setDeviceFormType\(deviceType: DeviceType\)/);
+  assert.match(app, /if \(openTypePicker && !target\.closest\("\.type-combo"\)\) openTypePicker = null/);
+  assert.match(app, /if \(bulkUsernameSuggestionsOpen && !target\.closest\("\.bulk-username-field"\)\) bulkUsernameSuggestionsOpen = false/);
   assert.match(appDialog, /class="type-combo-trigger"/);
   assert.match(appDialog, /class="type-combo-popover"/);
   assert.match(appDialog, /class="type-combo-search"/);
@@ -1109,7 +1245,7 @@ test("right-click context menus are available for types, devices, and details", 
   assert.match(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*<span>删除当前设备<\/span>/);
   assert.doesNotMatch(actionPopover, /\{:else if activePopover === "more"\}[\s\S]*(新增账号|openAddAccountDialog|删除当前账号|requestDeleteSelectedAccount|每台设备至少保留一个账号)/);
   assert.doesNotMatch(app + actionPopover, /编辑当前设备和账号/);
-  assert.match(appDialog, /\{#if !deviceForm\.id\}[\s\S]*<span>用户名<\/span>[\s\S]*<span>密码<\/span>/);
+  assert.doesNotMatch(appDialog, /\{#if !deviceForm\.id\}[\s\S]*<span>用户名<\/span>[\s\S]*<span>密码<\/span>/);
   assert.match(appDialog, /deviceForm\.id \? "保存设备" : "新增设备"/);
   assert.match(deviceDetailPane, /复制用户名/);
   assert.doesNotMatch(app + actionPopover, /新增此类型设备|新增此类设备/);

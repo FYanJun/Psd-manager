@@ -5,17 +5,16 @@ export const CONFIG_FORMAT_VERSION = 1;
 export const STORAGE_KEY = "device-password-manager-state-v1";
 export const DEFAULT_ACCOUNT_TAG = "";
 
-export const SIDEBAR_DEFAULT_WIDTH = 252;
-export const SIDEBAR_MIN_WIDTH = 208;
-export const SIDEBAR_MAX_WIDTH = 360;
-export const LIST_DEFAULT_WIDTH = 368;
-export const LIST_MIN_WIDTH = 300;
-export const LIST_MAX_WIDTH = 540;
-export const GENERATOR_DEFAULT_WIDTH = 460;
-export const GENERATOR_MIN_WIDTH = 360;
-export const GENERATOR_MAX_WIDTH = 680;
-export const DETAIL_MIN_WIDTH = 420;
-export const RESIZER_WIDTH = 8;
+export const SIDEBAR_DEFAULT_RATIO = 0.14;
+export const SIDEBAR_MIN_RATIO = 0.12;
+export const SIDEBAR_MAX_RATIO = 0.2;
+export const LIST_DEFAULT_RATIO = 0.21;
+export const LIST_MIN_RATIO = 0.18;
+export const LIST_MAX_RATIO = 0.34;
+export const GENERATOR_DEFAULT_RATIO = 0.32;
+export const GENERATOR_MIN_RATIO = 0.24;
+export const GENERATOR_MAX_RATIO = 0.48;
+export const RESIZER_RATIO = 0.005;
 
 export const initialItems = [];
 

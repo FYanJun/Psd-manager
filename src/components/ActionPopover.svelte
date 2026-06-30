@@ -29,8 +29,6 @@
   export let searchQuery = "";
   export let listContextLabel = "";
   export let deviceTypeOptionsLength = 0;
-  export let historyOpen = true;
-
   $: hasSelectedDevice = selectedItem.id > 0;
   $: hasSelectedAccount = selectedAccountTargetCount > 0;
 
@@ -229,14 +227,15 @@
         <span>切换历史顺序</span>
       </button>
       <div class="menu-separator"></div>
-      <button class="menu-item" on:click={() => chooseConfigFile()}>
-        <Upload size={16} />
-        <span>导入配置</span>
-      </button>
       <button class="menu-item" on:click={() => openExportConfigDialog()}>
-        <Download size={16} />
+        <Upload size={16} />
         <span>导出配置</span>
       </button>
+      <button class="menu-item" on:click={() => chooseConfigFile()}>
+        <Download size={16} />
+        <span>导入配置</span>
+      </button>
+
       <div class="menu-separator"></div>
       <button class="menu-item danger-menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "删除当前设备" : "请先选择设备"} on:click={() => requestDeleteSelectedDevice()}>
         <Trash2 size={16} />

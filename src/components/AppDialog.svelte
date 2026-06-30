@@ -35,6 +35,7 @@
   export let openTypePicker: TypePickerScope | null = null;
   export let bulkTypeSearch = "";
   export let bulkUsernameSearch = "";
+  export let bulkUsernameSuggestionsOpen = false;
   export let deviceTypeSearch = "";
   export let filteredBulkTypeRows: Array<DeviceTypeMeta & { count: number }>;
   export let filteredDeviceTypeOptions: DeviceTypeMeta[];
@@ -219,7 +220,7 @@
               placeholder="输入用户名，先选择完整用户名"
               onValueChange={updateBulkUsernameSearch}
             />
-            {#if bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim() && bulkUsernameSuggestions.length > 0}
+            {#if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim() && bulkUsernameSuggestions.length > 0}
               <div class="bulk-username-suggestions" role="listbox" aria-label="完整用户名候选">
                 {#each bulkUsernameSuggestions.slice(0, 8) as suggestion}
                   <button type="button" role="option" aria-selected={false} on:click={() => selectBulkUsername(suggestion)}>
@@ -227,7 +228,7 @@
                   </button>
                 {/each}
               </div>
-            {:else if bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim()}
+            {:else if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim()}
               <p class="quiet-text username-search-empty">没有匹配的完整用户名。</p>
             {/if}
           </div>
@@ -414,20 +415,18 @@
             <span>IP 地址</span>
             <ClearableInput bind:value={deviceForm.ipAddress} placeholder="例如：192.168.1.1" />
           </label>
-          {#if !deviceForm.id}
-              <label>
-                <span>用户名</span>
-                <ClearableInput bind:value={deviceForm.username} />
-              </label>
-              <label>
-                <span>密码</span>
-                <ClearableInput bind:value={deviceForm.password} type="password" />
-              </label>
-              <label class="wide-field">
-                <span>备注</span>
-                <ClearableTextarea bind:value={deviceForm.notes} />
-              </label>
-          {/if}
+          <label>
+            <span>资产编号</span>
+            <ClearableInput bind:value={deviceForm.assetCode} />
+          </label>
+          <label>
+            <span>设备位置</span>
+            <ClearableInput bind:value={deviceForm.location} />
+          </label>
+          <label class="wide-field">
+            <span>备注</span>
+            <ClearableTextarea bind:value={deviceForm.notes} />
+          </label>
         </div>
         <footer class="modal-actions">
           <button class="secondary-button" on:click={() => closeOverlays()}>取消</button>
