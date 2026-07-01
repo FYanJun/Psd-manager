@@ -90,7 +90,9 @@
             <div class="device-info-item">
               <div>
                 <span class="field-label">IP 地址</span>
-                <p>{selectedItem.ipAddress}</p>
+                <div class="device-info-value" data-value-tooltip={selectedItem.ipAddress}>
+                  <p>{selectedItem.ipAddress}</p>
+                </div>
               </div>
               <button class="icon-button inline" aria-label="复制 IP 地址" data-tooltip="复制 IP 地址" on:click={() => copyText(selectedItem.ipAddress, "IP 地址")}>
                 <Copy size={18} />
@@ -102,7 +104,9 @@
             <div class="device-info-item">
               <div>
                 <span class="field-label">资产编号</span>
-                <p>{selectedItem.assetCode}</p>
+                <div class="device-info-value" data-value-tooltip={selectedItem.assetCode}>
+                  <p>{selectedItem.assetCode}</p>
+                </div>
               </div>
               <button class="icon-button inline" aria-label="复制资产编号" data-tooltip="复制资产编号" on:click={() => copyText(selectedItem.assetCode, "资产编号")}>
                 <Copy size={18} />
@@ -114,7 +118,9 @@
             <div class="device-info-item">
               <div>
                 <span class="field-label">设备位置</span>
-                <p>{selectedItem.location}</p>
+                <div class="device-info-value" data-value-tooltip={selectedItem.location}>
+                  <p>{selectedItem.location}</p>
+                </div>
               </div>
               <button class="icon-button inline" aria-label="复制设备位置" data-tooltip="复制设备位置" on:click={() => copyText(selectedItem.location, "设备位置")}>
                 <Copy size={18} />

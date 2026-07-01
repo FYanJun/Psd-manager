@@ -27,6 +27,12 @@
   --generator-min-share: 24%;
   --generator-max-share: 48%;
   --resizer-share: 0.5%;
+  --toast-share: 44%;
+  --popover-share: 16%;
+  --modal-share: 42%;
+  --type-modal-share: 36%;
+  --bulk-modal-share: 52%;
+  --confirm-modal-share: 32%;
 }
 
 * {
@@ -839,7 +845,7 @@ button[data-tooltip]:disabled::after {
   display: grid;
   align-content: center;
   justify-items: start;
-  max-width: 520px;
+  max-width: 68%;
   min-height: 100%;
   padding: 28px clamp(36px, 7vw, 86px) 72px;
 }
@@ -864,7 +870,7 @@ button[data-tooltip]:disabled::after {
 }
 
 .detail-empty-state p {
-  max-width: 430px;
+  max-width: 84%;
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 16px;
@@ -949,6 +955,55 @@ button[data-tooltip]:disabled::after {
 
 .device-info-item > div {
   min-width: 0;
+}
+
+.device-info-value {
+  position: relative;
+  min-width: 0;
+}
+
+.device-info-value[data-value-tooltip]::before,
+.device-info-value[data-value-tooltip]::after {
+  position: absolute;
+  left: 50%;
+  z-index: 130;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.device-info-value[data-value-tooltip]::before {
+  content: attr(data-value-tooltip);
+  bottom: calc(100% + 10px);
+  inline-size: max-content;
+  max-inline-size: min(36ch, 42vw);
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(34, 38, 42, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  transform: translate(-50%, 4px);
+}
+
+.device-info-value[data-value-tooltip]::after {
+  content: "";
+  bottom: calc(100% + 4px);
+  border: 6px solid transparent;
+  border-top-color: rgba(34, 38, 42, 0.96);
+  transform: translate(-50%, 4px);
+}
+
+.device-info-value[data-value-tooltip]:hover::before,
+.device-info-value[data-value-tooltip]:hover::after,
+.device-info-value[data-value-tooltip]:focus-within::before,
+.device-info-value[data-value-tooltip]:focus-within::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .device-info-item p {
@@ -1721,7 +1776,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(560px, calc(100vw - 48px));
+  max-width: clamp(32%, var(--toast-share), 92%);
   padding: 10px 10px 10px 16px;
   border-radius: 10px;
   color: #fff;
@@ -1733,7 +1788,9 @@ button:disabled {
 
 .toast span {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toast-close {
@@ -1757,7 +1814,7 @@ button:disabled {
   z-index: 25;
   display: grid;
   gap: 4px;
-  width: 236px;
+  width: clamp(12%, var(--popover-share), 28%);
   max-height: calc(100vh - 24px);
   overflow: auto;
   padding: 8px;
@@ -1865,7 +1922,7 @@ button:disabled {
 }
 
 .modal {
-  width: min(620px, calc(100vw - 42px));
+  width: clamp(32%, var(--modal-share), 92%);
   max-height: calc(100vh - 60px);
   overflow: hidden;
   border: 1px solid #d8dce0;
@@ -1879,16 +1936,16 @@ button:disabled {
 }
 
 .type-modal {
-  width: min(520px, calc(100vw - 42px));
+  width: clamp(30%, var(--type-modal-share), 92%);
   border-radius: 14px;
 }
 
 .bulk-modal {
-  width: min(720px, calc(100vw - 42px));
+  width: clamp(42%, var(--bulk-modal-share), 92%);
 }
 
 .confirm-modal {
-  width: min(460px, calc(100vw - 42px));
+  width: clamp(28%, var(--confirm-modal-share), 92%);
 }
 
 .modal-header {
@@ -2025,11 +2082,13 @@ button:disabled {
 
 .password-change-card strong {
   min-height: 20px;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   color: #25282b;
   font-family: "SFMono-Regular", "SF Mono", Consolas, monospace;
   font-size: 13px;
   line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .type-combo-field {
@@ -2200,7 +2259,7 @@ button:disabled {
 
 .type-editor-layout {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.32fr) minmax(0, 0.68fr);
   gap: 16px;
   padding: 18px;
 }

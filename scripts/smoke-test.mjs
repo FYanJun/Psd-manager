@@ -120,6 +120,12 @@ test("workspace keeps the requested three-pane information architecture", () => 
   assert.match(styles, /--generator-min-share:\s*24%/);
   assert.match(styles, /--generator-max-share:\s*48%/);
   assert.match(styles, /--resizer-share:\s*0\.5%/);
+  assert.match(styles, /--toast-share:\s*44%/);
+  assert.match(styles, /--popover-share:\s*16%/);
+  assert.match(styles, /--modal-share:\s*42%/);
+  assert.match(styles, /--type-modal-share:\s*36%/);
+  assert.match(styles, /--bulk-modal-share:\s*52%/);
+  assert.match(styles, /--confirm-modal-share:\s*32%/);
   assert.match(app, /--sidebar-share: \$\{formatPanePercent\(sidebarRatio\)\}/);
   assert.match(app, /--sidebar-min-share: \$\{formatPanePercent\(SIDEBAR_MIN_RATIO\)\}/);
   assert.match(app, /--sidebar-max-share: \$\{formatPanePercent\(SIDEBAR_MAX_RATIO\)\}/);
@@ -133,7 +139,16 @@ test("workspace keeps the requested three-pane information architecture", () => 
   assert.match(app, /viewportWidth \* \(1 - sidebarRatio - RESIZER_RATIO\)/);
   assert.match(styles, /grid-template-columns:\s*clamp\(var\(--sidebar-min-share\), var\(--sidebar-share\), var\(--sidebar-max-share\)\) var\(--resizer-share\) minmax\(0, 1fr\)/);
   assert.match(styles, /grid-template-columns:\s*clamp\(var\(--list-min-share\), var\(--list-share\), var\(--list-max-share\)\) var\(--resizer-share\) minmax\(0, 1fr\)/);
-  assert.doesNotMatch(app + layout + styles, /--sidebar-width|--list-width|--generator-width|sidebarWidth|listWidth|generatorWidth|RESIZER_WIDTH|minmax\(208px|minmax\(300px|minmax\(420px|calc\(100% - (100|24|16)px\)/);
+  assert.match(styles, /\.toast \{[\s\S]*max-width:\s*clamp\(32%, var\(--toast-share\), 92%\);/);
+  assert.match(styles, /\.action-popover \{[\s\S]*width:\s*clamp\(12%, var\(--popover-share\), 28%\);/);
+  assert.match(styles, /\.modal \{[\s\S]*width:\s*clamp\(32%, var\(--modal-share\), 92%\);/);
+  assert.match(styles, /\.type-modal \{[\s\S]*width:\s*clamp\(30%, var\(--type-modal-share\), 92%\);/);
+  assert.match(styles, /\.bulk-modal \{[\s\S]*width:\s*clamp\(42%, var\(--bulk-modal-share\), 92%\);/);
+  assert.match(styles, /\.confirm-modal \{[\s\S]*width:\s*clamp\(28%, var\(--confirm-modal-share\), 92%\);/);
+  assert.match(styles, /\.detail-empty-state \{[\s\S]*max-width:\s*68%;/);
+  assert.match(styles, /\.detail-empty-state p \{[\s\S]*max-width:\s*84%;/);
+  assert.match(styles, /\.type-editor-layout \{[\s\S]*grid-template-columns:\s*minmax\(0, 0\.32fr\) minmax\(0, 0\.68fr\);/);
+  assert.doesNotMatch(app + layout + styles, /--sidebar-width|--list-width|--generator-width|sidebarWidth|listWidth|generatorWidth|RESIZER_WIDTH|minmax\((208|300|420|120|132|150|160|180)px|calc\(100% - (100|24|16)px\)|width:\s*min\((460|520|620|720)px|max-width:\s*min\(560px/);
   assert.match(sidebarPane, /class="sidebar-pane-title"/);
   assert.match(deviceListPane, /\{item\.iconText\}/);
   assert.match(deviceDetailPane, /\{selectedItem\.iconText\}/);
@@ -201,7 +216,8 @@ test("empty vault renders onboarding instead of blank device details", () => {
   assert.doesNotMatch(app + deviceDetailPane, /密码库还是空的|<span class="pane-kicker">密码库<\/span>/);
 });
 
-test("search fuzzily matches device names, IP addresses, asset codes, and locations", () => {
+test("search fuzzily matches device names, IP addresses, asset codes, and locations", async () => {
+  const { matchesVaultItemSearch } = await importSourceModule("lib/vault.ts");
   assert.match(utils, /export function compactSearchValue\(value: string\)/);
   assert.match(utils, /replace\(\/\[\\s\._:\/\\\\-\]\+\/g, ""\)/);
   assert.match(utils, /export function fuzzyContains\(source: string, query: string\)/);
@@ -212,7 +228,26 @@ test("search fuzzily matches device names, IP addresses, asset codes, and locati
   assert.match(vault, /const location = normalizeSearchValue\(item\.location\)/);
   assert.match(vault, /fuzzyContains\(deviceName, query\)[\s\S]*fuzzyContains\(ipAddress, query\)[\s\S]*fuzzyContains\(assetCode, query\)[\s\S]*fuzzyContains\(location, query\)/);
   assert.match(app, /matchesVaultItemSearch\(item, query\)/);
-  assert.match(app, /搜索设备名或 IP，快速定位资产/);
+  assert.match(app, /搜索设备名、IP 或资产编号/);
+  assert.match(app, /在\$\{selectedDeviceType\}中搜索设备名、IP 或资产编号/);
+  assert.equal(matchesVaultItemSearch({
+    id: 1,
+    title: "核心交换机",
+    deviceName: "核心交换机",
+    deviceType: "交换机",
+    assetCode: "RT-A1-2026",
+    location: "机柜 A1",
+    username: "",
+    password: "",
+    ipAddress: "10.0.0.8",
+    tag: "交换机",
+    iconText: "交",
+    iconClass: "icon-blue",
+    updatedAt: "",
+    notes: "",
+    history: [],
+    accounts: [],
+  }, "rta12026"), true);
   assert.doesNotMatch(app, /item\.website\.toLowerCase\(\)\.includes\(query\)/);
   assert.doesNotMatch(app, /item\.username\.toLowerCase\(\)\.includes\(query\)/);
 });
@@ -556,6 +591,9 @@ test("device asset fields stay with device information and website is not part o
   assert.match(deviceDetailPane, /selectedItem\.ipAddress/);
   assert.match(deviceDetailPane, /selectedItem\.assetCode/);
   assert.match(deviceDetailPane, /selectedItem\.location/);
+  assert.match(deviceDetailPane, /class="device-info-value" data-value-tooltip=\{selectedItem\.ipAddress\}[\s\S]*<p>\{selectedItem\.ipAddress\}<\/p>/);
+  assert.match(deviceDetailPane, /class="device-info-value" data-value-tooltip=\{selectedItem\.assetCode\}[\s\S]*<p>\{selectedItem\.assetCode\}<\/p>/);
+  assert.match(deviceDetailPane, /class="device-info-value" data-value-tooltip=\{selectedItem\.location\}[\s\S]*<p>\{selectedItem\.location\}<\/p>/);
   assert.match(deviceDetailPane, /class="device-info-card" aria-label="设备信息"[\s\S]*<span class="field-label">IP 地址<\/span>[\s\S]*<span class="field-label">资产编号<\/span>[\s\S]*<span class="field-label">设备位置<\/span>/);
   const detailWidthBlocks = [
     styles.match(/\.device-info-card \{[^}]*\}/)?.[0] ?? "",
@@ -573,6 +611,9 @@ test("device asset fields stay with device information and website is not part o
   assert.match(styles, /\.device-info-card:has\(\.device-info-item:nth-child\(3\)\) \{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(styles, /\.device-info-item \{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[\s\S]*min-width:\s*0;/);
   assert.match(styles, /\.device-info-item > div \{[\s\S]*min-width:\s*0;/);
+  assert.match(styles, /\.device-info-value \{[\s\S]*position:\s*relative;[\s\S]*min-width:\s*0;/);
+  assert.match(styles, /\.device-info-value\[data-value-tooltip\]::before \{[\s\S]*content:\s*attr\(data-value-tooltip\);[\s\S]*inline-size:\s*max-content;[\s\S]*max-inline-size:\s*min\(36ch, 42vw\);[\s\S]*overflow-wrap:\s*anywhere;/);
+  assert.match(styles, /\.device-info-value\[data-value-tooltip\]:hover::before,[\s\S]*\.device-info-value\[data-value-tooltip\]:hover::after/);
   assert.match(deviceInfoValueBlock, /overflow:\s*hidden;/);
   assert.match(deviceInfoValueBlock, /text-overflow:\s*ellipsis;/);
   assert.match(deviceInfoValueBlock, /white-space:\s*nowrap;/);

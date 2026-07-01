@@ -294,8 +294,8 @@
   $: listContextMeta = deviceTypeRows.find((type) => type.label === listContextLabel) ?? defaultDeviceTypeMeta[0];
   $: searchPlaceholder =
     searchQuery.trim() || selectedDeviceType === "全部设备"
-      ? "搜索设备名或 IP，快速定位资产"
-      : `在${selectedDeviceType}中搜索设备`;
+      ? "搜索设备名、IP 或资产编号"
+      : `在${selectedDeviceType}中搜索设备名、IP 或资产编号`;
   $: sortedHistory = [...selectedAccount.history].sort((left, right) =>
     historySortDesc ? right.id - left.id : left.id - right.id
   );
