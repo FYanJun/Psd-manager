@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, ChevronRight, Clock3, Copy, Eye, EyeOff, Folder, History, KeyRound, MoreVertical, Pencil, Plus, ShieldCheck, Trash2, UserRound } from "@lucide/svelte";
+  import { ArrowDownUp, ChevronDown, ChevronRight, Clock3, Copy, Eye, EyeOff, Folder, History, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserRound } from "@lucide/svelte";
   import type { DeviceAccount, PasswordHistory, VaultItem } from "../lib/types";
   import { formatAccountTag } from "../lib/vault";
 
@@ -13,6 +13,7 @@
   export let selectedAccountTargetCount = 0;
   export let canDeleteSelectedAccountTargets = false;
   export let sortedHistory: PasswordHistory[];
+  export let historySortDesc = true;
   export let passwordVisible = false;
   export let historyOpen = true;
   export let visibleHistoryIds: number[] = [];
@@ -24,8 +25,6 @@
   export let copySelectedAccountInfo: () => void;
   export let openEditAccountDialog: () => void;
   export let requestDeleteSelectedAccount: () => void;
-  export let openMorePopover: (event: MouseEvent) => void;
-  export let openSelectedDeviceContextMenu: (event: MouseEvent) => void;
   export let copyText: (text: string, label: string) => void;
   export let selectAccount: (id: number) => void;
   export let toggleAccountBatchSelection: (id: number) => void;
@@ -33,6 +32,7 @@
   export let clearAccountBatchSelection: () => void;
   export let maskPassword: (password: string) => string;
   export let toggleHistoryPassword: (id: number) => void;
+  export let toggleHistorySort: () => void;
   export let clearSearch: () => void;
   export let openAddDeviceDialog: () => void;
 </script>
@@ -57,13 +57,10 @@
           <Pencil size={20} />
           <span>编辑账号</span>
         </button>
-        <button class="icon-button" aria-label="更多操作" data-tooltip="更多操作" on:click={openMorePopover}>
-          <MoreVertical size={22} />
-        </button>
       </div>
     </div>
 
-    <div class="detail-scroll" role="group" aria-label="当前设备右键菜单区域" on:contextmenu={openSelectedDeviceContextMenu}>
+    <div class="detail-scroll" role="group" aria-label="当前设备详情">
       <div class="identity-row">
         <span class={`detail-icon ${selectedItem.iconClass}`}>
           {selectedItem.iconText}
@@ -76,9 +73,6 @@
               <span>{formatAccountTag(selectedAccount, selectedItem.deviceType, selectedItem.tag)}</span>
             {:else}
               <span>暂无账号</span>
-            {/if}
-            {#if selectedAccount.id}
-              <span>当前账号更新于 {selectedAccount.updatedAt}</span>
             {/if}
           </div>
         </div>
@@ -181,7 +175,6 @@
                 </label>
                 <button
                   class="account-tab"
-                  class:batch-selected={selectedAccountIds.includes(account.id)}
                   role="tab"
                   aria-selected={account.id === selectedAccount.id}
                   on:click={() => selectAccount(account.id)}
@@ -223,7 +216,6 @@
               <button class="icon-button inline" aria-label="复制密码" data-tooltip="复制密码" on:click={() => copyText(selectedAccount.password, "密码")}>
                 <Copy size={18} />
               </button>
-              <button class="secondary-button inline-update" on:click={() => openPasswordDialog()}>更新</button>
             </div>
           </div>
           {#if selectedAccount.notes}
@@ -248,9 +240,19 @@
 
         {#if historyOpen}
           <section class="history-section">
-            <div class="panel-heading">
+            <div class="panel-heading history-heading">
               <History size={19} />
               <h2>密码历史</h2>
+              {#if selectedAccount.history.length > 1}
+                <button
+                  class="icon-button inline history-sort-action"
+                  aria-label={historySortDesc ? "按最早记录排序" : "按最新记录排序"}
+                  data-tooltip={historySortDesc ? "按最早记录排序" : "按最新记录排序"}
+                  on:click={() => toggleHistorySort()}
+                >
+                  <ArrowDownUp size={17} />
+                </button>
+              {/if}
             </div>
             {#if selectedAccount.history.length === 0}
               <p class="quiet-text">暂无旧密码记录</p>

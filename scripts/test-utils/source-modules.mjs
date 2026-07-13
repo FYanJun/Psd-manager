@@ -1,10 +1,10 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { transformWithEsbuild } from "vite";
 
 const moduleCache = new Map();
-const compiledLibDir = join(tmpdir(), "device-password-manager-smoke-lib");
+const compiledLibDir = fileURLToPath(new URL("../../node_modules/.cache/device-password-manager-smoke-lib/", import.meta.url));
 
 export async function importSourceModule(relativePath) {
   const cacheKey = relativePath;

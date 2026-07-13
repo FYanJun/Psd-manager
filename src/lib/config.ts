@@ -2,6 +2,7 @@ import { APP_TITLE, CONFIG_FORMAT_VERSION, DEFAULT_ACCOUNT_TAG } from "./constan
 import type { ConfigData, ConfigSummary, ConfigFormat, DeviceAccount, DeviceTypeMeta, PasswordHistory, VaultItem } from "./types";
 import { getAccounts, normalizeVaultItems } from "./vault";
 import { formatDateTime, padDatePart, readNumber, readString } from "./utils";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 const CSV_HEADERS = [
   "设备类型",
@@ -22,7 +23,14 @@ const CSV_HEADERS = [
   "密码历史",
 ];
 
-const configFormats: ConfigFormat[] = ["json", "csv", "ini"];
+const configFormats: ConfigFormat[] = ["json", "csv", "yaml"];
+
+export class ConfigImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConfigImportError";
+  }
+}
 
 export function createConfigMeta() {
   return {
@@ -35,7 +43,7 @@ export function createConfigMeta() {
 export function createConfigPayload(items: VaultItem[], customDeviceTypes: DeviceTypeMeta[], hiddenDeviceTypes: string[], format: ConfigFormat) {
   const config = createConfigData(items, customDeviceTypes, hiddenDeviceTypes);
   if (format === "csv") return createCsvConfigPayload(config);
-  if (format === "ini") return createIniConfigPayload(config);
+  if (format === "yaml") return createYamlConfigPayload(config);
   return JSON.stringify(createJsonConfigPayload(config), null, 2);
 }
 
@@ -54,38 +62,40 @@ export function createConfigFilename(format: ConfigFormat) {
 export function parseConfigContent(content: string, format: ConfigFormat): ConfigData {
   const config = format === "csv"
     ? parseCsvConfigContent(content)
-    : format === "ini"
-      ? parseIniConfigContent(content)
+    : format === "yaml"
+      ? parseYamlConfigContent(content)
       : parseJsonConfigContent(content);
-  assertUniqueConfigNames(config.items);
+  assertValidConfigNames(config.items);
   return config;
 }
 
 export function parseConfigContentWithFallback(content: string, preferredFormat: ConfigFormat): { config: ConfigData; format: ConfigFormat } {
   const formats = [preferredFormat, ...configFormats.filter((format) => format !== preferredFormat)];
   let firstError: unknown = null;
+  let configImportError: ConfigImportError | null = null;
 
   for (const format of formats) {
     try {
       return { config: parseConfigContent(content, format), format };
     } catch (error) {
       firstError ??= error;
+      if (error instanceof ConfigImportError) configImportError ??= error;
     }
   }
 
-  throw firstError ?? new Error("invalid config");
+  throw configImportError ?? firstError ?? new Error("invalid config");
 }
 
 export function inferConfigFormat(pathOrName: string): ConfigFormat {
   const normalized = pathOrName.toLowerCase();
   if (normalized.endsWith(".csv")) return "csv";
-  if (normalized.endsWith(".ini")) return "ini";
+  if (normalized.endsWith(".yaml") || normalized.endsWith(".yml")) return "yaml";
   return "json";
 }
 
 export function getConfigMimeType(format: ConfigFormat) {
   if (format === "csv") return "text/csv;charset=utf-8";
-  if (format === "ini") return "text/plain;charset=utf-8";
+  if (format === "yaml") return "application/yaml;charset=utf-8";
   return "application/json";
 }
 
@@ -160,23 +170,39 @@ function createConfigData(items: VaultItem[], customDeviceTypes: DeviceTypeMeta[
   };
 }
 
-function assertUniqueConfigNames(items: VaultItem[]) {
+function assertValidConfigNames(items: VaultItem[]) {
   const deviceKeys = new Set<string>();
-  items.forEach((item) => {
+  items.forEach((item, itemIndex) => {
     const deviceName = item.deviceName.trim();
     const deviceType = item.deviceType.trim();
-    if (!deviceName || !deviceType) throw new Error("invalid config");
+    if (!deviceName) throw new ConfigImportError(`第 ${itemIndex + 1} 台设备缺少设备名称`);
+    if (!deviceType) throw new ConfigImportError(`设备“${deviceName}”缺少设备类型`);
+
     const deviceKey = `${deviceType}\u0000${deviceName}`;
-    if (deviceKeys.has(deviceKey)) throw new Error("invalid config");
+    if (deviceKeys.has(deviceKey)) {
+      throw new ConfigImportError(`设备类型“${deviceType}”下存在重复设备“${deviceName}”`);
+    }
     deviceKeys.add(deviceKey);
 
     const accountNames = new Set<string>();
-    getAccounts(item).forEach((account) => {
+    getAccounts(item).forEach((account, accountIndex) => {
       const accountName = account.username.trim();
-      if (!accountName || accountNames.has(accountName)) throw new Error("invalid config");
+      if (!accountName) {
+        throw new ConfigImportError(`设备“${deviceName}”下的第 ${accountIndex + 1} 个账号缺少用户名`);
+      }
+      if (accountNames.has(accountName)) {
+        throw new ConfigImportError(`设备“${deviceName}”下存在重复账号“${accountName}”`);
+      }
       accountNames.add(accountName);
     });
   });
+}
+
+function readRecordValue(record: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    if (key in record) return record[key] ?? "";
+  }
+  return "";
 }
 
 function compareText(left: string, right: string) {
@@ -265,14 +291,19 @@ function createJsonConfigPayload(config: ConfigData) {
 
 function parseJsonConfigContent(content: string): ConfigData {
   const parsed = JSON.parse(stripUtf8Bom(content));
-  const isChineseConfig = Boolean(parsed && typeof parsed === "object" &&
-    (Array.isArray(parsed["设备类型"]) ||
-      ["应用名称", "格式版本", "导出时间"].some((key) => key in (parsed["元信息"] ?? {}))));
-  if (isChineseConfig) return parseChineseJsonConfig(parsed);
+  if (isStructuredConfigPayload(parsed)) return parseStructuredConfigPayload(parsed);
   throw new Error("invalid config");
 }
 
-function parseChineseJsonConfig(parsed: Record<string, unknown>): ConfigData {
+function isStructuredConfigPayload(parsed: unknown): parsed is Record<string, unknown> {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const record = parsed as Record<string, unknown>;
+  const meta = record["元信息"];
+  return Array.isArray(record["设备类型"]) || Boolean(meta && typeof meta === "object" &&
+    ["应用名称", "格式版本", "导出时间"].some((key) => key in (meta as Record<string, unknown>)));
+}
+
+function parseStructuredConfigPayload(parsed: Record<string, unknown>): ConfigData {
   const rawTypes = Array.isArray(parsed["设备类型"]) ? parsed["设备类型"] : [];
   const configItems = normalizeVaultItems(rawTypes.flatMap((type, typeIndex) => {
     if (!type || typeof type !== "object") return [];
@@ -538,182 +569,26 @@ function stripUtf8Bom(content: string) {
   return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
 }
 
-function createIniConfigPayload(config: ConfigData) {
-  // INI 使用中文 section 表示设备类型、设备、账号、密码历史的层级关系。
-  const lines = [
-    "; 密码管理器 INI 配置文件",
-    "; 设备类型.N 表示设备类型；设备类型.N.设备.M 表示该类型下的设备。",
-    "; 设备类型.N.设备.M.账号.K 表示该设备下的账号；密码历史.H 表示该账号下的历史记录。",
-    "; JSON 和 INI 按设备类型分组；CSV 使用单表账号明细。",
-    "",
-    "[元信息]",
-    `应用名称=${escapeIniValue(config.meta.appName)}`,
-    `格式版本=${config.meta.formatVersion}`,
-    `导出时间=${escapeIniValue(config.meta.exportedAt)}`,
-    "",
-  ];
-
-  buildDeviceTypeGroups(config).forEach(({ type, items }, typeIndex) => {
-    const typeNumber = typeIndex + 1;
-    lines.push(`[设备类型.${typeNumber}]`);
-    lines.push(`设备类型=${escapeIniValue(type.label)}`);
-    lines.push(`图标文字=${escapeIniValue(type.iconText)}`);
-    lines.push(`颜色=${escapeIniValue(type.color)}`);
-    lines.push("");
-
-    items.forEach((item, itemIndex) => {
-      const deviceNumber = itemIndex + 1;
-      lines.push(`[设备类型.${typeNumber}.设备.${deviceNumber}]`);
-      lines.push(`设备ID=${item.id}`);
-      lines.push(`设备名称=${escapeIniValue(item.deviceName)}`);
-      lines.push(`设备类型=${escapeIniValue(item.deviceType)}`);
-      lines.push(`资产编号=${escapeIniValue(item.assetCode)}`);
-      lines.push(`设备位置=${escapeIniValue(item.location)}`);
-      lines.push(`IP地址=${escapeIniValue(item.ipAddress)}`);
-      lines.push(`设备备注=${escapeIniValue(item.notes)}`);
-      lines.push(`图标文字=${escapeIniValue(item.iconText)}`);
-      lines.push(`更新时间=${escapeIniValue(item.updatedAt)}`);
-      lines.push("");
-
-      getAccounts(item).forEach((account, accountIndex) => {
-        const accountNumber = accountIndex + 1;
-        lines.push(`[设备类型.${typeNumber}.设备.${deviceNumber}.账号.${accountNumber}]`);
-        lines.push(`账号ID=${account.id}`);
-        lines.push(`用户名=${escapeIniValue(account.username)}`);
-        lines.push(`密码=${escapeIniValue(account.password)}`);
-        lines.push(`账号标签=${escapeIniValue(account.tag)}`);
-        lines.push(`账号备注=${escapeIniValue(account.notes)}`);
-        lines.push(`更新时间=${escapeIniValue(account.updatedAt || item.updatedAt)}`);
-        lines.push("");
-
-        [...account.history].sort((left, right) => left.id - right.id).forEach((history, historyIndex) => {
-          lines.push(`[设备类型.${typeNumber}.设备.${deviceNumber}.账号.${accountNumber}.密码历史.${historyIndex + 1}]`);
-          lines.push(`历史ID=${history.id}`);
-          lines.push(`旧密码=${escapeIniValue(history.password)}`);
-          lines.push(`新密码=${escapeIniValue(history.newPassword)}`);
-          lines.push(`修改时间=${escapeIniValue(history.changedAt)}`);
-          lines.push(`修改原因=${escapeIniValue(history.reason)}`);
-          lines.push("");
-        });
-      });
-    });
+function createYamlConfigPayload(config: ConfigData) {
+  const payload = stringifyYaml(createJsonConfigPayload(config), {
+    aliasDuplicateObjects: false,
+    indent: 2,
+    lineWidth: 0,
+    simpleKeys: true,
   });
-
-  return lines.join("\n").trimEnd() + "\n";
+  return `# 密码管理器 YAML 配置文件\n# 包含明文账号、密码和密码历史，请只保存到可信位置。\n${payload}`;
 }
 
-function parseIniConfigContent(content: string): ConfigData {
-  const sections = normalizeIniSectionNames(parseIniSections(stripUtf8Bom(content)));
-  const meta = sections.get("meta") ?? {};
-  const hasStructuredSections = Array.from(sections.keys()).some((section) =>
-    /^deviceType\.\d+$/.test(section) ||
-    /^deviceType\.\d+\.device\.\d+$/.test(section) ||
-    /^deviceType\.\d+\.device\.\d+\.account\.\d+$/.test(section) ||
-    /^deviceType\.\d+\.device\.\d+\.account\.\d+\.history\.\d+$/.test(section)
-  );
-  if (hasStructuredSections) return parseStructuredIniSections(sections, meta);
+function parseYamlConfigContent(content: string): ConfigData {
+  const parsed = parseYaml(stripUtf8Bom(content), {
+    customTags: [],
+    maxAliasCount: 0,
+    merge: false,
+    resolveKnownTags: false,
+    schema: "core",
+  });
+  if (isStructuredConfigPayload(parsed)) return parseStructuredConfigPayload(parsed);
   throw new Error("invalid config");
-}
-
-function parseStructuredIniSections(sections: Map<string, Record<string, string>>, meta: Record<string, string>): ConfigData {
-  const deviceTypeSections = Array.from(sections)
-    .filter(([section]) => /^deviceType\.\d+$/.test(section))
-    .map(([section, record]) => ({ section, record }));
-  const historyByAccountKey = new Map<string, PasswordHistory[]>();
-
-  Array.from(sections)
-    .filter(([section]) => /^deviceType\.\d+\.device\.\d+\.account\.\d+\.history\.\d+$/.test(section))
-    .forEach(([section, record], index) => {
-      const parts = section.split(".");
-      const key = `${parts[1]}\u0000${parts[3]}\u0000${parts[5]}`;
-      const history = {
-        id: readNumber(readRecordValue(record, "历史ID"), index + 1),
-        password: readRecordValue(record, "旧密码"),
-        newPassword: readRecordValue(record, "新密码"),
-        changedAt: readRecordValue(record, "修改时间"),
-        reason: readRecordValue(record, "修改原因"),
-      };
-      historyByAccountKey.set(key, [...(historyByAccountKey.get(key) ?? []), history]);
-    });
-
-  const accountsByDeviceKey = new Map<string, DeviceAccount[]>();
-  Array.from(sections)
-    .filter(([section]) => /^deviceType\.\d+\.device\.\d+\.account\.\d+$/.test(section))
-    .forEach(([section, record], index) => {
-      const parts = section.split(".");
-      const typeIndex = parts[1];
-      const deviceIndex = parts[3];
-      const accountIndex = parts[5];
-      const key = `${typeIndex}\u0000${deviceIndex}`;
-      const accountKey = `${typeIndex}\u0000${deviceIndex}\u0000${accountIndex}`;
-      const accountId = readNumber(readRecordValue(record, "账号ID"), index + 1);
-      const username = readRecordValue(record, "用户名").trim();
-      const account: DeviceAccount = {
-        id: accountId,
-        title: username || "未填写用户名",
-        username,
-        password: readRecordValue(record, "密码"),
-        tag: readRecordValue(record, "账号标签").trim() || DEFAULT_ACCOUNT_TAG,
-        notes: readRecordValue(record, "账号备注"),
-        updatedAt: readRecordValue(record, "更新时间").trim() || formatDateTime(new Date()),
-        history: historyByAccountKey.get(accountKey) ?? [],
-      };
-      accountsByDeviceKey.set(key, [...(accountsByDeviceKey.get(key) ?? []), account]);
-    });
-
-  const items = Array.from(sections)
-    .filter(([section]) => /^deviceType\.\d+\.device\.\d+$/.test(section))
-    .reduce<VaultItem[]>((devices, [section, record], index) => {
-      const parts = section.split(".");
-      const typeIndex = parts[1];
-      const deviceIndex = parts[3];
-      const deviceName = readRecordValue(record, "设备名称").trim();
-      if (!deviceName) return devices;
-      const accounts = accountsByDeviceKey.get(`${typeIndex}\u0000${deviceIndex}`) ?? [];
-      const primaryAccount = accounts[0];
-      const deviceType = readRecordValue(record, "设备类型").trim();
-      devices.push({
-        id: readNumber(readRecordValue(record, "设备ID"), devices.length + 1),
-        title: primaryAccount?.title ?? deviceName,
-        deviceName,
-        deviceType,
-        assetCode: readRecordValue(record, "资产编号").trim(),
-        location: readRecordValue(record, "设备位置").trim(),
-        username: primaryAccount?.username ?? "",
-        password: primaryAccount?.password ?? "",
-        ipAddress: readRecordValue(record, "IP地址").trim(),
-        tag: deviceType || DEFAULT_ACCOUNT_TAG,
-        iconText: readRecordValue(record, "图标文字").trim() || deviceType.slice(0, 1) || "设",
-        iconClass: "",
-        updatedAt: readRecordValue(record, "更新时间").trim() || primaryAccount?.updatedAt || formatDateTime(new Date()),
-        notes: readRecordValue(record, "设备备注"),
-        history: primaryAccount?.history ?? [],
-        accounts,
-      });
-      return devices;
-    }, []);
-
-  const normalizedItems = normalizeVaultItems(items);
-  const hasKnownMeta = ["应用名称", "格式版本", "导出时间", "appName", "formatVersion", "exportedAt"].some((key) => key in meta);
-  if (!hasKnownMeta && normalizedItems.length === 0 && deviceTypeSections.length === 0) throw new Error("invalid config");
-
-  return {
-    meta: {
-      appName: readString(readRecordValue(meta, "应用名称"), APP_TITLE),
-      formatVersion: readNumber(readRecordValue(meta, "格式版本"), CONFIG_FORMAT_VERSION),
-      exportedAt: readString(readRecordValue(meta, "导出时间")),
-    },
-    items: normalizedItems,
-    customDeviceTypes: normalizeDeviceTypeMetaList(deviceTypeSections.map(({ record }) => record)),
-    hiddenDeviceTypes: [],
-  };
-}
-
-function readRecordValue(record: Record<string, string>, ...keys: string[]) {
-  for (const key of keys) {
-    if (key in record) return record[key] ?? "";
-  }
-  return "";
 }
 
 function escapeCsvValue(value: unknown) {
@@ -755,58 +630,4 @@ function parseCsvRows(content: string) {
   row.push(cell);
   rows.push(row);
   return rows;
-}
-
-function escapeIniValue(value: unknown) {
-  return String(value ?? "")
-    .replace(/\\/g, "\\\\")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r");
-}
-
-function unescapeIniValue(value: string) {
-  return value
-    .replace(/\\r/g, "\r")
-    .replace(/\\n/g, "\n")
-    .replace(/\\\\/g, "\\");
-}
-
-function normalizeIniSectionNames(sections: Map<string, Record<string, string>>) {
-  const normalized = new Map<string, Record<string, string>>();
-  sections.forEach((record, section) => {
-    normalized.set(normalizeIniSectionName(section), record);
-  });
-  return normalized;
-}
-
-function normalizeIniSectionName(section: string) {
-  return section
-    .replace(/^元信息$/, "meta")
-    .replace(/^设备类型\.(\d+)$/, "deviceType.$1")
-    .replace(/^设备类型\.(\d+)\.设备\.(\d+)$/, "deviceType.$1.device.$2")
-    .replace(/^设备类型\.(\d+)\.设备\.(\d+)\.账号\.(\d+)$/, "deviceType.$1.device.$2.account.$3")
-    .replace(/^设备类型\.(\d+)\.设备\.(\d+)\.账号\.(\d+)\.密码历史\.(\d+)$/, "deviceType.$1.device.$2.account.$3.history.$4")
-}
-
-function parseIniSections(content: string) {
-  const sections = new Map<string, Record<string, string>>();
-  let currentSection = "";
-
-  content.split(/\r?\n/).forEach((rawLine) => {
-    const line = rawLine.trim();
-    if (!line || line.startsWith(";") || line.startsWith("#")) return;
-    const sectionMatch = line.match(/^\[([^\]]+)]$/);
-    if (sectionMatch) {
-      currentSection = sectionMatch[1].trim();
-      sections.set(currentSection, sections.get(currentSection) ?? {});
-      return;
-    }
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex < 0 || !currentSection) return;
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-    sections.get(currentSection)![key] = unescapeIniValue(value);
-  });
-
-  return sections;
 }

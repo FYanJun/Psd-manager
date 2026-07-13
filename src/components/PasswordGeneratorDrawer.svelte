@@ -178,25 +178,17 @@
   </div>
 
   <footer class="drawer-footer">
-    <button class="drawer-action primary-action" aria-label="重新生成" data-tooltip="重新生成" on:click={() => generatePassword()}>
-      <RefreshCcw size={20} />
-      <span>重新生成</span>
-    </button>
     {#if canUseGeneratorForCurrentAccount}
-      <button class="drawer-action" aria-label="填入当前账号" data-tooltip="填入当前账号" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={() => useGeneratedPasswordForCurrentDevice()}>
+      <button class="drawer-action primary-action" aria-label="填入当前账号" data-tooltip="填入当前账号" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={() => useGeneratedPasswordForCurrentDevice()}>
         <KeyRound size={18} />
         <span>填入当前账号</span>
       </button>
     {/if}
     {#if canUseGeneratorForBulkUpdate}
-      <button class="drawer-action" aria-label="批量改密" data-tooltip="批量改密" disabled={!generatedPassword || itemCount === 0} on:click={() => useGeneratedPasswordForBulkUpdate()}>
+      <button class="drawer-action" class:primary-action={!canUseGeneratorForCurrentAccount} aria-label="批量改密" data-tooltip="批量改密" disabled={!generatedPassword || itemCount === 0} on:click={() => useGeneratedPasswordForBulkUpdate()}>
         <RotateCcwKey size={20} />
         <span>批量改密</span>
       </button>
     {/if}
-    <button class="drawer-action" aria-label="复制密码" data-tooltip="复制密码" disabled={!generatedPassword} on:click={() => copyGeneratedPassword()}>
-      <Copy size={18} />
-      <span>复制密码</span>
-    </button>
   </footer>
 </aside>

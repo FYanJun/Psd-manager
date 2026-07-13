@@ -311,13 +311,13 @@
             </button>
             <button
               type="button"
-              class:selected={exportConfigFormat === "ini"}
+              class:selected={exportConfigFormat === "yaml"}
               role="radio"
-              aria-checked={exportConfigFormat === "ini"}
-              on:click={() => (exportConfigFormat = "ini")}
+              aria-checked={exportConfigFormat === "yaml"}
+              on:click={() => (exportConfigFormat = "yaml")}
             >
-              <strong>INI</strong>
-              <span>分段配置文本，适合简单脚本或手动编辑。</span>
+              <strong>YAML</strong>
+              <span>保留完整层级，适合人工阅读和手动编辑。</span>
             </button>
           </div>
           <p class="export-config-note wide-field">导出的配置会包含明文用户名、密码和密码历史，请只保存到可信位置。</p>

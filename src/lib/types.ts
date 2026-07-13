@@ -5,12 +5,12 @@ export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-pa
 export type ActivePopover =
   | "type-sort"
   | "device-sort"
+  | "device-actions"
   | "type-context"
-  | "device-context"
   | "type-blank-context"
   | "list-blank-context"
   | "detail-blank-context"
-  | "more"
+  | "config"
   | null;
 export type ConfirmationAction =
   | "delete-device"
@@ -141,7 +141,7 @@ export type BulkUsernameSuggestion = {
 export type GeneratorTarget = "current-account" | "bulk-password" | null;
 export type TypePickerScope = "device" | "bulk";
 export type ResizePane = "sidebar" | "list" | "generator";
-export type ConfigFormat = "json" | "csv" | "ini";
+export type ConfigFormat = "json" | "csv" | "yaml";
 
 export type ConfigData = {
   items: VaultItem[];

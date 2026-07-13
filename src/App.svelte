@@ -34,7 +34,6 @@
   import {
     createAccountFromForm as createAccountFromFormData,
     formatDeviceAccountInfo,
-    formatDeviceInfo,
     getBulkPasswordMatches as getBulkPasswordMatchesData,
     getBulkPasswordMatchKey,
     getBulkUsernameSuggestions,
@@ -79,6 +78,7 @@
     readNumber,
   } from "./lib/utils";
   import {
+    ConfigImportError,
     createConfigFilename,
     createConfigPayload,
     formatConfigSummary,
@@ -677,19 +677,6 @@
     return formatDeviceAccountInfo(account);
   }
 
-  function copyDeviceInfo(item = selectedItem) {
-    return formatDeviceInfo(item);
-  }
-
-  function copySelectedDeviceInfo() {
-    activePopover = null;
-    if (!hasSelectedDevice) {
-      showStatus("请先选择设备");
-      return;
-    }
-    copyText(copyDeviceInfo(), "设备信息");
-  }
-
   function copySelectedAccountInfo() {
     activePopover = null;
     const targets = selectedAccountTargets;
@@ -786,16 +773,6 @@
     activePopover = "type-context";
   }
 
-  function openDeviceContextMenu(item: VaultItem, event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (item.id && selectedId !== item.id) selectDevice(item.id);
-    contextDeviceType = item.deviceType;
-    activeDialog = null;
-    popoverPosition = getPointerPopoverPosition(event);
-    activePopover = "device-context";
-  }
-
   function isContextMenuControlTarget(target: EventTarget | null) {
     if (!(target instanceof HTMLElement)) return false;
     return Boolean(target.closest("button, a, input, textarea, select, [role='button']"));
@@ -828,12 +805,6 @@
     activePopover = "detail-blank-context";
   }
 
-  function openSelectedDeviceContextMenu(event: MouseEvent) {
-    if (!selectedItem.id) return;
-    if ((event.target as HTMLElement).closest("button, a, input, textarea, select, [role='button']")) return;
-    openDeviceContextMenu(selectedItem, event);
-  }
-
   function closePopoverWhenPointerLeavesMenu(event: Event) {
     if (!activePopover) return;
     const target = event.target;
@@ -859,6 +830,7 @@
   }
 
   function handleGlobalContextMenu(event: MouseEvent) {
+    event.preventDefault();
     if (!activePopover) return;
     const target = event.target;
     if (target instanceof HTMLElement && target.closest(".action-popover")) return;
@@ -1730,7 +1702,7 @@
         const path = await openFileDialog({
           title: "选择要导入的配置文件",
           multiple: false,
-          filters: [{ name: "配置文件", extensions: ["json", "csv", "ini"] }],
+          filters: [{ name: "配置文件", extensions: ["json", "csv", "yaml", "yml"] }],
         });
         if (!path || Array.isArray(path)) {
           showStatus("已取消导入");
@@ -1756,10 +1728,13 @@
   function tryRequestApplyConfig(content: string, format: ConfigFormat) {
     try {
       requestApplyConfig(content, format);
-    } catch {
+    } catch (error) {
       pendingConfigContent = "";
       pendingConfirmation = null;
-      showStatus("配置文件格式不正确");
+      const reason = error instanceof ConfigImportError
+        ? error.message
+        : "无法识别配置结构或文件内容存在语法错误";
+      showStatus(`配置导入失败：${reason}`, 7000);
     }
   }
 
@@ -1838,7 +1813,7 @@
 </script>
 
 <main class="app-shell" style={layoutStyle}>
-  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.csv,.ini,application/json,text/csv,text/plain" on:change={selectConfigFileFromBrowser} />
+  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.csv,.yaml,.yml,application/json,text/csv,application/yaml,text/yaml" on:change={selectConfigFileFromBrowser} />
   <SidebarPane
     {deviceTypeRows}
     {selectedDeviceType}
@@ -1871,9 +1846,9 @@
       {goBack}
       {goForward}
       {updateSearchValue}
-      openAddDeviceDialog={() => openAddDeviceDialog()}
       openBulkPasswordDialog={() => openBulkPasswordDialog()}
       openGeneratorPanel={() => openGeneratorPanel()}
+      openConfigPopover={(event) => openPopover("config", event)}
     />
 
     <div class="content-grid">
@@ -1883,12 +1858,17 @@
         {selectedDeviceType}
         {searchQuery}
         {hasDevices}
+        {hasSelectedDevice}
+        deviceTypeOptionsLength={deviceTypeOptions.length}
         {listContextLabel}
         {listContextMeta}
+        openAddDeviceDialog={() => openAddDeviceDialog()}
+        {openEditDeviceDialog}
+        {requestDeleteSelectedDevice}
         openDeviceSortPopover={(event) => openPopover("device-sort", event)}
+        openDeviceActionsPopover={(event) => openPopover("device-actions", event)}
         {openDeviceListBlankContextMenu}
         {selectDevice}
-        {openDeviceContextMenu}
       />
 
       <button
@@ -1912,6 +1892,7 @@
         {selectedAccountTargetCount}
         {canDeleteSelectedAccountTargets}
         {sortedHistory}
+        {historySortDesc}
         {visibleHistoryIds}
         {passwordStrength}
         {openDetailBlankContextMenu}
@@ -1920,8 +1901,6 @@
         {copySelectedAccountInfo}
         {openEditAccountDialog}
         {requestDeleteSelectedAccount}
-        openMorePopover={(event) => openPopover("more", event)}
-        {openSelectedDeviceContextMenu}
         {copyText}
         {selectAccount}
         {toggleAccountBatchSelection}
@@ -1929,6 +1908,7 @@
         {clearAccountBatchSelection}
         {maskPassword}
         {toggleHistoryPassword}
+        toggleHistorySort={() => (historySortDesc = !historySortDesc)}
         {clearSearch}
         openAddDeviceDialog={() => openAddDeviceDialog()}
       />
@@ -1942,11 +1922,10 @@
     {sortMode}
     {contextDeviceType}
     {selectedDeviceType}
-    {selectedItem}
-    {selectedAccountTargetCount}
     {searchQuery}
     {listContextLabel}
     deviceTypeOptionsLength={deviceTypeOptions.length}
+    {hasSelectedDevice}
     {setDeviceTypeSortMode}
     {setSortMode}
     {selectDeviceType}
@@ -1958,14 +1937,10 @@
     {clearSearch}
     {openAddDeviceDialog}
     {openEditDeviceDialog}
-    {copySelectedDeviceInfo}
     {requestDeleteSelectedDevice}
-    {openEditAccountDialog}
-    {openPasswordDialog}
     {chooseConfigFile}
     {openExportConfigDialog}
     setActivePopover={(popover) => (activePopover = popover)}
-    toggleHistorySort={() => { historySortDesc = !historySortDesc; activePopover = null; }}
   />
 
   <AppDialog

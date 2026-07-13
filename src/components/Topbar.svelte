@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Plus, RotateCcwKey, Search, Sparkles } from "@lucide/svelte";
+  import { ChevronRight, MoreVertical, RotateCcwKey, Search, Sparkles } from "@lucide/svelte";
   import ClearableInput from "./ClearableInput.svelte";
 
   export let backDisabled = false;
@@ -11,9 +11,9 @@
   export let goBack: () => void;
   export let goForward: () => void;
   export let updateSearchValue: (value: string) => void;
-  export let openAddDeviceDialog: () => void;
   export let openBulkPasswordDialog: () => void;
   export let openGeneratorPanel: () => void;
+  export let openConfigPopover: (event: MouseEvent) => void;
 </script>
 
 <header class="topbar">
@@ -39,10 +39,6 @@
     />
   </label>
 
-  <button class="primary-button" data-tooltip="新增设备" aria-keyshortcuts="Meta+N Control+N" on:click={() => openAddDeviceDialog()}>
-    <Plus size={22} />
-    <span>新增设备</span>
-  </button>
   <button class="tool-button topbar-tool" data-tooltip="批量改密" aria-keyshortcuts="Meta+B Control+B" on:click={() => openBulkPasswordDialog()}>
     <RotateCcwKey size={20} />
     <span>批量改密</span>
@@ -50,5 +46,8 @@
   <button class="tool-button topbar-tool accent" data-tooltip="密码生成器" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
     <Sparkles size={20} />
     <span>密码生成器</span>
+  </button>
+  <button class="icon-button topbar-tool" aria-label="配置管理" data-tooltip="配置管理" on:click={openConfigPopover}>
+    <MoreVertical size={22} />
   </button>
 </header>
