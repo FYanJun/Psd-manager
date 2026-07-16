@@ -2,9 +2,12 @@
   import {
     ArrowDownAZ,
     ArrowDownUp,
+    ArchiveRestore,
     ChartNoAxesColumnDecreasing,
     ClockArrowDown,
+    Copy,
     Download,
+    KeyRound,
     Pencil,
     Plus,
     Rows3,
@@ -23,6 +26,9 @@
   export let selectedDeviceType: "全部设备" | DeviceType;
   export let searchQuery = "";
   export let listContextLabel = "";
+  export let selectedDeviceName = "";
+  export let selectedAccountLabel = "";
+  export let selectedAccountHasPassword = false;
   export let deviceTypeOptionsLength = 0;
   export let hasSelectedDevice = false;
 
@@ -38,8 +44,14 @@
   export let openAddDeviceDialog: (deviceType?: "全部设备" | DeviceType) => void;
   export let openEditDeviceDialog: () => void;
   export let requestDeleteSelectedDevice: () => void;
+  export let copySelectedDeviceInfo: () => void;
+  export let openPasswordDialog: () => void;
+  export let copySelectedAccountInfo: () => void;
+  export let openEditAccountDialog: () => void;
+  export let requestDeleteSelectedAccount: () => void;
   export let chooseConfigFile: () => void;
   export let openExportConfigDialog: () => void;
+  export let openSnapshotsDialog: () => void;
   export let setActivePopover: (popover: ActivePopover) => void;
 </script>
 
@@ -180,12 +192,16 @@
       </button>
     {:else if activePopover === "device-actions"}
       <div class="context-menu-title">
-        <strong>设备操作</strong>
-        <span>管理当前选中的设备</span>
+        <strong>{selectedDeviceName || "设备操作"}</strong>
+        <span>设备操作</span>
       </div>
       <button class="menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "编辑设备信息" : "请先选择设备"} on:click={() => openEditDeviceDialog()}>
         <Pencil size={16} />
         <span>编辑设备信息</span>
+      </button>
+      <button class="menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "复制设备信息" : "请先选择设备"} on:click={() => copySelectedDeviceInfo()}>
+        <Copy size={16} />
+        <span>复制设备信息</span>
       </button>
       <button class="menu-item danger-menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "删除设备" : "请先选择设备"} on:click={() => requestDeleteSelectedDevice()}>
         <Trash2 size={16} />
@@ -196,11 +212,38 @@
         <ArrowDownUp size={16} />
         <span>设备排序</span>
       </button>
+    {:else if activePopover === "account-context"}
+      <div class="context-menu-title">
+        <strong>{selectedAccountLabel}</strong>
+        <span>账号操作</span>
+      </div>
+      <button class="menu-item" on:click={() => openPasswordDialog()}>
+        <KeyRound size={16} />
+        <span>更新密码</span>
+      </button>
+      <button class="menu-item" disabled={!selectedAccountHasPassword} title={selectedAccountHasPassword ? "复制账号密码" : "该账号未设置密码"} on:click={() => copySelectedAccountInfo()}>
+        <Copy size={16} />
+        <span>复制账号密码</span>
+      </button>
+      <button class="menu-item" on:click={() => openEditAccountDialog()}>
+        <Pencil size={16} />
+        <span>编辑账号</span>
+      </button>
+      <div class="menu-separator"></div>
+      <button class="menu-item danger-menu-item" on:click={() => requestDeleteSelectedAccount()}>
+        <Trash2 size={16} />
+        <span>删除账号</span>
+      </button>
     {:else if activePopover === "config"}
       <div class="context-menu-title">
-        <strong>配置管理</strong>
-        <span>导入或导出资产库配置</span>
+        <strong>资产库工具</strong>
+        <span>数据恢复和配置管理</span>
       </div>
+      <button class="menu-item" on:click={() => openSnapshotsDialog()}>
+        <ArchiveRestore size={16} />
+        <span>数据快照</span>
+      </button>
+      <div class="menu-separator"></div>
       <button class="menu-item" on:click={() => openExportConfigDialog()}>
         <Upload size={16} />
         <span>导出配置</span>

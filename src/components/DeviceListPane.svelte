@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowDownUp, Folder, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "@lucide/svelte";
-  import type { DeviceType, DeviceTypeMeta, VaultItem } from "../lib/types";
-  import { createBlankAccount, getAccounts } from "../lib/vault";
+  import type { DeviceType, VaultItem } from "../lib/types";
+  import { getAccounts } from "../lib/vault";
 
   export let filteredItems: VaultItem[];
   export let selectedId = 0;
@@ -11,13 +11,13 @@
   export let hasSelectedDevice = false;
   export let deviceTypeOptionsLength = 0;
   export let listContextLabel = "";
-  export let listContextMeta: DeviceTypeMeta;
 
   export let openAddDeviceDialog: () => void;
   export let openEditDeviceDialog: () => void;
   export let requestDeleteSelectedDevice: () => void;
   export let openDeviceSortPopover: (event: MouseEvent) => void;
   export let openDeviceActionsPopover: (event: MouseEvent) => void;
+  export let openDeviceContextMenu: (id: number, event: MouseEvent) => void;
   export let openDeviceListBlankContextMenu: (event: MouseEvent) => void;
   export let selectDevice: (id: number) => void;
 </script>
@@ -27,8 +27,6 @@
     <div class="list-context" aria-label="当前设备范围">
       {#if searchQuery.trim()}
         <Search size={21} />
-      {:else}
-        <span class={`context-type-icon type-${listContextMeta.color}`}>{listContextMeta.iconText}</span>
       {/if}
       <span>{listContextLabel}</span>
       <small>{filteredItems.length}</small>
@@ -62,31 +60,32 @@
         </div>
       </div>
     {:else}
-      <h2 class="list-heading">{searchQuery.trim() ? "搜索结果" : "设备名称"}</h2>
       {#each filteredItems as item}
         {@const itemAccounts = getAccounts(item)}
-        {@const primaryAccount = itemAccounts[0] ?? createBlankAccount()}
+        {@const deviceReference = item.ipAddress || item.assetCode || item.location || "未填写设备信息"}
         <button
           class:selected={item.id === selectedId}
-          class:no-type-pill={selectedDeviceType !== "全部设备" && !searchQuery.trim()}
           class="item-row"
           on:click={() => selectDevice(item.id)}
-          on:contextmenu={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            selectDevice(item.id);
-          }}
+          on:contextmenu={(event) => openDeviceContextMenu(item.id, event)}
         >
           <span class={`item-icon ${item.iconClass}`}>
             {item.iconText}
           </span>
           <span class="item-copy">
-            <strong>{item.deviceName}</strong>
-            <small>{itemAccounts.length} 个账号 · {primaryAccount.username || "未填写用户名"}{#if item.ipAddress} · {item.ipAddress}{/if}</small>
+            <span class="item-primary">
+              <strong data-value-tooltip={item.deviceName}>
+                <span class="item-name-text">{item.deviceName}</span>
+              </strong>
+              {#if selectedDeviceType === "全部设备" || searchQuery.trim()}
+                <span class="item-type-pill" data-tooltip={item.deviceType}>{item.deviceType}</span>
+              {/if}
+            </span>
+            <span class="item-secondary">
+              <small data-value-tooltip={deviceReference}>{deviceReference}</small>
+              <small class="item-account-count">{itemAccounts.length} 个账号</small>
+            </span>
           </span>
-          {#if selectedDeviceType === "全部设备" || searchQuery.trim()}
-            <span class="item-type-pill">{item.deviceType}</span>
-          {/if}
         </button>
       {/each}
     {/if}

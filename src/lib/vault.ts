@@ -1,6 +1,14 @@
 import { DEFAULT_ACCOUNT_TAG, fallbackDeviceTypeMeta } from "./constants";
 import type { AccountForm, DeviceAccount, DeviceForm, DeviceTypeMeta, PasswordHistory, VaultItem } from "./types";
 import { formatDateTime, fuzzyContains, normalizeSearchValue, parseDateTimeValue, readNumber, readString } from "./utils";
+import { createUuid, isUuid, normalizeUuid } from "./uuid";
+
+function uniqueUuid(value: unknown, usedUuids: Set<string>) {
+  let uuid = normalizeUuid(value);
+  while (usedUuids.has(uuid)) uuid = createUuid();
+  usedUuids.add(uuid);
+  return uuid;
+}
 
 export function iconClassForColor(color: string) {
   if (color === "cyan") return "icon-router";
@@ -19,6 +27,7 @@ export function iconClassForType(deviceType: string, deviceTypes: DeviceTypeMeta
 
 export function accountFromItem(item: VaultItem): DeviceAccount {
   return {
+    uuid: createUuid(),
     id: 1,
     title: item.username || item.title || "未填写用户名",
     username: item.username,
@@ -26,26 +35,42 @@ export function accountFromItem(item: VaultItem): DeviceAccount {
     tag: item.tag,
     notes: item.notes,
     updatedAt: item.updatedAt,
+    passwordChangedAt: item.updatedAt,
     history: item.history ?? [],
   };
 }
 
 export function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
   if (!Array.isArray(value)) return [];
-  return value.map((entry, index) => ({
+  const history = value.map((entry, index) => ({
+    uuid: normalizeUuid(entry?.uuid),
     id: readNumber(entry?.id, index + 1),
     password: readString(entry?.password),
     newPassword: readString(entry?.newPassword),
     changedAt: readString(entry?.changedAt),
     reason: readString(entry?.reason),
   }));
+  const usedIds = new Set<number>();
+  const usedUuids = new Set<string>();
+  let nextId = 1;
+  return history.map((entry) => {
+    let id = entry.id > 0 ? entry.id : nextId;
+    while (usedIds.has(id)) id += 1;
+    usedIds.add(id);
+    nextId = Math.max(nextId, id + 1);
+    return { ...entry, uuid: uniqueUuid(entry.uuid, usedUuids), id };
+  });
 }
 
 export function normalizeAccount(value: unknown, fallback: VaultItem, index: number, inheritLegacyItemFields = false): DeviceAccount {
   const account = value as Partial<DeviceAccount>;
   const username = readString(account.username, fallback.username);
   const tagFallback = inheritLegacyItemFields ? fallback.tag : DEFAULT_ACCOUNT_TAG;
+  const history = normalizeHistoryEntries(account.history ?? fallback.history);
+  const latestHistory = history.reduce<PasswordHistory | null>((latest, entry) => !latest || entry.id > latest.id ? entry : latest, null);
+  const passwordChangedAt = readString(account.passwordChangedAt).trim() || latestHistory?.changedAt || readString(account.updatedAt, fallback.updatedAt);
   return {
+    uuid: normalizeUuid(account.uuid),
     id: readNumber(account.id, index + 1),
     title: username || readString(account.title, fallback.title || "未填写用户名") || "未填写用户名",
     username,
@@ -53,19 +78,21 @@ export function normalizeAccount(value: unknown, fallback: VaultItem, index: num
     tag: readString(account.tag, tagFallback) || DEFAULT_ACCOUNT_TAG,
     notes: readString(account.notes, inheritLegacyItemFields ? fallback.notes : ""),
     updatedAt: readString(account.updatedAt, fallback.updatedAt),
-    history: normalizeHistoryEntries(account.history ?? fallback.history),
+    passwordChangedAt,
+    history,
   };
 }
 
 export function normalizeAccountIds(accounts: DeviceAccount[]) {
   const usedIds = new Set<number>();
+  const usedUuids = new Set<string>();
   let nextId = 1;
   return accounts.map((account) => {
     let id = account.id > 0 ? account.id : nextId;
     while (usedIds.has(id)) id += 1;
     usedIds.add(id);
     nextId = Math.max(nextId, id + 1);
-    return { ...account, id };
+    return { ...account, uuid: uniqueUuid(account.uuid, usedUuids), id };
   });
 }
 
@@ -98,10 +125,12 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
   const deviceType = readString(item.deviceType);
   const hasExplicitAccounts = Array.isArray(item.accounts);
   const fallback: VaultItem = {
+    uuid: normalizeUuid(item.uuid),
     id: readNumber(item.id, index + 1),
     title: readString(item.title, "管理员账号") || "管理员账号",
     deviceName: readString(item.deviceName, readString(item.title, `设备 ${index + 1}`)) || `设备 ${index + 1}`,
     deviceType,
+    deviceTypeUuid: readString(item.deviceTypeUuid),
     assetCode: readString(item.assetCode),
     location: readString(item.location),
     username: readString(item.username),
@@ -115,7 +144,15 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
     history: normalizeHistoryEntries(item.history),
     accounts: [],
   };
-  const accountSource = hasExplicitAccounts ? item.accounts ?? [] : [item];
+  const hasLegacyAccountData = Boolean(
+    fallback.username.trim() ||
+    fallback.password ||
+    fallback.history.length > 0
+  );
+  const legacyAccountSource = hasLegacyAccountData
+    ? [{ ...item, uuid: undefined, username: fallback.username.trim() || "未填写用户名" }]
+    : [];
+  const accountSource = hasExplicitAccounts ? item.accounts ?? [] : legacyAccountSource;
   const accounts = normalizeAccountIds(accountSource.map((account, accountIndex) => normalizeAccount(account, fallback, accountIndex, !hasExplicitAccounts)));
   const normalizedItem = syncItemWithAccounts(fallback, accounts);
   const primaryAccount = accounts[0];
@@ -127,7 +164,32 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
 
 export function normalizeVaultItems(value: unknown) {
   if (!Array.isArray(value)) throw new Error("invalid config");
-  return value.map((item, index) => normalizeVaultItem(item, index));
+  const usedIds = new Set<number>();
+  const usedDeviceUuids = new Set<string>();
+  const usedAccountUuids = new Set<string>();
+  const usedHistoryUuids = new Set<string>();
+  let nextId = 1;
+  return value.map((item, index) => {
+    const normalized = normalizeVaultItem(item, index);
+    let id = normalized.id > 0 ? normalized.id : nextId;
+    while (usedIds.has(id)) id += 1;
+    usedIds.add(id);
+    nextId = Math.max(nextId, id + 1);
+    const accounts = getAccounts(normalized).map((account) => ({
+      ...account,
+      uuid: uniqueUuid(account.uuid, usedAccountUuids),
+      history: account.history.map((entry) => ({
+        ...entry,
+        uuid: uniqueUuid(entry.uuid, usedHistoryUuids),
+      })),
+    }));
+    return syncItemWithAccounts({
+      ...normalized,
+      uuid: uniqueUuid(normalized.uuid, usedDeviceUuids),
+      deviceTypeUuid: isUuid(normalized.deviceTypeUuid) ? normalized.deviceTypeUuid.toLowerCase() : "",
+      id,
+    }, accounts);
+  });
 }
 
 export function getAccounts(item: VaultItem) {
@@ -158,10 +220,12 @@ export function matchesVaultItemSearch(item: VaultItem, query: string) {
 
 export function createBlankItem(): VaultItem {
   return {
+    uuid: "",
     id: 0,
     title: "未选择设备",
     deviceName: "未选择设备",
     deviceType: "",
+    deviceTypeUuid: "",
     assetCode: "",
     location: "",
     username: "",
@@ -179,6 +243,7 @@ export function createBlankItem(): VaultItem {
 
 export function createBlankAccount(): DeviceAccount {
   return {
+    uuid: "",
     id: 0,
     title: "未选择账号",
     username: "",
@@ -186,6 +251,7 @@ export function createBlankAccount(): DeviceAccount {
     tag: "",
     notes: "",
     updatedAt: formatDateTime(new Date()),
+    passwordChangedAt: "",
     history: [],
   };
 }

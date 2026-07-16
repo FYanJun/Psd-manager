@@ -40,6 +40,7 @@
   export let filteredBulkTypeRows: Array<DeviceTypeMeta & { count: number }>;
   export let filteredDeviceTypeOptions: DeviceTypeMeta[];
   export let deviceTypeOptionsLength = 0;
+  export let revealResetToken = 0;
   export let bulkUsernameSuggestions: BulkUsernameSuggestion[];
   export let bulkPasswordMatches: BulkPasswordMatch[];
   export let bulkPasswordSelectedMatches: BulkPasswordMatch[];
@@ -62,11 +63,12 @@
   export let setDeviceFormType: (deviceType: DeviceType) => void;
   export let saveDevice: () => void;
   export let exportConfig: (format?: ConfigFormat) => void;
+
 </script>
 
 {#if activeDialog}
   <div class="modal-backdrop">
-    <div class="modal" class:type-modal={activeDialog === "type"} class:bulk-modal={activeDialog === "bulk-password"} class:type-picker-open={Boolean(openTypePicker)} role="dialog" aria-modal="true">
+    <div class="modal" class:type-modal={activeDialog === "type"} class:bulk-modal={activeDialog === "bulk-password"} role="dialog" aria-modal="true">
       <header class="modal-header">
         <h2>
           {#if activeDialog === "type"}
@@ -137,19 +139,9 @@
               <span>{selectedItem.deviceName} · {selectedAccountTargets.length > 1 ? "批量更新密码" : formatAccountTag(selectedAccount, selectedItem.deviceType, selectedItem.tag)}</span>
             </div>
           </section>
-          <section class="password-change-card wide-field" aria-label="密码变更预览">
-            <div>
-              <span>旧密码</span>
-              <strong>{selectedAccountTargets.length > 1 ? `将同时更新 ${selectedAccountTargets.length} 个账号` : selectedAccount.password || "未填写密码"}</strong>
-            </div>
-            <div>
-              <span>新密码</span>
-              <strong>{passwordForm.password || "待输入"}</strong>
-            </div>
-          </section>
           <label class="wide-field">
             <span>新密码</span>
-            <ClearableInput bind:value={passwordForm.password} type="password" />
+            <ClearableInput bind:value={passwordForm.password} type="password" {revealResetToken} />
           </label>
           <label class="wide-field">
             <span>更新原因</span>
@@ -162,7 +154,7 @@
           <button class="primary-button" disabled={!passwordForm.password.trim()} on:click={() => savePasswordUpdate()}>保存修改</button>
         </footer>
       {:else if activeDialog === "bulk-password"}
-        <div class="form-grid bulk-password-grid" class:type-picker-open={openTypePicker === "bulk"}>
+        <div class="form-grid bulk-password-grid">
           <div class="form-control type-combo-field wide-field">
             <span>设备类型</span>
             <div class="type-combo">
@@ -234,7 +226,7 @@
           </div>
           <label>
             <span>新密码</span>
-            <ClearableInput bind:value={bulkPasswordForm.password} type="password" />
+            <ClearableInput bind:value={bulkPasswordForm.password} type="password" {revealResetToken} />
           </label>
           <label class="wide-field">
             <span>更新原因</span>
@@ -334,7 +326,7 @@
           </label>
           <label>
             <span>密码</span>
-            <ClearableInput bind:value={accountForm.password} type="password" />
+            <ClearableInput bind:value={accountForm.password} type="password" {revealResetToken} />
           </label>
           <label>
             <span>账号标签</span>
@@ -354,7 +346,7 @@
           <button class="primary-button" on:click={() => saveAccount()}>{accountForm.id ? "保存账号" : "新增账号"}</button>
         </footer>
       {:else}
-        <div class="form-grid" class:type-picker-open={openTypePicker === "device"}>
+        <div class="form-grid">
           <label>
             <span>设备名称</span>
             <ClearableInput bind:value={deviceForm.deviceName} />

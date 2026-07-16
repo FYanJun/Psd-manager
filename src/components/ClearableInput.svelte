@@ -16,11 +16,18 @@
   export let className = "";
   export let inputClass = "";
   export let inputRef: HTMLInputElement | null = null;
+  export let revealResetToken = 0;
   export let onValueChange: ((value: string) => void) | undefined = undefined;
   export let onBlur: (() => void) | undefined = undefined;
   export let onKeydown: ((event: KeyboardEvent) => void) | undefined = undefined;
 
   let passwordVisible = false;
+  let appliedRevealResetToken = revealResetToken;
+
+  $: if (revealResetToken !== appliedRevealResetToken) {
+    appliedRevealResetToken = revealResetToken;
+    passwordVisible = false;
+  }
 
   $: isPassword = type === "password";
   $: currentType = isPassword ? (passwordVisible ? "text" : "password") : type;

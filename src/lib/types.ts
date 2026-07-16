@@ -1,11 +1,14 @@
 export type DeviceType = string;
+export type ConfigImportMode = "replace" | "add-missing";
+export type ConfirmationSummaryItem = { label: string; value: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
-export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | null;
+export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | null;
 export type ActivePopover =
   | "type-sort"
   | "device-sort"
   | "device-actions"
+  | "account-context"
   | "type-context"
   | "type-blank-context"
   | "list-blank-context"
@@ -19,6 +22,8 @@ export type ConfirmationAction =
   | "import-config"
   | "update-password"
   | "bulk-update-password"
+  | "restore-history"
+  | "restore-snapshot"
   | "save-account-password"
   | "rename-device-type";
 
@@ -33,11 +38,18 @@ export type PendingConfirmation = {
   message: string;
   detail: string;
   confirmLabel: string;
-  summaryItems?: Array<{ label: string; value: string }>;
+  summaryItems?: ConfirmationSummaryItem[];
+  importModeSummaries?: Record<ConfigImportMode, ConfirmationSummaryItem[]>;
+  importModeDetails?: Record<ConfigImportMode, string>;
   deviceType?: "全部设备" | DeviceType;
+  snapshotId?: string;
+  itemId?: number;
+  accountId?: number;
+  historyId?: number;
 };
 
 export type DeviceTypeMeta = {
+  uuid: string;
   label: string;
   iconText: string;
   color: string;
@@ -53,6 +65,7 @@ export type ViewState = {
 };
 
 export type PasswordHistory = {
+  uuid: string;
   id: number;
   password: string;
   newPassword: string;
@@ -61,6 +74,7 @@ export type PasswordHistory = {
 };
 
 export type DeviceAccount = {
+  uuid: string;
   id: number;
   title: string;
   username: string;
@@ -68,14 +82,17 @@ export type DeviceAccount = {
   tag: string;
   notes: string;
   updatedAt: string;
+  passwordChangedAt: string;
   history: PasswordHistory[];
 };
 
 export type VaultItem = {
+  uuid: string;
   id: number;
   title: string;
   deviceName: string;
   deviceType: DeviceType;
+  deviceTypeUuid: string;
   assetCode: string;
   location: string;
   username: string;
@@ -122,6 +139,29 @@ export type BulkPasswordForm = {
   reason: string;
 };
 
+export type VaultSnapshot = {
+  id: string;
+  createdAt: string;
+  reason: string;
+  items: VaultItem[];
+  customDeviceTypes: DeviceTypeMeta[];
+  hiddenDeviceTypes: string[];
+};
+
+export type PersistedVaultState = {
+  schemaVersion: number;
+  revision: number;
+  items: VaultItem[];
+  customDeviceTypes: DeviceTypeMeta[];
+  hiddenDeviceTypes: string[];
+  paneLayout: {
+    sidebarRatio?: number;
+    listRatio?: number;
+    generatorRatio?: number;
+  };
+  snapshots: VaultSnapshot[];
+};
+
 export type BulkPasswordMatch = {
   itemId: number;
   accountId: number;
@@ -161,4 +201,16 @@ export type ConfigSummary = {
   typeCount: number;
   exportedAtText: string;
   formatVersion: number;
+};
+
+export type ConfigDiffSummary = {
+  devicesAdded: number;
+  devicesRemoved: number;
+  devicesChanged: number;
+  accountsAdded: number;
+  accountsRemoved: number;
+  accountsChanged: number;
+  typesAdded: number;
+  typesRemoved: number;
+  typesChanged: number;
 };

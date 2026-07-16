@@ -1,7 +1,8 @@
 import type { DeviceType, DeviceTypeMeta } from "./types";
 
 export const APP_TITLE = "密码管理器";
-export const CONFIG_FORMAT_VERSION = 1;
+export const CONFIG_FORMAT_VERSION = 3;
+export const VAULT_SCHEMA_VERSION = 2;
 export const STORAGE_KEY = "device-password-manager-state-v1";
 export const DEFAULT_ACCOUNT_TAG = "";
 
@@ -19,10 +20,10 @@ export const RESIZER_RATIO = 0.005;
 export const initialItems = [];
 
 export const defaultDeviceTypeMeta: Array<DeviceTypeMeta & { label: "全部设备" | DeviceType }> = [
-  { label: "全部设备", iconText: "全", color: "blue" },
+  { uuid: "", label: "全部设备", iconText: "全", color: "blue" },
 ];
 
-export const fallbackDeviceTypeMeta: DeviceTypeMeta = { label: "", iconText: "设", color: "blue" };
+export const fallbackDeviceTypeMeta: DeviceTypeMeta = { uuid: "", label: "", iconText: "设", color: "blue" };
 
 export const typeColorOptions = [
   { value: "blue", label: "蓝色" },

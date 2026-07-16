@@ -1,17 +1,21 @@
 <script lang="ts">
-  import { isTauri } from "@tauri-apps/api/core";
+  import { invoke, isTauri } from "@tauri-apps/api/core";
   import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
   import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import ActionPopover from "./components/ActionPopover.svelte";
   import AppDialog from "./components/AppDialog.svelte";
   import ConfirmationDialog from "./components/ConfirmationDialog.svelte";
   import DeviceDetailPane from "./components/DeviceDetailPane.svelte";
   import DeviceListPane from "./components/DeviceListPane.svelte";
+  import GlobalTooltip from "./components/GlobalTooltip.svelte";
   import PasswordGeneratorDrawer from "./components/PasswordGeneratorDrawer.svelte";
   import SidebarPane from "./components/SidebarPane.svelte";
   import StatusToast from "./components/StatusToast.svelte";
   import Topbar from "./components/Topbar.svelte";
+  import VaultStorageStatus from "./components/VaultStorageStatus.svelte";
+  import VaultSnapshotsDialog from "./components/VaultSnapshotsDialog.svelte";
 
   import {
     APP_TITLE,
@@ -27,6 +31,7 @@
     SIDEBAR_MAX_RATIO,
     SIDEBAR_MIN_RATIO,
     STORAGE_KEY,
+    VAULT_SCHEMA_VERSION,
     defaultDeviceTypeMeta,
     fallbackDeviceTypeMeta,
     initialItems,
@@ -34,6 +39,7 @@
   import {
     createAccountFromForm as createAccountFromFormData,
     formatDeviceAccountInfo,
+    formatDeviceInfo,
     getBulkPasswordMatches as getBulkPasswordMatchesData,
     getBulkPasswordMatchKey,
     getBulkUsernameSuggestions,
@@ -49,6 +55,8 @@
     normalizeGeneratorLength,
     type GeneratorOptions,
   } from "./lib/password-generator";
+  import { getPasswordStrengthLabel } from "./lib/password-strength";
+  import { parsePersistedVaultContent, validatePersistedVaultState } from "./lib/persisted-vault";
   import type {
     AccountForm,
     ActiveDialog,
@@ -56,7 +64,9 @@
     BulkPasswordForm,
     BulkPasswordMatch,
     BulkUsernameSuggestion,
+    ConfigData,
     ConfigFormat,
+    ConfigImportMode,
     DeviceAccount,
     DeviceForm,
     DeviceType,
@@ -64,12 +74,15 @@
     DeviceTypeSortMode,
     GeneratorTarget,
     PendingConfirmation,
+    PasswordHistory,
+    PersistedVaultState,
     PopoverPosition,
     ResizePane,
     SortMode,
     TypeForm,
     TypePickerScope,
     VaultItem,
+    VaultSnapshot,
     ViewState,
   } from "./lib/types";
   import {
@@ -87,7 +100,7 @@
     inferConfigFormat,
     normalizeDeviceTypeMetaList,
     normalizeHiddenDeviceTypes,
-    parseConfigContent,
+    normalizeVaultIdentityData,
     parseConfigContentWithFallback,
   } from "./lib/config";
   import {
@@ -104,10 +117,41 @@
     syncItemWithAccounts,
     isBlankPlaceholderAccount,
   } from "./lib/vault";
+  import {
+    createVaultSnapshot,
+    formatConfigDiffCount,
+    getConfigDiffSummary,
+    mergeMissingImportedConfig,
+  } from "./lib/vault-recovery";
+  import { createUuid } from "./lib/uuid";
+
+  type VaultStorageState = "loading" | "ready" | "load-error" | "save-error";
+  const LEGACY_KEY_MIGRATION_REQUIRED = "LEGACY_KEY_MIGRATION_REQUIRED:";
+  const BACKUP_RECOVERY_REQUIRED = "BACKUP_RECOVERY_REQUIRED:";
+  type PendingVaultSave = { generation: number; content: string };
+  type VaultSaveWaiter = {
+    generation: number;
+    resolve: () => void;
+    reject: (error: Error) => void;
+  };
 
   let items: VaultItem[] = initialItems;
   let customDeviceTypes: DeviceTypeMeta[] = [];
   let hiddenDeviceTypes: string[] = [];
+  let vaultSnapshots: VaultSnapshot[] = [];
+  let vaultRevision = 0;
+  let vaultStorageState: VaultStorageState = "loading";
+  let vaultStorageError = "";
+  let legacyVaultKeyMigrationRequired = false;
+  let vaultBackupRecoveryRequired = false;
+  let pendingVaultSave: PendingVaultSave | null = null;
+  let dirtyVaultContent = "";
+  let vaultSaveGeneration = 0;
+  let vaultSaveInFlight = false;
+  let vaultSaveTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let vaultSaveWaiters: VaultSaveWaiter[] = [];
+  let allowDiscardedVaultExit = false;
+  let removeCloseRequestedListener: (() => void) | null = null;
   let hydrated = false;
   let searchQuery = "";
   let selectedDeviceType: "全部设备" | DeviceType = "全部设备";
@@ -118,8 +162,9 @@
   let activeDialog: ActiveDialog = null;
   let activePopover: ActivePopover = null;
   let pendingConfirmation: PendingConfirmation | null = null;
-  let pendingConfigContent = "";
+  let pendingImportedConfig: ConfigData | null = null;
   let pendingConfigFormat: ConfigFormat = "json";
+  let importConfigMode: ConfigImportMode = "add-missing";
   let exportConfigFormat: ConfigFormat = "json";
   let contextDeviceType: "全部设备" | DeviceType = "全部设备";
   let popoverPosition: PopoverPosition = { top: 72, left: 22 };
@@ -137,7 +182,8 @@
   let selectedAccountId = 0;
   let selectedAccountIds: number[] = [];
   let passwordVisible = false;
-  let historyOpen = true;
+  let historyOpen = false;
+  let historyContextKey = "";
   let visibleHistoryIds: number[] = [];
   let generatorPanelOpen = false;
   let generatorTarget: GeneratorTarget = null;
@@ -158,6 +204,9 @@
   let copyStatus = "";
   let statusHovered = false;
   let statusTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let statusActionLabel = "";
+  let statusAction: (() => void) | null = null;
+  let revealResetToken = 0;
   let backStack: ViewState[] = [];
   let forwardStack: ViewState[] = [];
   let restoringView = false;
@@ -171,45 +220,366 @@
   let resizeStartListRatio = LIST_DEFAULT_RATIO;
   let resizeStartGeneratorRatio = GENERATOR_DEFAULT_RATIO;
 
-  onMount(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed.items)) items = normalizeVaultItems(parsed.items);
-        if (Array.isArray(parsed.customDeviceTypes)) customDeviceTypes = normalizeDeviceTypeMetaList(parsed.customDeviceTypes);
-        ensureDeviceTypeMetaForItems(items);
-        hiddenDeviceTypes = normalizeHiddenDeviceTypes(parsed.hiddenDeviceTypes, items);
-        if (parsed.paneLayout) {
-          sidebarRatio = readPaneLayoutRatio(parsed.paneLayout, "sidebar");
-          listRatio = readPaneLayoutRatio(parsed.paneLayout, "list");
-          generatorRatio = readPaneLayoutRatio(parsed.paneLayout, "generator");
-        }
-      } catch {
-        showStatus("本地数据读取失败，已使用默认数据");
-      }
+  function applyPersistedVaultState(parsed: PersistedVaultState) {
+    vaultRevision = parsed.revision;
+    const normalized = normalizeVaultIdentityData(parsed.items, parsed.customDeviceTypes);
+    items = normalized.items;
+    customDeviceTypes = normalized.customDeviceTypes;
+    ensureDeviceTypeMetaForItems(items);
+    hiddenDeviceTypes = normalizeHiddenDeviceTypes(parsed.hiddenDeviceTypes, items);
+    vaultSnapshots = Array.isArray(parsed.snapshots) ? parsed.snapshots.slice(0, 10) : [];
+    if (parsed.paneLayout) {
+      sidebarRatio = readPaneLayoutRatio(parsed.paneLayout, "sidebar");
+      listRatio = readPaneLayoutRatio(parsed.paneLayout, "list");
+      generatorRatio = readPaneLayoutRatio(parsed.paneLayout, "generator");
     }
-    clampPaneLayout();
-    hydrated = true;
+  }
+
+  function createPersistedVaultState(): PersistedVaultState {
+    return {
+      schemaVersion: VAULT_SCHEMA_VERSION,
+      revision: vaultRevision,
+      items,
+      customDeviceTypes,
+      hiddenDeviceTypes,
+      snapshots: vaultSnapshots,
+      paneLayout: { sidebarRatio, listRatio, generatorRatio },
+    };
+  }
+
+  async function writePersistedVaultContent(content: string) {
+    const expectedRevision = vaultRevision;
+    const parsed = parsePersistedVaultContent(content);
+    if (parsed.migrated) throw new Error("拒绝直接保存未迁移的旧版资产库");
+    parsed.state.revision = expectedRevision;
+    const normalizedContent = JSON.stringify(validatePersistedVaultState(parsed.state));
+    let persistedContent = normalizedContent;
+    if (isTauri()) {
+      persistedContent = await invoke<string>("save_secure_vault", {
+        content: normalizedContent,
+        expectedRevision,
+      });
+    } else {
+      const currentContent = window.localStorage.getItem(STORAGE_KEY);
+      const currentRevision = currentContent
+        ? parsePersistedVaultContent(currentContent).state.revision
+        : 0;
+      if (currentRevision !== expectedRevision) {
+        throw new Error(`资产库版本冲突：本地版本为 ${currentRevision}，当前操作基于版本 ${expectedRevision}`);
+      }
+      parsed.state.revision = expectedRevision + 1;
+      persistedContent = JSON.stringify(validatePersistedVaultState(parsed.state));
+      window.localStorage.setItem(STORAGE_KEY, persistedContent);
+    }
+    const persisted = parsePersistedVaultContent(persistedContent);
+    if (persisted.migrated || persisted.state.revision !== expectedRevision + 1) {
+      throw new Error("资产库保存后返回了无效版本号");
+    }
+    vaultRevision = persisted.state.revision;
+    return persistedContent;
+  }
+
+  async function readPersistedVaultContent() {
+    if (isTauri()) return invoke<string | null>("load_secure_vault");
+    return window.localStorage.getItem(STORAGE_KEY);
+  }
+
+  function resolveVaultSaveWaiters(generation: number) {
+    const completed = vaultSaveWaiters.filter((waiter) => waiter.generation <= generation);
+    vaultSaveWaiters = vaultSaveWaiters.filter((waiter) => waiter.generation > generation);
+    completed.forEach((waiter) => waiter.resolve());
+  }
+
+  function rejectVaultSaveWaiters(error: Error) {
+    const rejected = vaultSaveWaiters;
+    vaultSaveWaiters = [];
+    rejected.forEach((waiter) => waiter.reject(error));
+  }
+
+  function enqueueVaultSave(content: string, waitForCompletion = false) {
+    const generation = ++vaultSaveGeneration;
+    pendingVaultSave = { generation, content };
+    dirtyVaultContent = content;
+    const completion = waitForCompletion
+      ? new Promise<void>((resolve, reject) => vaultSaveWaiters.push({ generation, resolve, reject }))
+      : Promise.resolve();
+    void flushVaultSaveQueue();
+    return completion;
+  }
+
+  async function flushVaultSaveQueue() {
+    if (vaultSaveInFlight || !pendingVaultSave || vaultStorageState !== "ready") return;
+    vaultSaveInFlight = true;
+    try {
+      while (pendingVaultSave) {
+        const batch = pendingVaultSave;
+        pendingVaultSave = null;
+        try {
+          await writePersistedVaultContent(batch.content);
+        } catch (error) {
+          const saveError = error instanceof Error ? error : new Error(String(error ?? "未知错误"));
+          const newestUnsaved = pendingVaultSave ?? batch;
+          pendingVaultSave = null;
+          dirtyVaultContent = newestUnsaved.content;
+          vaultStorageError = saveError.message;
+          vaultStorageState = "save-error";
+          rejectVaultSaveWaiters(saveError);
+          return;
+        }
+        resolveVaultSaveWaiters(batch.generation);
+        dirtyVaultContent = pendingVaultSave ? pendingVaultSave.content : "";
+      }
+    } finally {
+      vaultSaveInFlight = false;
+    }
+  }
+
+  async function persistCurrentVaultStateImmediately() {
+    if (vaultStorageState !== "ready") throw new Error(vaultStorageError || "资产库当前不可写");
+    if (vaultSaveTimer) window.clearTimeout(vaultSaveTimer);
+    vaultSaveTimer = null;
+    const content = JSON.stringify(createPersistedVaultState());
+    await enqueueVaultSave(content, true);
+  }
+
+  function currentVaultDataSignature() {
+    return JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes });
+  }
+
+  async function createSafetySnapshot(reason: string) {
+    const previousSnapshots = vaultSnapshots;
+    const snapshot = createVaultSnapshot(reason, items, customDeviceTypes, hiddenDeviceTypes);
+    vaultSnapshots = [snapshot, ...vaultSnapshots].slice(0, 10);
+    try {
+      await persistCurrentVaultStateImmediately();
+      return snapshot;
+    } catch {
+      vaultSnapshots = previousSnapshots;
+      dirtyVaultContent = JSON.stringify(createPersistedVaultState());
+      return null;
+    }
+  }
+
+  function applySnapshotData(snapshot: VaultSnapshot) {
+    items = normalizeVaultItems(snapshot.items);
+    customDeviceTypes = normalizeDeviceTypeMetaList(snapshot.customDeviceTypes);
+    hiddenDeviceTypes = normalizeHiddenDeviceTypes(snapshot.hiddenDeviceTypes, items);
+    ensureDeviceTypeMetaForItems(items);
+    selectedDeviceType = "全部设备";
+    selectedId = items[0]?.id ?? 0;
+    selectedAccountId = 0;
+    selectedAccountIds = [];
+    searchQuery = "";
+    sortMode = "updatedDesc";
+    backStack = [];
+    forwardStack = [];
+    passwordVisible = false;
+    visibleHistoryIds = [];
+  }
+
+  async function restoreSnapshot(snapshotId: string, createCurrentBackup: boolean) {
+    const snapshot = vaultSnapshots.find((candidate) => candidate.id === snapshotId);
+    if (!snapshot) {
+      showStatus("找不到要恢复的数据快照", 5000);
+      return;
+    }
+    if (createCurrentBackup) {
+      const backup = await createSafetySnapshot("恢复快照前自动保存");
+      if (!backup) return;
+    }
+    applySnapshotData(snapshot);
+    activeDialog = null;
+    pendingConfirmation = null;
+    await persistCurrentVaultStateImmediately();
+    showStatus("数据快照已恢复");
+  }
+
+  function offerSnapshotUndo(snapshotId: string, message: string) {
+    const expectedState = currentVaultDataSignature();
+    showStatus(message, 8000, "撤销", () => {
+      if (currentVaultDataSignature() !== expectedState) {
+        showStatus("数据已继续变化，请从“数据快照”中选择恢复", 5000);
+        return;
+      }
+      void restoreSnapshot(snapshotId, false);
+    });
+  }
+
+  function requestRestoreSnapshot(snapshot: VaultSnapshot) {
+    activeDialog = null;
+    pendingConfirmation = {
+      action: "restore-snapshot",
+      snapshotId: snapshot.id,
+      title: "恢复数据快照",
+      message: `恢复“${snapshot.reason}”？`,
+      detail: "当前资产库会被这个快照替换；恢复前会自动再保存一份当前数据。",
+      confirmLabel: "确认恢复",
+      summaryItems: [
+        { label: "设备", value: `${snapshot.items.length} 台` },
+        { label: "快照时间", value: new Date(snapshot.createdAt).toLocaleString("zh-CN", { hour12: false }) },
+      ],
+    };
+  }
+
+  function scheduleVaultSave() {
+    if (!hydrated || vaultStorageState !== "ready") return;
+    if (vaultSaveTimer) window.clearTimeout(vaultSaveTimer);
+    vaultSaveTimer = window.setTimeout(() => {
+      vaultSaveTimer = null;
+      enqueueVaultSave(JSON.stringify(createPersistedVaultState()));
+    }, 250);
+  }
+
+  async function initializeVaultStorage() {
+    vaultStorageState = "loading";
+    vaultStorageError = "";
+    legacyVaultKeyMigrationRequired = false;
+    vaultBackupRecoveryRequired = false;
+    hydrated = false;
+    try {
+      const storedContent = await readPersistedVaultContent();
+      if (storedContent) {
+        const parsed = parsePersistedVaultContent(storedContent);
+        applyPersistedVaultState(parsed.state);
+        if (parsed.migrated) {
+          const migrationContent = JSON.stringify(createPersistedVaultState());
+          const persistedContent = await writePersistedVaultContent(migrationContent);
+          const verifiedContent = await readPersistedVaultContent();
+          if (verifiedContent !== persistedContent) throw new Error("旧版资产库迁移校验失败，原文件仍保留");
+        }
+        if (isTauri()) window.localStorage.removeItem(STORAGE_KEY);
+      } else {
+        const legacyContent = window.localStorage.getItem(STORAGE_KEY);
+        if (legacyContent) applyPersistedVaultState(parsePersistedVaultContent(legacyContent).state);
+        const migrationContent = JSON.stringify(createPersistedVaultState());
+        const persistedContent = await writePersistedVaultContent(migrationContent);
+        const verifiedContent = await readPersistedVaultContent();
+        if (verifiedContent !== persistedContent) throw new Error("加密资产库迁移校验失败，旧数据仍保留");
+        if (isTauri()) window.localStorage.removeItem(STORAGE_KEY);
+      }
+      clampPaneLayout();
+      pendingVaultSave = null;
+      dirtyVaultContent = "";
+      vaultStorageState = "ready";
+      hydrated = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "未知错误");
+      legacyVaultKeyMigrationRequired = message.includes(LEGACY_KEY_MIGRATION_REQUIRED);
+      vaultBackupRecoveryRequired = message.includes(BACKUP_RECOVERY_REQUIRED);
+      vaultStorageError = message
+        .replace(LEGACY_KEY_MIGRATION_REQUIRED, "")
+        .replace(BACKUP_RECOVERY_REQUIRED, "");
+      vaultStorageState = "load-error";
+    }
+  }
+
+  async function migrateLegacyVaultKey() {
+    if (!isTauri() || !legacyVaultKeyMigrationRequired) return;
+    vaultStorageState = "loading";
+    vaultStorageError = "";
+    try {
+      await invoke("migrate_legacy_vault_key");
+      await initializeVaultStorage();
+    } catch (error) {
+      vaultStorageError = error instanceof Error ? error.message : String(error ?? "未知错误");
+      vaultStorageState = "load-error";
+    }
+  }
+
+  async function recoverVaultBackup() {
+    if (!isTauri() || !vaultBackupRecoveryRequired) return;
+    vaultStorageState = "loading";
+    vaultStorageError = "";
+    try {
+      await invoke("recover_vault_backup");
+      await initializeVaultStorage();
+    } catch (error) {
+      vaultStorageError = error instanceof Error ? error.message : String(error ?? "未知错误");
+      vaultStorageState = "load-error";
+    }
+  }
+
+  async function retryVaultStorage() {
+    if (vaultStorageState === "load-error") {
+      await initializeVaultStorage();
+      return;
+    }
+    if (vaultStorageState !== "save-error" || !dirtyVaultContent) return;
+
+    const content = dirtyVaultContent;
+    vaultStorageError = "";
+    vaultStorageState = "ready";
+    try {
+      await enqueueVaultSave(content, true);
+      showStatus("未保存的数据已重新写入资产库");
+    } catch {
+      // flushVaultSaveQueue preserves the latest dirty payload and error state.
+    }
+  }
+
+  async function discardUnsavedChangesAndExit() {
+    allowDiscardedVaultExit = true;
+    if (vaultSaveTimer) window.clearTimeout(vaultSaveTimer);
+    vaultSaveTimer = null;
+    pendingVaultSave = null;
+    dirtyVaultContent = "";
+    rejectVaultSaveWaiters(new Error("用户已放弃未保存的修改"));
+    if (isTauri()) await getCurrentWindow().destroy();
+  }
+
+  function hasUnsavedVaultChanges() {
+    return Boolean(vaultSaveTimer || pendingVaultSave || vaultSaveInFlight || dirtyVaultContent);
+  }
+
+  onMount(() => {
+    void initializeVaultStorage();
+    if (isTauri()) {
+      const appWindow = getCurrentWindow();
+      void appWindow.onCloseRequested(async (event) => {
+        if (allowDiscardedVaultExit || vaultStorageState === "load-error" || vaultStorageState === "loading") return;
+        if (vaultStorageState === "save-error") {
+          event.preventDefault();
+          return;
+        }
+        if (!hasUnsavedVaultChanges()) return;
+        event.preventDefault();
+        try {
+          await persistCurrentVaultStateImmediately();
+          await appWindow.destroy();
+        } catch {
+          showStatus("资产库尚未安全保存，已取消退出", 5000);
+        }
+      }).then((removeListener) => {
+        removeCloseRequestedListener = removeListener;
+      });
+    }
     window.addEventListener("pointerdown", handleGlobalPointerDown, true);
     window.addEventListener("contextmenu", handleGlobalContextMenu, true);
     window.addEventListener("keydown", handleGlobalKeydown);
     window.addEventListener("resize", clampPaneLayout);
+    window.addEventListener("blur", handleWindowBlur);
     return () => {
       window.removeEventListener("pointerdown", handleGlobalPointerDown, true);
       window.removeEventListener("contextmenu", handleGlobalContextMenu, true);
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("resize", clampPaneLayout);
+      window.removeEventListener("blur", handleWindowBlur);
       if (statusTimer) window.clearTimeout(statusTimer);
+      if (vaultSaveTimer) window.clearTimeout(vaultSaveTimer);
+      removeCloseRequestedListener?.();
       stopPaneResize();
     };
   });
 
   $: if (hydrated) {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes, paneLayout: { sidebarRatio, listRatio, generatorRatio } })
-    );
+    items;
+    customDeviceTypes;
+    hiddenDeviceTypes;
+    vaultSnapshots;
+    sidebarRatio;
+    listRatio;
+    generatorRatio;
+    scheduleVaultSave();
   }
 
   $: layoutStyle = [
@@ -275,9 +645,19 @@
 
   $: selectedAccounts = getAccounts(selectedItem);
   $: selectedAccount = selectedAccounts.find((account) => account.id === selectedAccountId) ?? selectedAccounts[0] ?? createBlankAccount();
+  $: {
+    const nextHistoryContextKey = selectedItem.id && selectedAccount.id
+      ? `${selectedItem.id}:${selectedAccount.id}`
+      : "";
+    if (nextHistoryContextKey !== historyContextKey) {
+      historyContextKey = nextHistoryContextKey;
+      historyOpen = false;
+    }
+  }
   $: selectedAccountBatch = selectedAccounts.filter((account) => selectedAccountIds.includes(account.id));
   $: selectedAccountTargets = selectedAccountBatch.length > 0 ? selectedAccountBatch : selectedAccount.id ? [selectedAccount] : [];
   $: selectedAccountTargetCount = selectedAccountTargets.length;
+  $: copyableAccountTargetCount = selectedAccountTargets.filter((account) => Boolean(account.password)).length;
   $: canDeleteSelectedAccountTargets = selectedAccountTargetCount > 0;
   $: if (selectedAccounts.length > 0 && !selectedAccounts.some((account) => account.id === selectedAccountId)) {
     selectedAccountId = selectedAccounts[0].id;
@@ -288,10 +668,15 @@
       selectedAccountIds = validSelectedAccountIds;
     }
   }
-  $: passwordStrength = selectedAccount.password.length >= 14 ? "较强" : selectedAccount.password.length >= 10 ? "一般" : "较弱";
+  $: passwordStrength = getPasswordStrengthLabel(selectedAccount.password, [
+    selectedAccount.username,
+    selectedAccount.tag,
+    selectedItem.deviceName,
+    selectedItem.deviceType,
+    selectedItem.ipAddress,
+  ]);
   $: selectedTypeDeviceCount = getDeviceTypeCount(selectedDeviceType);
   $: listContextLabel = searchQuery.trim() ? "搜索结果" : selectedDeviceType;
-  $: listContextMeta = deviceTypeRows.find((type) => type.label === listContextLabel) ?? defaultDeviceTypeMeta[0];
   $: searchPlaceholder =
     searchQuery.trim() || selectedDeviceType === "全部设备"
       ? "搜索设备名、IP 或资产编号"
@@ -422,6 +807,22 @@
     }
   }
 
+  function handleWindowBlur() {
+    passwordVisible = false;
+    visibleHistoryIds = [];
+    revealResetToken += 1;
+    if (generatorPanelOpen) {
+      generatedPassword = "";
+      generatorPanelOpen = false;
+      generatorTarget = null;
+    }
+  }
+
+  function openSnapshotsDialog() {
+    activePopover = null;
+    activeDialog = "snapshots";
+  }
+
   function clearStatusTimer() {
     if (statusTimer) window.clearTimeout(statusTimer);
     statusTimer = null;
@@ -432,12 +833,16 @@
     if (!copyStatus || statusHovered) return;
     statusTimer = window.setTimeout(() => {
       copyStatus = "";
+      statusActionLabel = "";
+      statusAction = null;
       statusTimer = null;
     }, duration);
   }
 
-  function showStatus(message: string, duration = 2200) {
+  function showStatus(message: string, duration = 2200, actionLabel = "", action: (() => void) | null = null) {
     copyStatus = message;
+    statusActionLabel = actionLabel;
+    statusAction = action;
     statusHovered = false;
     scheduleStatusDismiss(duration);
   }
@@ -446,6 +851,14 @@
     clearStatusTimer();
     statusHovered = false;
     copyStatus = "";
+    statusActionLabel = "";
+    statusAction = null;
+  }
+
+  function runStatusAction() {
+    const action = statusAction;
+    dismissStatus();
+    action?.();
   }
 
   function pauseStatusDismiss() {
@@ -677,6 +1090,15 @@
     return formatDeviceAccountInfo(account);
   }
 
+  function copySelectedDeviceInfo() {
+    activePopover = null;
+    if (!hasSelectedDevice) {
+      showStatus("请先选择设备");
+      return;
+    }
+    copyText(formatDeviceInfo(selectedItem), "设备信息");
+  }
+
   function copySelectedAccountInfo() {
     activePopover = null;
     const targets = selectedAccountTargets;
@@ -773,6 +1195,28 @@
     activePopover = "type-context";
   }
 
+  function openDeviceContextMenu(id: number, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    selectDevice(id);
+    activeDialog = null;
+    popoverPosition = getPointerPopoverPosition(event);
+    activePopover = "device-actions";
+  }
+
+  function openAccountContextMenu(id: number, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedAccounts.some((account) => account.id === id)) return;
+    selectedAccountId = id;
+    selectedAccountIds = [];
+    passwordVisible = false;
+    visibleHistoryIds = [];
+    activeDialog = null;
+    popoverPosition = getPointerPopoverPosition(event);
+    activePopover = "account-context";
+  }
+
   function isContextMenuControlTarget(target: EventTarget | null) {
     if (!(target instanceof HTMLElement)) return false;
     return Boolean(target.closest("button, a, input, textarea, select, [role='button']"));
@@ -816,7 +1260,7 @@
     activePopover = null;
     activeDialog = null;
     pendingConfirmation = null;
-    pendingConfigContent = "";
+    pendingImportedConfig = null;
     openTypePicker = null;
     bulkUsernameSuggestionsOpen = false;
   }
@@ -849,7 +1293,7 @@
     }
     if (pendingConfirmation) {
       pendingConfirmation = null;
-      pendingConfigContent = "";
+      pendingImportedConfig = null;
       return true;
     }
     if (activeDialog) {
@@ -896,6 +1340,7 @@
   }
 
   function handleGlobalKeydown(event: KeyboardEvent) {
+    if (vaultStorageState !== "ready") return;
     const shortcutModifier = event.metaKey || event.ctrlKey;
     const editableTarget = isEditableShortcutTarget(event.target);
 
@@ -911,6 +1356,8 @@
       else saveActiveDialog();
       return;
     }
+
+    if (pendingConfirmation) return;
 
     if (!shortcutModifier && !editableTarget && !activeDialog && !activePopover && !generatorPanelOpen) {
       if (event.key === "ArrowDown") {
@@ -1014,7 +1461,7 @@
     };
   }
 
-  function deleteDeviceType(deviceType: "全部设备" | DeviceType = selectedDeviceType) {
+  async function deleteDeviceType(deviceType: "全部设备" | DeviceType = selectedDeviceType) {
     if (deviceType === "全部设备") return;
     const deviceCount = getDeviceTypeCount(deviceType);
     if (deviceCount > 0) {
@@ -1023,6 +1470,8 @@
       return;
     }
 
+    const snapshot = await createSafetySnapshot(`删除设备类型“${deviceType}”前`);
+    if (!snapshot) return;
     pushNavigationState();
     if (defaultDeviceTypeMeta.some((type) => type.label === deviceType) && !hiddenDeviceTypes.includes(deviceType)) {
       hiddenDeviceTypes = [...hiddenDeviceTypes, deviceType];
@@ -1033,7 +1482,7 @@
     selectedAccountIds = [];
     activePopover = null;
     activeDialog = null;
-    showStatus("设备类型已删除");
+    offerSnapshotUndo(snapshot.id, "设备类型已删除");
   }
 
   function saveDeviceType() {
@@ -1079,6 +1528,7 @@
       return;
     }
     const nextMeta: DeviceTypeMeta = {
+      uuid: originalLabel ? getTypeMeta(originalLabel).uuid || createUuid() : createUuid(),
       label,
       iconText: typeForm.iconText.trim() || label.slice(0, 1),
       color: typeForm.color,
@@ -1101,6 +1551,7 @@
           ? {
               ...item,
               deviceType: label,
+              deviceTypeUuid: nextMeta.uuid,
               tag: item.tag === originalLabel ? label : item.tag,
               iconText: nextMeta.iconText,
               iconClass: iconClassForColor(nextMeta.color),
@@ -1188,6 +1639,7 @@
             ...item,
             deviceName: name,
             deviceType: deviceForm.deviceType,
+            deviceTypeUuid: typeMeta.uuid,
             assetCode: deviceForm.assetCode.trim(),
             location: deviceForm.location.trim(),
             ipAddress: deviceForm.ipAddress.trim(),
@@ -1207,10 +1659,12 @@
     }
 
     const nextItem: VaultItem = {
+      uuid: createUuid(),
       id: Math.max(0, ...items.map((item) => item.id)) + 1,
       title: name,
       deviceName: name,
       deviceType: deviceForm.deviceType,
+      deviceTypeUuid: typeMeta.uuid,
       assetCode: deviceForm.assetCode.trim(),
       location: deviceForm.location.trim(),
       username: "",
@@ -1285,7 +1739,7 @@
         action: "save-account-password",
         title: "保存账号密码变更",
         message: `确认直接修改“${currentAccount.username || currentAccount.title || "当前账号"}”的密码？`,
-        detail: "这会覆盖账号当前密码，不会生成密码历史。需要保留旧密码记录时，请使用“更新密码”。",
+        detail: "这会更新账号资料，并把当前密码写入密码历史。",
         confirmLabel: "仍然保存",
         summaryItems: [
           { label: "所属设备", value: selectedItem.deviceName },
@@ -1316,9 +1770,25 @@
     const nextId = accountForm.id ?? Math.max(0, ...selectedAccounts.map((account) => account.id)) + 1;
     const nextAccount = createAccountFromFormData(accountForm, nextId, now);
     const nextAccounts = accountForm.id
-      ? selectedAccounts.map((account) =>
-          account.id === accountForm.id ? { ...nextAccount, history: account.history, updatedAt: now } : account
-        )
+      ? selectedAccounts.map((account) => {
+          if (account.id !== accountForm.id) return account;
+          if (account.password !== nextAccount.password) {
+            return {
+              ...updateAccountPassword(account, nextAccount.password, now, "编辑账号时修改密码"),
+              title: nextAccount.title,
+              username: nextAccount.username,
+              tag: nextAccount.tag,
+              notes: nextAccount.notes,
+            };
+          }
+          return {
+            ...nextAccount,
+            uuid: account.uuid,
+            history: account.history,
+            updatedAt: now,
+            passwordChangedAt: account.passwordChangedAt,
+          };
+        })
       : [...selectedAccounts.filter((account) => !isBlankPlaceholderAccount(account)), nextAccount];
 
     items = items.map((item) =>
@@ -1338,10 +1808,12 @@
     );
   }
 
-  function deleteSelectedAccount() {
+  async function deleteSelectedAccount() {
     const targetIds = selectedAccountTargets.map((account) => account.id);
     if (!selectedItem.id || targetIds.length === 0) return;
 
+    const snapshot = await createSafetySnapshot(`删除设备“${selectedItem.deviceName}”的账号前`);
+    if (!snapshot) return;
     const nextAccounts = selectedAccounts.filter((account) => !targetIds.includes(account.id));
     items = items.map((item) =>
       item.id === selectedItem.id
@@ -1356,7 +1828,7 @@
     passwordVisible = false;
     visibleHistoryIds = [];
     activePopover = null;
-    showStatus(targetIds.length > 1 ? `${targetIds.length} 个账号已删除` : "账号已删除");
+    offerSnapshotUndo(snapshot.id, targetIds.length > 1 ? `${targetIds.length} 个账号已删除` : "账号已删除");
   }
 
   function requestDeleteSelectedAccount() {
@@ -1390,6 +1862,50 @@
     }
     passwordForm = { password: "", reason: "" };
     activeDialog = "password";
+  }
+
+  function requestRestoreHistoryPassword(history: PasswordHistory) {
+    if (!hasSelectedDevice || !selectedAccount.id) return;
+    pendingConfirmation = {
+      action: "restore-history",
+      itemId: selectedItem.id,
+      accountId: selectedAccount.id,
+      historyId: history.id,
+      title: "恢复历史密码",
+      message: `将“${selectedAccount.username || selectedAccount.title}”恢复到这条历史密码？`,
+      detail: "当前密码会先写入新的历史记录，然后再恢复选中的旧密码。",
+      confirmLabel: "确认恢复",
+      summaryItems: [
+        { label: "所属设备", value: selectedItem.deviceName },
+        { label: "历史时间", value: history.changedAt || "未记录" },
+      ],
+    };
+  }
+
+  function executeRestoreHistoryPassword(confirmation: PendingConfirmation) {
+    const item = items.find((candidate) => candidate.id === confirmation.itemId);
+    const account = item && getAccounts(item).find((candidate) => candidate.id === confirmation.accountId);
+    const history = account?.history.find((candidate) => candidate.id === confirmation.historyId);
+    if (!item || !account || !history) {
+      showStatus("要恢复的密码历史已经不存在", 5000);
+      return;
+    }
+    if (account.password === history.password) {
+      showStatus("当前密码已经与这条历史记录相同");
+      return;
+    }
+    const changedAt = formatDateTime(new Date());
+    const nextAccounts = getAccounts(item).map((candidate) =>
+      candidate.id === account.id
+        ? updateAccountPassword(candidate, history.password, changedAt, `恢复历史密码（原记录：${history.changedAt || "未记录"}）`)
+        : candidate
+    );
+    items = items.map((candidate) => candidate.id === item.id ? syncItemWithAccounts(candidate, nextAccounts) : candidate);
+    selectedId = item.id;
+    selectedAccountId = account.id;
+    passwordVisible = false;
+    visibleHistoryIds = [];
+    showStatus("历史密码已恢复");
   }
 
   function openBulkPasswordDialog(useGenerated = false) {
@@ -1589,8 +2105,10 @@
     showStatus(`已更新 ${matches.length} 个账号`);
   }
 
-  function deleteSelectedDevice() {
+  async function deleteSelectedDevice() {
     if (!selectedItem.id) return;
+    const snapshot = await createSafetySnapshot(`删除设备“${selectedItem.deviceName}”前`);
+    if (!snapshot) return;
     const remainingItems = items.filter((item) => item.id !== selectedItem.id);
     const nextDeviceType =
       selectedDeviceType === "全部设备" || remainingItems.some((item) => item.deviceType === selectedDeviceType)
@@ -1603,7 +2121,7 @@
     selectedAccountId = 0;
     selectedAccountIds = [];
     activePopover = null;
-    showStatus("设备已删除");
+    offerSnapshotUndo(snapshot.id, "设备已删除");
   }
 
   function requestDeleteSelectedDevice() {
@@ -1622,18 +2140,19 @@
   function confirmPendingAction() {
     const confirmation = pendingConfirmation;
     if (!confirmation) return;
-    const configContent = pendingConfigContent;
+    const importedConfig = pendingImportedConfig;
     const configFormat = pendingConfigFormat;
+    const selectedImportMode = importConfigMode;
     pendingConfirmation = null;
-    pendingConfigContent = "";
+    pendingImportedConfig = null;
     if (confirmation.action === "delete-device-type") {
-      deleteDeviceType(confirmation.deviceType ?? selectedDeviceType);
+      void deleteDeviceType(confirmation.deviceType ?? selectedDeviceType);
     } else if (confirmation.action === "delete-account") {
-      deleteSelectedAccount();
+      void deleteSelectedAccount();
     } else if (confirmation.action === "delete-device") {
-      deleteSelectedDevice();
-    } else if (confirmation.action === "import-config" && configContent) {
-      applyImportedConfig(configContent, configFormat);
+      void deleteSelectedDevice();
+    } else if (confirmation.action === "import-config" && importedConfig) {
+      void applyImportedConfig(importedConfig, configFormat, selectedImportMode);
     } else if (confirmation.action === "update-password") {
       executePasswordUpdate();
     } else if (confirmation.action === "bulk-update-password") {
@@ -1642,6 +2161,10 @@
       executeSaveAccount();
     } else if (confirmation.action === "rename-device-type") {
       executeSaveDeviceType();
+    } else if (confirmation.action === "restore-history") {
+      executeRestoreHistoryPassword(confirmation);
+    } else if (confirmation.action === "restore-snapshot" && confirmation.snapshotId) {
+      void restoreSnapshot(confirmation.snapshotId, true);
     }
   }
 
@@ -1729,7 +2252,7 @@
     try {
       requestApplyConfig(content, format);
     } catch (error) {
-      pendingConfigContent = "";
+      pendingImportedConfig = null;
       pendingConfirmation = null;
       const reason = error instanceof ConfigImportError
         ? error.message
@@ -1741,21 +2264,44 @@
   function requestApplyConfig(content: string, preferredFormat: ConfigFormat) {
     const { config, format } = parseConfigContentWithFallback(content, preferredFormat);
     const summary = getConfigSummary(config);
-    const summaryItems = formatConfigSummary(summary);
+    const replaceDiff = getConfigDiffSummary(items, customDeviceTypes, config);
+    const mergedConfig = mergeMissingImportedConfig(items, customDeviceTypes, hiddenDeviceTypes, config);
+    const mergedSummary = getConfigSummary(mergedConfig);
+    const addMissingDiff = getConfigDiffSummary(items, customDeviceTypes, mergedConfig);
+    const formatResultSummary = (resultSummary: typeof summary) => formatConfigSummary(resultSummary).map((item) => ({
+      ...item,
+      label: ["设备", "账号", "历史", "类型"].includes(item.label)
+        ? `导入后${item.label}`
+        : item.label === "格式" ? "文件格式" : item.label,
+    }));
+    const formatDiffSummary = (resultSummary: typeof summary, diff: typeof replaceDiff) => [
+      ...formatResultSummary(resultSummary),
+      { label: "设备变化", value: formatConfigDiffCount(diff.devicesAdded, diff.devicesRemoved, diff.devicesChanged) },
+      { label: "账号变化", value: formatConfigDiffCount(diff.accountsAdded, diff.accountsRemoved, diff.accountsChanged) },
+      { label: "类型变化", value: formatConfigDiffCount(diff.typesAdded, diff.typesRemoved, diff.typesChanged) },
+    ];
     const formatMismatchDetail = preferredFormat === format
       ? ""
       : `文件扩展名像是 ${preferredFormat.toUpperCase()}，已按内容识别为 ${format.toUpperCase()} 配置。`;
     activePopover = null;
     activeDialog = null;
-    pendingConfigContent = content;
+    pendingImportedConfig = config;
     pendingConfigFormat = format;
+    importConfigMode = "add-missing";
     pendingConfirmation = {
       action: "import-config",
-      title: "覆盖导入配置",
-      message: `导入这个 ${format.toUpperCase()} 配置并覆盖当前数据？`,
-      detail: `${formatMismatchDetail}${formatMismatchDetail ? " " : ""}当前设备、账号和密码历史会被导入文件替换。需要保留现有数据时，请先导出当前配置。`,
-      confirmLabel: "覆盖导入",
-      summaryItems,
+      title: "导入配置",
+      message: `${format.toUpperCase()} 配置已完成整体验证，请选择导入方式。`,
+      detail: "",
+      confirmLabel: "导入配置",
+      importModeSummaries: {
+        replace: formatDiffSummary(summary, replaceDiff),
+        "add-missing": formatDiffSummary(mergedSummary, addMissingDiff),
+      },
+      importModeDetails: {
+        replace: `${formatMismatchDetail}${formatMismatchDetail ? " " : ""}当前设备、账号和密码历史会被导入文件整体替换。`,
+        "add-missing": `${formatMismatchDetail}${formatMismatchDetail ? " " : ""}现有设备信息、现有账号、密码和历史记录保持不变，只添加缺少的设备、账号和类型。`,
+      },
     };
   }
 
@@ -1769,31 +2315,52 @@
       if (!label || label === "全部设备" || knownLabels.has(label)) return types;
       knownLabels.add(label);
       types.push({
+        uuid: item.deviceTypeUuid || createUuid(),
         label,
         iconText: item.iconText.trim() || label.slice(0, 1),
         color: "blue",
       });
       return types;
     }, []);
-    if (missingTypes.length > 0) customDeviceTypes = [...customDeviceTypes, ...missingTypes];
+    if (missingTypes.length > 0) {
+      customDeviceTypes = [...customDeviceTypes, ...missingTypes];
+      const typeUuids = new Map(missingTypes.map((type) => [type.label, type.uuid]));
+      items = items.map((item) => item.deviceTypeUuid ? item : {
+        ...item,
+        deviceTypeUuid: typeUuids.get(item.deviceType) ?? item.deviceTypeUuid,
+      });
+    }
   }
 
-  function applyImportedConfig(content: string, format: ConfigFormat) {
-    const config = parseConfigContent(content, format);
-    items = config.items;
-    customDeviceTypes = config.customDeviceTypes;
+  async function applyImportedConfig(config: ConfigData, format: ConfigFormat, mode: ConfigImportMode) {
+    const nextConfig = mode === "replace"
+      ? config
+      : mergeMissingImportedConfig(items, customDeviceTypes, hiddenDeviceTypes, config);
+    const diff = getConfigDiffSummary(items, customDeviceTypes, nextConfig);
+    const hasChanges = Object.values(diff).some((count) => count > 0);
+    if (mode === "add-missing" && !hasChanges) {
+      showStatus("没有可新增的数据");
+      return;
+    }
+    const modeLabel = mode === "replace" ? "全部覆盖" : "仅新增";
+    const snapshot = await createSafetySnapshot(`${modeLabel}导入 ${format.toUpperCase()} 配置前`);
+    if (!snapshot) return;
+    items = nextConfig.items;
+    customDeviceTypes = nextConfig.customDeviceTypes;
     ensureDeviceTypeMetaForItems(items);
-    hiddenDeviceTypes = normalizeHiddenDeviceTypes(config.hiddenDeviceTypes, items);
-    selectedId = items[0]?.id ?? 0;
-    selectedAccountId = 0;
-    selectedAccountIds = [];
-    selectedDeviceType = "全部设备";
-    searchQuery = "";
-    sortMode = "updatedDesc";
-    backStack = [];
-    forwardStack = [];
-    visibleHistoryIds = [];
-    showStatus(`${format.toUpperCase()} 配置已导入`);
+    hiddenDeviceTypes = normalizeHiddenDeviceTypes(nextConfig.hiddenDeviceTypes, items);
+    if (mode === "replace") {
+      selectedId = items[0]?.id ?? 0;
+      selectedAccountId = 0;
+      selectedAccountIds = [];
+      selectedDeviceType = "全部设备";
+      searchQuery = "";
+      sortMode = "updatedDesc";
+      backStack = [];
+      forwardStack = [];
+      visibleHistoryIds = [];
+    }
+    offerSnapshotUndo(snapshot.id, `${format.toUpperCase()} 配置已按“${modeLabel}”导入`);
   }
 
   async function selectConfigFileFromBrowser(event: Event) {
@@ -1812,7 +2379,20 @@
   }
 </script>
 
-<main class="app-shell" style={layoutStyle}>
+{#if vaultStorageState !== "ready"}
+  <VaultStorageStatus
+    state={vaultStorageState === "loading" ? "loading" : vaultStorageState === "save-error" ? "save-error" : "load-error"}
+    error={vaultStorageError}
+    retry={retryVaultStorage}
+    canMigrateLegacyKey={legacyVaultKeyMigrationRequired}
+    migrateLegacyKey={migrateLegacyVaultKey}
+    canRecoverBackup={vaultBackupRecoveryRequired}
+    recoverBackup={recoverVaultBackup}
+    discardChangesAndExit={discardUnsavedChangesAndExit}
+  />
+{/if}
+
+<main class="app-shell" class:storage-blocked={vaultStorageState !== "ready"} style={layoutStyle} aria-hidden={vaultStorageState !== "ready"} inert={vaultStorageState !== "ready"}>
   <input id="import-file" class="hidden-file-input" type="file" accept=".json,.csv,.yaml,.yml,application/json,text/csv,application/yaml,text/yaml" on:change={selectConfigFileFromBrowser} />
   <SidebarPane
     {deviceTypeRows}
@@ -1861,12 +2441,12 @@
         {hasSelectedDevice}
         deviceTypeOptionsLength={deviceTypeOptions.length}
         {listContextLabel}
-        {listContextMeta}
         openAddDeviceDialog={() => openAddDeviceDialog()}
         {openEditDeviceDialog}
         {requestDeleteSelectedDevice}
         openDeviceSortPopover={(event) => openPopover("device-sort", event)}
         openDeviceActionsPopover={(event) => openPopover("device-actions", event)}
+        {openDeviceContextMenu}
         {openDeviceListBlankContextMenu}
         {selectDevice}
       />
@@ -1890,12 +2470,14 @@
         {selectedAccount}
         {selectedAccountIds}
         {selectedAccountTargetCount}
+        {copyableAccountTargetCount}
         {canDeleteSelectedAccountTargets}
         {sortedHistory}
         {historySortDesc}
         {visibleHistoryIds}
         {passwordStrength}
         {openDetailBlankContextMenu}
+        {openAccountContextMenu}
         {openAddAccountDialog}
         {openPasswordDialog}
         {copySelectedAccountInfo}
@@ -1908,6 +2490,7 @@
         {clearAccountBatchSelection}
         {maskPassword}
         {toggleHistoryPassword}
+        {requestRestoreHistoryPassword}
         toggleHistorySort={() => (historySortDesc = !historySortDesc)}
         {clearSearch}
         openAddDeviceDialog={() => openAddDeviceDialog()}
@@ -1924,6 +2507,9 @@
     {selectedDeviceType}
     {searchQuery}
     {listContextLabel}
+    selectedDeviceName={selectedItem.deviceName}
+    selectedAccountLabel={selectedAccount.username || selectedAccount.title || "未填写用户名"}
+    selectedAccountHasPassword={Boolean(selectedAccount.password)}
     deviceTypeOptionsLength={deviceTypeOptions.length}
     {hasSelectedDevice}
     {setDeviceTypeSortMode}
@@ -1938,8 +2524,14 @@
     {openAddDeviceDialog}
     {openEditDeviceDialog}
     {requestDeleteSelectedDevice}
+    {copySelectedDeviceInfo}
+    {openPasswordDialog}
+    {copySelectedAccountInfo}
+    {openEditAccountDialog}
+    {requestDeleteSelectedAccount}
     {chooseConfigFile}
     {openExportConfigDialog}
+    {openSnapshotsDialog}
     setActivePopover={(popover) => (activePopover = popover)}
   />
 
@@ -1955,7 +2547,8 @@
     bind:bulkUsernameSearch
     bind:deviceTypeSearch
     {bulkUsernameSuggestionsOpen}
-    {activeDialog}
+    activeDialog={activeDialog === "snapshots" ? null : activeDialog}
+    {revealResetToken}
     {selectedItem}
     {selectedAccount}
     {selectedAccountTargets}
@@ -1987,10 +2580,19 @@
     {exportConfig}
   />
 
+  <VaultSnapshotsDialog
+    open={activeDialog === "snapshots"}
+    snapshots={vaultSnapshots}
+    close={closeOverlays}
+    requestRestore={requestRestoreSnapshot}
+  />
+
   <ConfirmationDialog
     {pendingConfirmation}
+    {importConfigMode}
     {closeOverlays}
     {confirmPendingAction}
+    setImportConfigMode={(mode) => (importConfigMode = mode)}
   />
 
   {#if generatorPanelOpen}
@@ -2031,5 +2633,13 @@
     />
   {/if}
 
-  <StatusToast {copyStatus} {pauseStatusDismiss} {resumeStatusDismiss} {dismissStatus} />
+  <StatusToast
+    {copyStatus}
+    {pauseStatusDismiss}
+    {resumeStatusDismiss}
+    {dismissStatus}
+    actionLabel={statusActionLabel}
+    runAction={runStatusAction}
+  />
+  <GlobalTooltip enabled={vaultStorageState === "ready"} />
 </main>

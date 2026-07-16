@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_ACCOUNT_TAG } from "./constants";
 import { getAccounts } from "./vault";
 import { fuzzyContains, normalizeSearchValue } from "./utils";
+import { createUuid } from "./uuid";
 
 export function createAccountFromForm(
   accountForm: AccountForm,
@@ -20,6 +21,7 @@ export function createAccountFromForm(
   const username = accountForm.username.trim();
   const tag = accountForm.tag.trim() || DEFAULT_ACCOUNT_TAG;
   return {
+    uuid: createUuid(),
     id,
     title: username || "未填写用户名",
     username,
@@ -27,6 +29,7 @@ export function createAccountFromForm(
     tag,
     notes: accountForm.notes.trim(),
     updatedAt,
+    passwordChangedAt: accountForm.password ? updatedAt : "",
     history: [],
   };
 }
@@ -117,6 +120,7 @@ export function getBulkPasswordMatchKey(match: Pick<BulkPasswordMatch, "itemId" 
 
 export function updateAccountPassword(account: DeviceAccount, password: string, changedAt: string, reason: string) {
   const historyEntry: PasswordHistory = {
+    uuid: createUuid(),
     id: Math.max(0, ...account.history.map((entry) => entry.id)) + 1,
     password: account.password,
     newPassword: password,
@@ -127,6 +131,7 @@ export function updateAccountPassword(account: DeviceAccount, password: string, 
     ...account,
     password,
     updatedAt: changedAt,
+    passwordChangedAt: changedAt,
     history: account.password ? [historyEntry, ...account.history] : account.history,
   };
 }

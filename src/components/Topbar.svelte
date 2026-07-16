@@ -47,7 +47,7 @@
     <Sparkles size={20} />
     <span>密码生成器</span>
   </button>
-  <button class="icon-button topbar-tool" aria-label="配置管理" data-tooltip="配置管理" on:click={openConfigPopover}>
+  <button class="icon-button topbar-tool" aria-label="资产库工具" data-tooltip="资产库工具" on:click={openConfigPopover}>
     <MoreVertical size={22} />
   </button>
 </header>

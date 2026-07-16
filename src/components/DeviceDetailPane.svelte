@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, ChevronDown, ChevronRight, Clock3, Copy, Eye, EyeOff, Folder, History, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserRound } from "@lucide/svelte";
+  import { ArrowDownUp, ChevronDown, ChevronRight, Clock3, Copy, Eye, EyeOff, Folder, History, KeyRound, Pencil, Plus, RotateCcwKey, ShieldCheck, Trash2, UserRound } from "@lucide/svelte";
   import type { DeviceAccount, PasswordHistory, VaultItem } from "../lib/types";
   import { formatAccountTag } from "../lib/vault";
 
@@ -11,15 +11,17 @@
   export let selectedAccount: DeviceAccount;
   export let selectedAccountIds: number[] = [];
   export let selectedAccountTargetCount = 0;
+  export let copyableAccountTargetCount = 0;
   export let canDeleteSelectedAccountTargets = false;
   export let sortedHistory: PasswordHistory[];
   export let historySortDesc = true;
   export let passwordVisible = false;
-  export let historyOpen = true;
+  export let historyOpen = false;
   export let visibleHistoryIds: number[] = [];
   export let passwordStrength = "较弱";
 
   export let openDetailBlankContextMenu: (event: MouseEvent) => void;
+  export let openAccountContextMenu: (id: number, event: MouseEvent) => void;
   export let openAddAccountDialog: () => void;
   export let openPasswordDialog: () => void;
   export let copySelectedAccountInfo: () => void;
@@ -32,26 +34,44 @@
   export let clearAccountBatchSelection: () => void;
   export let maskPassword: (password: string) => string;
   export let toggleHistoryPassword: (id: number) => void;
+  export let requestRestoreHistoryPassword: (history: PasswordHistory) => void;
   export let toggleHistorySort: () => void;
   export let clearSearch: () => void;
   export let openAddDeviceDialog: () => void;
+
+  let selectedAccountTag = "";
+  $: selectedAccountTag = selectedAccount.id ? formatAccountTag(selectedAccount, selectedItem.deviceType, selectedItem.tag) : "";
 </script>
 
 <section class="detail-pane" aria-label="设备详情" on:contextmenu={openDetailBlankContextMenu}>
   {#if hasSelectedDevice}
     <div class="detail-topline">
-      <div class="breadcrumb" aria-label="当前详情设备类型">
-        <span class="device-type-badge"><ShieldCheck size={16} /></span>
-        <span>{selectedItem.deviceType}</span>
+      <div class="detail-header-identity">
+        <span class={`detail-icon ${selectedItem.iconClass}`}>
+          {selectedItem.iconText}
+        </span>
+        <div class="detail-header-copy">
+          <h1>{selectedItem.deviceName}</h1>
+          <p class="identity-subtitle">
+            <span>{selectedItem.deviceType}</span>
+            <span>{selectedAccounts.length} 个账号</span>
+            {#if selectedItem.ipAddress}
+              <span class="identity-ip">{selectedItem.ipAddress}</span>
+            {/if}
+            {#if selectedAccountTag}
+              <span class="identity-account-tag">{selectedAccountTag}</span>
+            {/if}
+          </p>
+        </div>
       </div>
       <div class="detail-actions">
         <button class="tool-button update-password-action" data-tooltip={selectedAccountTargetCount > 0 ? "更新密码" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => openPasswordDialog()}>
           <KeyRound size={19} />
           <span>{selectedAccountTargetCount > 1 ? `更新 ${selectedAccountTargetCount} 个` : "更新密码"}</span>
         </button>
-        <button class="tool-button" data-tooltip={selectedAccountTargetCount > 0 ? "复制账号密码" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => copySelectedAccountInfo()}>
+        <button class="tool-button" data-tooltip={copyableAccountTargetCount > 0 ? "复制账号密码" : selectedAccountTargetCount > 0 ? "所选账号未设置密码" : "请先新增账号"} disabled={copyableAccountTargetCount === 0} on:click={() => copySelectedAccountInfo()}>
           <Copy size={20} />
-          <span>{selectedAccountTargetCount > 1 ? `复制 ${selectedAccountTargetCount} 个` : "复制账号密码"}</span>
+          <span>{copyableAccountTargetCount > 1 ? `复制 ${copyableAccountTargetCount} 个` : "复制账号密码"}</span>
         </button>
         <button class="tool-button" data-tooltip={selectedAccountTargetCount > 0 ? "编辑账号" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => openEditAccountDialog()}>
           <Pencil size={20} />
@@ -61,23 +81,6 @@
     </div>
 
     <div class="detail-scroll" role="group" aria-label="当前设备详情">
-      <div class="identity-row">
-        <span class={`detail-icon ${selectedItem.iconClass}`}>
-          {selectedItem.iconText}
-        </span>
-        <div>
-          <h1>{selectedItem.deviceName}</h1>
-          <p class="identity-subtitle">{selectedItem.deviceType} · {selectedAccounts.length} 个账号</p>
-          <div class="identity-meta">
-            {#if selectedAccount.id}
-              <span>{formatAccountTag(selectedAccount, selectedItem.deviceType, selectedItem.tag)}</span>
-            {:else}
-              <span>暂无账号</span>
-            {/if}
-          </div>
-        </div>
-      </div>
-
       {#if selectedItem.ipAddress || selectedItem.assetCode || selectedItem.location}
         <div class="device-info-card" aria-label="设备信息">
           {#if selectedItem.ipAddress}
@@ -163,7 +166,7 @@
             </div>
           {:else}
             {#each selectedAccounts as account}
-              <div class="account-row" class:selected={account.id === selectedAccount.id}>
+              <div class="account-row" class:selected={account.id === selectedAccount.id} on:contextmenu={(event) => openAccountContextMenu(account.id, event)}>
                 <label class="account-select-box">
                   <input
                     type="checkbox"
@@ -202,21 +205,23 @@
           <div class="field-row">
             <div>
               <span class="field-label">密码</span>
-              <p class="password-value">{passwordVisible ? selectedAccount.password : "••••••••••"}</p>
+              <p class="password-value" class:empty={!selectedAccount.password}>{selectedAccount.password ? (passwordVisible ? selectedAccount.password : "••••••••••") : "未设置密码"}</p>
             </div>
-            <div class="field-tools">
-              <span class={`strength ${passwordStrength === "较弱" ? "weak" : ""}`}>{passwordStrength}</span>
-              <button class="icon-button inline" aria-label={passwordVisible ? "隐藏密码" : "显示密码"} data-tooltip={passwordVisible ? "隐藏密码" : "显示密码"} on:click={() => (passwordVisible = !passwordVisible)}>
-                {#if passwordVisible}
-                  <EyeOff size={18} />
-                {:else}
-                  <Eye size={18} />
-                {/if}
-              </button>
-              <button class="icon-button inline" aria-label="复制密码" data-tooltip="复制密码" on:click={() => copyText(selectedAccount.password, "密码")}>
-                <Copy size={18} />
-              </button>
-            </div>
+            {#if selectedAccount.password}
+              <div class="field-tools">
+                <span class={`strength ${passwordStrength === "较弱" ? "weak" : ""}`}>{passwordStrength}</span>
+                <button class="icon-button inline" aria-label={passwordVisible ? "隐藏密码" : "显示密码"} data-tooltip={passwordVisible ? "隐藏密码" : "显示密码"} on:click={() => (passwordVisible = !passwordVisible)}>
+                  {#if passwordVisible}
+                    <EyeOff size={18} />
+                  {:else}
+                    <Eye size={18} />
+                  {/if}
+                </button>
+                <button class="icon-button inline" aria-label="复制密码" data-tooltip="复制密码" on:click={() => copyText(selectedAccount.password, "密码")}>
+                  <Copy size={18} />
+                </button>
+              </div>
+            {/if}
           </div>
           {#if selectedAccount.notes}
             <div class="field-row">
@@ -284,6 +289,9 @@
                     </button>
                     <button class="icon-button inline" aria-label="复制旧密码" data-tooltip="复制旧密码" on:click={() => copyText(history.password, "旧密码")}>
                       <Copy size={17} />
+                    </button>
+                    <button class="icon-button inline" aria-label="恢复为此密码" data-tooltip="恢复为此密码" on:click={() => requestRestoreHistoryPassword(history)}>
+                      <RotateCcwKey size={17} />
                     </button>
                   </div>
                   <time>{history.changedAt}</time>
