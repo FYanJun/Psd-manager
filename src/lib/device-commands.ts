@@ -49,7 +49,7 @@ export function formatDeviceInfo(item: VaultItem) {
     item.deviceType ? `类型: ${item.deviceType}` : "",
     item.assetCode ? `资产编号: ${item.assetCode}` : "",
     item.location ? `位置: ${item.location}` : "",
-    item.ipAddress ? `IP: ${item.ipAddress}` : "",
+    item.ipAddress ? `连接地址: ${item.ipAddress}` : "",
     `${getAccounts(item).length} 个账号`,
   ]
     .filter(Boolean)
@@ -77,8 +77,8 @@ export function getBulkPasswordMatches(items: VaultItem[], form: BulkPasswordFor
     getAccounts(item)
       .filter((account) => matchesBulkUsername(account, form.username))
       .map((account) => ({
-        itemId: item.id,
-        accountId: account.id,
+        itemUuid: item.uuid,
+        accountUuid: account.uuid,
         deviceName: item.deviceName,
         deviceType: item.deviceType,
         deviceTag: item.tag,
@@ -114,8 +114,8 @@ export function getBulkUsernameSuggestions(
   );
 }
 
-export function getBulkPasswordMatchKey(match: Pick<BulkPasswordMatch, "itemId" | "accountId">) {
-  return `${match.itemId}:${match.accountId}`;
+export function getBulkPasswordMatchKey(match: Pick<BulkPasswordMatch, "itemUuid" | "accountUuid">) {
+  return `${match.itemUuid}:${match.accountUuid}`;
 }
 
 export function updateAccountPassword(account: DeviceAccount, password: string, changedAt: string, reason: string) {

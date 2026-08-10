@@ -1,11 +1,10 @@
 <script lang="ts">
   import { ArrowDownUp, Folder, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "@lucide/svelte";
-  import type { DeviceType, VaultItem } from "../lib/types";
+  import type { VaultItem } from "../lib/types";
   import { getAccounts } from "../lib/vault";
 
   export let filteredItems: VaultItem[];
   export let selectedId = 0;
-  export let selectedDeviceType: "全部设备" | DeviceType = "全部设备";
   export let searchQuery = "";
   export let hasDevices = false;
   export let hasSelectedDevice = false;
@@ -56,7 +55,7 @@
         <Folder size={24} />
         <div>
           <strong>{hasDevices ? "没有匹配的设备资产" : "资产库还是空的"}</strong>
-          <span>{hasDevices ? "换个设备名或 IP 搜索，或新增一台设备。" : "新增第一台设备资产后，这里会保存账号、当前密码和历史密码。"}</span>
+          <span>{hasDevices ? "换个设备名或连接地址搜索，或新增一台设备。" : "新增第一台设备资产后，这里会保存账号、当前密码和历史密码。"}</span>
         </div>
       </div>
     {:else}
@@ -66,6 +65,7 @@
         <button
           class:selected={item.id === selectedId}
           class="item-row"
+          data-value-tooltip={item.deviceName}
           on:click={() => selectDevice(item.id)}
           on:contextmenu={(event) => openDeviceContextMenu(item.id, event)}
         >
@@ -74,15 +74,13 @@
           </span>
           <span class="item-copy">
             <span class="item-primary">
-              <strong data-value-tooltip={item.deviceName}>
+              <strong>
                 <span class="item-name-text">{item.deviceName}</span>
               </strong>
-              {#if selectedDeviceType === "全部设备" || searchQuery.trim()}
-                <span class="item-type-pill" data-tooltip={item.deviceType}>{item.deviceType}</span>
-              {/if}
+              <span class="item-type-pill">{item.deviceType}</span>
             </span>
             <span class="item-secondary">
-              <small data-value-tooltip={deviceReference}>{deviceReference}</small>
+              <small>{deviceReference}</small>
               <small class="item-account-count">{itemAccounts.length} 个账号</small>
             </span>
           </span>

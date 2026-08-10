@@ -1,0 +1,594 @@
+/* Device detail pane, account list, and password history presentation. */
+.detail-pane {
+  container: device-detail / inline-size;
+  display: grid;
+  grid-template-rows: 68px minmax(0, 1fr);
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.detail-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 14px;
+  padding: 0 16px 0 24px;
+  border-bottom: 1px solid #eef0f2;
+  background: #fff;
+}
+
+.detail-header-identity {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.detail-header-copy {
+  min-width: 0;
+}
+
+.detail-header-copy h1 {
+  margin: 0;
+  overflow: hidden;
+  color: #25282b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  color: #33363a;
+  font-size: 17px;
+}
+
+.breadcrumb span {
+  white-space: nowrap;
+}
+
+.device-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #536170;
+  background: #d9e1e8;
+}
+
+.update-password-action {
+  color: #fff;
+  background: var(--blue);
+}
+
+.update-password-action:hover {
+  background: var(--blue-hover);
+}
+
+.detail-actions .icon-button {
+  width: 40px;
+  height: 40px;
+}
+
+.detail-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+.detail-scroll {
+  padding: 18px clamp(28px, 5vw, 64px) 40px;
+}
+
+.detail-empty-state {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  max-width: 68%;
+  min-height: 100%;
+  padding: 28px clamp(36px, 7vw, 86px) 72px;
+}
+
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border: 1px solid #dfe5ec;
+  border-radius: 16px;
+  color: #536170;
+  background: #f6f8fa;
+}
+
+.detail-empty-state h1 {
+  margin: 20px 0 0;
+  color: #24282c;
+  font-size: 28px;
+  line-height: 1.18;
+}
+
+.detail-empty-state p {
+  max-width: 84%;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.identity-subtitle {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.identity-subtitle > span {
+  min-width: 0;
+}
+
+.identity-subtitle > span + span::before {
+  content: "\00b7";
+  padding: 0 6px;
+  color: #a0a5aa;
+}
+
+.identity-ip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identity-account-tag {
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: #536170;
+  text-overflow: ellipsis;
+}
+
+.device-info-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  gap: 18px 28px;
+  margin: 0 0 24px;
+  border-bottom: 1px solid #eceef0;
+  padding: 4px 0 22px;
+}
+
+.device-info-card:has(.device-info-item:nth-child(2):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.device-info-card:has(.device-info-item:nth-child(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.device-info-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 12px;
+}
+
+.device-info-item > div,
+.device-info-value {
+  min-width: 0;
+}
+
+.device-info-item p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #25282b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.device-info-card + .account-section {
+  margin-top: 0;
+}
+
+.account-section {
+  width: 100%;
+  margin: 0 0 22px;
+}
+
+@container device-detail (max-width: 760px) {
+  .detail-actions .tool-button span {
+    display: none;
+  }
+
+  .detail-actions .tool-button {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .identity-ip,
+  .identity-account-tag {
+    display: none;
+  }
+}
+
+@container device-detail (max-width: 520px) {
+  .detail-topline {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .detail-header-identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detail-header-identity .detail-icon {
+    display: none;
+  }
+
+  .detail-copy-action,
+  .detail-edit-action {
+    display: none;
+  }
+}
+
+.account-heading {
+  justify-content: flex-start;
+  min-height: 36px;
+  margin-bottom: 10px;
+}
+
+.account-heading h2 {
+  flex: 0 0 auto;
+}
+
+.account-selection-hint {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #edf4ff;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.account-heading-actions {
+  display: inline-flex;
+  margin-left: auto;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.account-heading-action {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.account-heading-action svg {
+  flex: 0 0 auto;
+}
+
+.account-list {
+  --account-row-height: 44px;
+  display: grid;
+  gap: 6px;
+  max-height: calc(var(--account-row-height) * 4 + 18px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  min-height: var(--account-row-height);
+  border: 1px solid #e5e7ea;
+  border-radius: 8px;
+  background: #fafbfc;
+  overflow: hidden;
+}
+
+.account-row.selected {
+  border-color: #c9d8eb;
+  background: #eef3fb;
+}
+
+.account-empty-state {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  border: 1px dashed #d8dde4;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+}
+
+.account-empty-state strong {
+  color: #2b2f33;
+  font-size: 14px;
+}
+
+.account-empty-state span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.account-select-box {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  position: relative;
+  min-height: 42px;
+  border-right: 1px solid #e5e7ea;
+  cursor: pointer;
+}
+
+.account-row.selected .account-select-box {
+  border-right-color: #d6e0ee;
+}
+
+.account-select-box input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.account-checkbox {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #858b92;
+  border-radius: 6px;
+  background: #fff;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.account-checkbox.checked {
+  border-color: var(--blue);
+  background: var(--blue);
+  box-shadow: 0 0 0 3px rgba(17, 112, 226, 0.14);
+}
+
+.account-checkbox.checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.account-select-box input:focus-visible + .account-checkbox {
+  box-shadow: 0 0 0 3px rgba(17, 112, 226, 0.22);
+}
+
+.account-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: center;
+  min-height: 42px;
+  gap: 12px;
+  padding: 7px 10px;
+  text-align: left;
+  background: transparent;
+}
+
+.account-list strong,
+.account-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-list strong {
+  color: #25282b;
+  font-size: 14px;
+}
+
+.account-list span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field-group {
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  background: var(--field);
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  gap: 18px;
+  padding: 12px 18px;
+}
+
+.field-row > div:not(.field-tools) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.field-row > .icon-button,
+.field-row > .field-tools {
+  flex: 0 0 auto;
+}
+
+.field-row + .field-row {
+  border-top: 1px solid var(--field-border);
+}
+
+.field-label {
+  display: block;
+  color: #6b737b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field-row p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: #25282b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.field-row a {
+  color: var(--blue);
+}
+
+.password-value {
+  letter-spacing: 2px;
+}
+
+.password-value.empty {
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.strength {
+  color: #7b7e83;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.strength.weak {
+  color: #d45b30;
+}
+
+.field-tools {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 48px;
+  padding: 8px 0;
+  color: #292c30;
+  text-align: left;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.history-section {
+  width: 100%;
+  margin-top: 16px;
+  border-top: 1px solid #eceef0;
+  padding-top: 18px;
+}
+
+.history-heading {
+  min-height: 36px;
+}
+
+.history-sort-action {
+  margin-left: auto;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 58px;
+  border-bottom: 1px solid #f0f1f2;
+}
+
+.history-row div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.history-password-pair {
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.9fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 10px !important;
+}
+
+.history-password-pair span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.history-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.history-row strong.masked {
+  letter-spacing: 1px;
+}
+
+.history-actions {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px !important;
+}
+
+.history-row time {
+  grid-column: 1 / -1;
+  margin-top: -12px;
+}
+
+.history-row span,
+.history-row time {
+  color: var(--muted);
+  font-size: 13px;
+}

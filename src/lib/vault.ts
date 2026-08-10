@@ -114,7 +114,9 @@ export function syncItemWithAccounts(item: VaultItem, accounts: DeviceAccount[])
     title: primaryAccount?.title ?? "",
     username: primaryAccount?.username ?? "",
     password: primaryAccount?.password ?? "",
-    updatedAt: primaryAccount?.updatedAt ?? item.updatedAt,
+    // Keep device metadata time independent from the primary account time.
+    // Legacy records without a device timestamp still inherit the account time.
+    updatedAt: item.updatedAt || primaryAccount?.updatedAt || "",
     history: primaryAccount?.history ?? [],
     accounts,
   };
@@ -135,7 +137,7 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
     location: readString(item.location),
     username: readString(item.username),
     password: readString(item.password),
-    ipAddress: readString(item.ipAddress, readString((item as { ip?: unknown }).ip)),
+    ipAddress: readString(item.ipAddress, readString((item as { ip?: unknown }).ip)).trim(),
     tag: readString(item.tag, DEFAULT_ACCOUNT_TAG) || DEFAULT_ACCOUNT_TAG,
     iconText: readString(item.iconText, fallbackDeviceTypeMeta.iconText),
     iconClass: readString(item.iconClass).trim() || iconClassForColor(fallbackDeviceTypeMeta.color),

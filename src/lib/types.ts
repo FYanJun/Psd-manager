@@ -1,6 +1,7 @@
 export type DeviceType = string;
 export type ConfigImportMode = "replace" | "add-missing";
 export type ConfirmationSummaryItem = { label: string; value: string };
+export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
 export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | null;
@@ -41,11 +42,19 @@ export type PendingConfirmation = {
   summaryItems?: ConfirmationSummaryItem[];
   importModeSummaries?: Record<ConfigImportMode, ConfirmationSummaryItem[]>;
   importModeDetails?: Record<ConfigImportMode, string>;
+  importModeErrors?: Partial<Record<ConfigImportMode, string>>;
   deviceType?: "全部设备" | DeviceType;
+  deviceTypeUuid?: string;
   snapshotId?: string;
-  itemId?: number;
-  accountId?: number;
-  historyId?: number;
+  itemUuid?: string;
+  accountUuid?: string;
+  accountUuids?: string[];
+  accountTargets?: ConfirmationAccountTarget[];
+  historyUuid?: string;
+  passwordValue?: string;
+  reasonValue?: string;
+  accountDraft?: AccountForm;
+  typeDraft?: TypeForm;
 };
 
 export type DeviceTypeMeta = {
@@ -54,8 +63,6 @@ export type DeviceTypeMeta = {
   iconText: string;
   color: string;
 };
-
-export type GeneratorPreset = "balanced" | "readable" | "strong" | "pin";
 
 export type ViewState = {
   selectedDeviceType: "全部设备" | DeviceType;
@@ -118,6 +125,7 @@ export type DeviceForm = {
 };
 
 export type TypeForm = {
+  originalUuid: string | null;
   originalLabel: string | null;
   label: string;
   iconText: string;
@@ -163,8 +171,8 @@ export type PersistedVaultState = {
 };
 
 export type BulkPasswordMatch = {
-  itemId: number;
-  accountId: number;
+  itemUuid: string;
+  accountUuid: string;
   deviceName: string;
   deviceType: string;
   deviceTag: string;

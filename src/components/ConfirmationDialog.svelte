@@ -1,23 +1,18 @@
 <script lang="ts">
-  import { X } from "@lucide/svelte";
+  import ModalFrame from "./ModalFrame.svelte";
   import type { ConfigImportMode, PendingConfirmation } from "../lib/types";
 
   export let pendingConfirmation: PendingConfirmation | null = null;
   export let importConfigMode: ConfigImportMode = "add-missing";
-  export let closeOverlays: () => void;
+  export let cancelPendingConfirmation: () => void;
   export let confirmPendingAction: () => void;
   export let setImportConfigMode: (mode: ConfigImportMode) => void;
+
+  $: importModeError = pendingConfirmation?.importModeErrors?.[importConfigMode] ?? "";
 </script>
 
 {#if pendingConfirmation}
-  <div class="modal-backdrop">
-    <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-      <header class="modal-header">
-        <h2 id="confirm-title">{pendingConfirmation.title}</h2>
-        <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" on:click={() => closeOverlays()}>
-          <X size={20} />
-        </button>
-      </header>
+  <ModalFrame title={pendingConfirmation.title} titleId="confirm-title" modalClass="confirm-modal" close={cancelPendingConfirmation}>
       <div class="confirmation-body">
         <strong>{pendingConfirmation.message}</strong>
         {#if pendingConfirmation.action === "import-config"}
@@ -27,6 +22,9 @@
               type="button"
               role="radio"
               aria-checked={importConfigMode === "add-missing"}
+              aria-disabled={Boolean(pendingConfirmation.importModeErrors?.["add-missing"])}
+              disabled={Boolean(pendingConfirmation.importModeErrors?.["add-missing"])}
+              data-tooltip={pendingConfirmation.importModeErrors?.["add-missing"] ?? "仅新增"}
               on:click={() => setImportConfigMode("add-missing")}
             >
               <strong>仅新增</strong>
@@ -37,6 +35,7 @@
               type="button"
               role="radio"
               aria-checked={importConfigMode === "replace"}
+              data-tooltip="全部覆盖"
               on:click={() => setImportConfigMode("replace")}
             >
               <strong>全部覆盖</strong>
@@ -55,15 +54,18 @@
           </div>
         {/if}
         <p>{pendingConfirmation.importModeDetails?.[importConfigMode] ?? pendingConfirmation.detail}</p>
+        {#if importModeError}
+          <p class="confirmation-error" role="alert">{importModeError}</p>
+        {/if}
       </div>
       <footer class="modal-actions">
-        <button class="secondary-button" on:click={() => closeOverlays()}>取消</button>
+        <button class="secondary-button" on:click={() => cancelPendingConfirmation()}>取消</button>
         <button
           class:danger-button={pendingConfirmation.action !== "import-config" || importConfigMode === "replace"}
           class:primary-button={pendingConfirmation.action === "import-config" && importConfigMode === "add-missing"}
+          disabled={Boolean(importModeError)}
           on:click={() => confirmPendingAction()}
         >{pendingConfirmation.action === "import-config" ? importConfigMode === "add-missing" ? "仅新增" : "全部覆盖" : pendingConfirmation.confirmLabel}</button>
       </footer>
-    </div>
-  </div>
+  </ModalFrame>
 {/if}

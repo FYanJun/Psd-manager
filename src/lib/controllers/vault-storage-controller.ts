@@ -1,0 +1,364 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { STORAGE_KEY } from "../constants";
+import { parsePersistedVaultContent, validatePersistedVaultState } from "../persisted-vault";
+import type { PersistedVaultState } from "../types";
+
+export type VaultStorageState = "loading" | "ready" | "load-error" | "save-error";
+
+export type VaultStorageViewState = {
+  state: VaultStorageState;
+  error: string;
+  canMigrateLegacyKey: boolean;
+  canRecoverBackup: boolean;
+  hydrated: boolean;
+};
+
+type PendingVaultSave = { generation: number; content: string };
+type VaultSaveWaiter = {
+  generation: number;
+  resolve: () => void;
+  reject: (error: Error) => void;
+};
+
+type VaultStoragePort = {
+  capture(revision: number): PersistedVaultState;
+  applyLoaded(state: PersistedVaultState): void;
+  clampLayout(): void;
+  showStatus(message: string, duration?: number): void;
+  writeViewState(state: VaultStorageViewState): void;
+};
+
+const LEGACY_KEY_MIGRATION_REQUIRED = "LEGACY_KEY_MIGRATION_REQUIRED:";
+const BACKUP_RECOVERY_REQUIRED = "BACKUP_RECOVERY_REQUIRED:";
+
+// Browser preview is intentionally session-only. Plaintext localStorage is not a
+// security boundary, so the encrypted Tauri store remains the only persistent vault.
+let browserPreviewContent: string | null = null;
+
+export function createVaultStorageController(port: VaultStoragePort) {
+  let revision = 0;
+  let storageState: VaultStorageState = "loading";
+  let storageError = "";
+  let legacyKeyMigrationRequired = false;
+  let backupRecoveryRequired = false;
+  let hydrated = false;
+  let pendingSave: PendingVaultSave | null = null;
+  let dirtyContent = "";
+  let persistedDataSignature = "";
+  let saveGeneration = 0;
+  let saveInFlight = false;
+  let saveTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let saveWaiters: VaultSaveWaiter[] = [];
+  let allowDiscardedExit = false;
+  let removeCloseRequestedListener: (() => void) | null = null;
+  let destroyed = false;
+
+  function publish() {
+    port.writeViewState({
+      state: storageState,
+      error: storageError,
+      canMigrateLegacyKey: legacyKeyMigrationRequired,
+      canRecoverBackup: backupRecoveryRequired,
+      hydrated,
+    });
+  }
+
+  function captureContent() {
+    return JSON.stringify(port.capture(revision));
+  }
+
+  function getDataSignature(content: string) {
+    try {
+      const parsed = parsePersistedVaultContent(content);
+      return JSON.stringify({ ...parsed.state, revision: 0 });
+    } catch {
+      return content;
+    }
+  }
+
+  function updateDirtyContent(content: string) {
+    dirtyContent = getDataSignature(content) === persistedDataSignature ? "" : content;
+  }
+
+  async function writeContent(content: string) {
+    const expectedRevision = revision;
+    const parsed = parsePersistedVaultContent(content);
+    if (parsed.migrated) throw new Error("拒绝直接保存未迁移的旧版资产库");
+    parsed.state.revision = expectedRevision;
+    const normalizedContent = JSON.stringify(validatePersistedVaultState(parsed.state));
+    let persistedContent = normalizedContent;
+
+    if (isTauri()) {
+      persistedContent = await invoke<string>("save_secure_vault", {
+        content: normalizedContent,
+        expectedRevision,
+      });
+    } else {
+      const currentContent = browserPreviewContent;
+      const currentRevision = currentContent ? parsePersistedVaultContent(currentContent).state.revision : 0;
+      if (currentRevision !== expectedRevision) {
+        throw new Error(`资产库版本冲突：本地版本为 ${currentRevision}，当前操作基于版本 ${expectedRevision}`);
+      }
+      parsed.state.revision = expectedRevision + 1;
+      persistedContent = JSON.stringify(validatePersistedVaultState(parsed.state));
+      browserPreviewContent = persistedContent;
+    }
+
+    const persisted = parsePersistedVaultContent(persistedContent);
+    if (persisted.migrated || persisted.state.revision !== expectedRevision + 1) {
+      throw new Error("资产库保存后返回了无效版本号");
+    }
+    revision = persisted.state.revision;
+    return persistedContent;
+  }
+
+  async function readContent() {
+    if (isTauri()) return invoke<string | null>("load_secure_vault");
+    return browserPreviewContent;
+  }
+
+  function resolveWaiters(generation: number) {
+    const completed = saveWaiters.filter((waiter) => waiter.generation <= generation);
+    saveWaiters = saveWaiters.filter((waiter) => waiter.generation > generation);
+    completed.forEach((waiter) => waiter.resolve());
+  }
+
+  function rejectWaiters(error: Error) {
+    const rejected = saveWaiters;
+    saveWaiters = [];
+    rejected.forEach((waiter) => waiter.reject(error));
+  }
+
+  function enqueue(content: string, waitForCompletion = false) {
+    const generation = ++saveGeneration;
+    pendingSave = { generation, content };
+    updateDirtyContent(content);
+    const completion = waitForCompletion
+      ? new Promise<void>((resolve, reject) => saveWaiters.push({ generation, resolve, reject }))
+      : Promise.resolve();
+    void flushQueue();
+    return completion;
+  }
+
+  function readPendingSave() {
+    return pendingSave;
+  }
+
+  async function flushQueue() {
+    if (saveInFlight || !pendingSave || storageState !== "ready") return;
+    saveInFlight = true;
+    try {
+      while (pendingSave) {
+        const batch = pendingSave;
+        pendingSave = null;
+        try {
+          const persistedContent = await writeContent(batch.content);
+          persistedDataSignature = getDataSignature(persistedContent);
+        } catch (error) {
+          const saveError = error instanceof Error ? error : new Error(String(error ?? "未知错误"));
+          const newestUnsaved = pendingSave ?? batch;
+          pendingSave = null;
+          dirtyContent = newestUnsaved.content;
+          storageError = saveError.message;
+          storageState = "save-error";
+          rejectWaiters(saveError);
+          publish();
+          return;
+        }
+        resolveWaiters(batch.generation);
+        const nextPendingSave = readPendingSave();
+        if (nextPendingSave) updateDirtyContent(nextPendingSave.content);
+        else updateDirtyContent(captureContent());
+      }
+    } finally {
+      saveInFlight = false;
+    }
+  }
+
+  async function persistImmediately() {
+    if (storageState !== "ready") throw new Error(storageError || "资产库当前不可写");
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = null;
+    await enqueue(captureContent(), true);
+  }
+
+  function schedule() {
+    if (!hydrated || storageState !== "ready") return;
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => {
+      saveTimer = null;
+      enqueue(captureContent());
+    }, 250);
+  }
+
+  function refreshDirtyState() {
+    updateDirtyContent(captureContent());
+  }
+
+  async function initialize() {
+    storageState = "loading";
+    storageError = "";
+    legacyKeyMigrationRequired = false;
+    backupRecoveryRequired = false;
+    hydrated = false;
+    persistedDataSignature = "";
+    publish();
+    try {
+      const storedContent = await readContent();
+      let successfulContent = "";
+      if (storedContent) {
+        const parsed = parsePersistedVaultContent(storedContent);
+        revision = parsed.state.revision;
+        port.applyLoaded(parsed.state);
+        if (parsed.migrated) {
+          const migrationContent = captureContent();
+          const persistedContent = await writeContent(migrationContent);
+          successfulContent = persistedContent;
+          const verifiedContent = await readContent();
+          if (verifiedContent !== persistedContent) throw new Error("旧版资产库迁移校验失败，原文件仍保留");
+        } else {
+          successfulContent = storedContent;
+        }
+        window.localStorage.removeItem(STORAGE_KEY);
+      } else {
+        const legacyContent = window.localStorage.getItem(STORAGE_KEY);
+        if (legacyContent) {
+          const parsed = parsePersistedVaultContent(legacyContent);
+          revision = parsed.state.revision;
+          port.applyLoaded(parsed.state);
+        }
+        const migrationContent = captureContent();
+        const persistedContent = await writeContent(migrationContent);
+        successfulContent = persistedContent;
+        const verifiedContent = await readContent();
+        if (verifiedContent !== persistedContent) throw new Error("加密资产库迁移校验失败，旧数据仍保留");
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+      port.clampLayout();
+      pendingSave = null;
+      persistedDataSignature = getDataSignature(successfulContent || captureContent());
+      refreshDirtyState();
+      storageState = "ready";
+      hydrated = true;
+      publish();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "未知错误");
+      legacyKeyMigrationRequired = message.includes(LEGACY_KEY_MIGRATION_REQUIRED);
+      backupRecoveryRequired = message.includes(BACKUP_RECOVERY_REQUIRED);
+      storageError = message
+        .replace(LEGACY_KEY_MIGRATION_REQUIRED, "")
+        .replace(BACKUP_RECOVERY_REQUIRED, "");
+      storageState = "load-error";
+      publish();
+    }
+  }
+
+  async function migrateLegacyKey() {
+    if (!isTauri() || !legacyKeyMigrationRequired) return;
+    storageState = "loading";
+    storageError = "";
+    publish();
+    try {
+      await invoke("migrate_legacy_vault_key");
+      await initialize();
+    } catch (error) {
+      storageError = error instanceof Error ? error.message : String(error ?? "未知错误");
+      storageState = "load-error";
+      publish();
+    }
+  }
+
+  async function recoverBackup() {
+    if (!isTauri() || !backupRecoveryRequired) return;
+    storageState = "loading";
+    storageError = "";
+    publish();
+    try {
+      await invoke("recover_vault_backup");
+      await initialize();
+    } catch (error) {
+      storageError = error instanceof Error ? error.message : String(error ?? "未知错误");
+      storageState = "load-error";
+      publish();
+    }
+  }
+
+  async function retry() {
+    if (storageState === "load-error") {
+      await initialize();
+      return;
+    }
+    if (storageState !== "save-error") return;
+    const content = dirtyContent || captureContent();
+    storageError = "";
+    storageState = "ready";
+    publish();
+    try {
+      await enqueue(content, true);
+      port.showStatus("未保存的数据已重新写入资产库");
+    } catch {
+      // flushQueue keeps the latest dirty payload and publishes the error state.
+    }
+  }
+
+  async function discardAndExit() {
+    allowDiscardedExit = true;
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = null;
+    pendingSave = null;
+    dirtyContent = "";
+    rejectWaiters(new Error("用户已放弃未保存的修改"));
+    if (isTauri()) await getCurrentWindow().destroy();
+  }
+
+  function hasUnsavedChanges() {
+    return Boolean(saveTimer || pendingSave || saveInFlight || dirtyContent);
+  }
+
+  function mountCloseProtection() {
+    if (!isTauri()) return;
+    const appWindow = getCurrentWindow();
+    void appWindow.onCloseRequested(async (event) => {
+      if (allowDiscardedExit || storageState === "load-error" || storageState === "loading") return;
+      if (storageState === "save-error") {
+        event.preventDefault();
+        return;
+      }
+      if (!hasUnsavedChanges()) return;
+      event.preventDefault();
+      try {
+        await persistImmediately();
+        await appWindow.destroy();
+      } catch {
+        port.showStatus("资产库尚未安全保存，已取消退出", 5000);
+      }
+    }).then((removeListener) => {
+      if (destroyed) removeListener();
+      else removeCloseRequestedListener = removeListener;
+    });
+  }
+
+  function destroy() {
+    destroyed = true;
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = null;
+    removeCloseRequestedListener?.();
+    removeCloseRequestedListener = null;
+  }
+
+  publish();
+  return {
+    initialize,
+    schedule,
+    persistImmediately,
+    refreshDirtyState,
+    retry,
+    migrateLegacyKey,
+    recoverBackup,
+    discardAndExit,
+    hasUnsavedChanges,
+    mountCloseProtection,
+    destroy,
+  };
+}

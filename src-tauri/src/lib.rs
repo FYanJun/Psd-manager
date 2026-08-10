@@ -55,8 +55,7 @@ fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&directory)
-        .map_err(|error| format!("无法创建资产库目录：{error}"))?;
+    fs::create_dir_all(&directory).map_err(|error| format!("无法创建资产库目录：{error}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -75,11 +74,12 @@ fn lock_vault_file(app: &AppHandle) -> Result<File, String> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
+    let lock_path = directory.join(VAULT_LOCK_FILE_NAME);
     let lock_file = options
-        .open(directory.join(VAULT_LOCK_FILE_NAME))
+        .open(&lock_path)
         .map_err(|error| format!("无法打开资产库进程锁：{error}"))?;
-    fs4::FileExt::lock(&lock_file)
-        .map_err(|error| format!("无法获取资产库进程锁：{error}"))?;
+    restrict_private_file(&lock_path, "资产库进程锁")?;
+    fs4::FileExt::lock(&lock_file).map_err(|error| format!("无法获取资产库进程锁：{error}"))?;
     Ok(lock_file)
 }
 
@@ -87,11 +87,55 @@ fn vault_key_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(ensure_vault_directory(app)?.join(VAULT_KEY_FILE_NAME))
 }
 
+fn sync_parent_directory(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let directory = path
+            .parent()
+            .ok_or_else(|| "资产库路径缺少父目录".to_string())?;
+        let directory_file = File::open(directory)
+            .map_err(|error| format!("无法打开资产库目录进行同步：{error}"))?;
+        directory_file
+            .sync_all()
+            .map_err(|error| format!("无法同步资产库目录：{error}"))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+    Ok(())
+}
+
+fn restrict_private_file(path: &Path, description: &str) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("无法限制{description}文件权限：{error}"))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, description);
+    }
+    Ok(())
+}
+
+fn restrict_existing_vault_files(vault_path: &Path, backup_path: &Path) -> Result<(), String> {
+    if vault_path.exists() {
+        restrict_private_file(vault_path, "主资产库")?;
+    }
+    if backup_path.exists() {
+        restrict_private_file(backup_path, "资产库安全备份")?;
+    }
+    Ok(())
+}
+
 fn read_local_vault_key(app: &AppHandle) -> Result<Option<Vec<u8>>, String> {
     let key_path = vault_key_path(app)?;
     if !key_path.exists() {
         return Ok(None);
     }
+    restrict_private_file(&key_path, "资产库密钥")?;
     let key = fs::read(&key_path).map_err(|error| format!("无法读取本地资产库密钥：{error}"))?;
     if key.len() != 32 {
         return Err("本地资产库密钥长度不正确".to_string());
@@ -118,13 +162,16 @@ fn write_local_vault_key(app: &AppHandle, key: &[u8]) -> Result<(), String> {
     let mut file = options
         .open(&temporary_path)
         .map_err(|error| format!("无法创建临时资产库密钥：{error}"))?;
+    restrict_private_file(&temporary_path, "临时资产库密钥")?;
     file.write_all(key)
         .map_err(|error| format!("无法写入本地资产库密钥：{error}"))?;
     file.sync_all()
         .map_err(|error| format!("无法同步本地资产库密钥：{error}"))?;
     drop(file);
     fs::rename(&temporary_path, &key_path)
-        .map_err(|error| format!("无法启用本地资产库密钥：{error}"))
+        .map_err(|error| format!("无法启用本地资产库密钥：{error}"))?;
+    sync_parent_directory(&key_path)?;
+    Ok(())
 }
 
 fn get_or_create_local_vault_key(app: &AppHandle, vault_exists: bool) -> Result<Vec<u8>, String> {
@@ -142,8 +189,8 @@ fn get_or_create_local_vault_key(app: &AppHandle, vault_exists: bool) -> Result<
 }
 
 fn validate_vault_payload(content: &str, allow_legacy: bool) -> Result<Value, String> {
-    let value: Value = serde_json::from_str(content)
-        .map_err(|error| format!("资产库内容格式不正确：{error}"))?;
+    let value: Value =
+        serde_json::from_str(content).map_err(|error| format!("资产库内容格式不正确：{error}"))?;
     let object = value
         .as_object()
         .ok_or_else(|| "资产库内容必须是对象".to_string())?;
@@ -179,10 +226,7 @@ fn validate_vault_payload(content: &str, allow_legacy: bool) -> Result<Value, St
 }
 
 fn vault_revision(value: &Value) -> u64 {
-    value
-        .get("revision")
-        .and_then(Value::as_u64)
-        .unwrap_or(0)
+    value.get("revision").and_then(Value::as_u64).unwrap_or(0)
 }
 
 fn load_existing_vault(
@@ -214,11 +258,13 @@ fn load_existing_vault(
 
 fn restore_backup_as_primary(vault_path: &Path, backup_path: &Path) -> Result<(), String> {
     if vault_path.exists() {
-        fs::remove_file(vault_path)
-            .map_err(|error| format!("无法移除损坏的主资产库：{error}"))?;
+        fs::remove_file(vault_path).map_err(|error| format!("无法移除损坏的主资产库：{error}"))?;
     }
+    sync_parent_directory(vault_path)?;
     fs::rename(backup_path, vault_path)
-        .map_err(|error| format!("无法恢复资产库安全备份：{error}"))
+        .map_err(|error| format!("无法恢复资产库安全备份：{error}"))?;
+    sync_parent_directory(vault_path)?;
+    Ok(())
 }
 
 fn keyring_entry() -> Result<Entry, String> {
@@ -271,6 +317,7 @@ fn load_secure_vault_sync(app: &AppHandle) -> Result<Option<String>, String> {
         .map_err(|_| "资产库文件锁已损坏".to_string())?;
     let _file_guard = lock_vault_file(app)?;
     let (vault_path, backup_path) = vault_paths(app)?;
+    restrict_existing_vault_files(&vault_path, &backup_path)?;
     if !vault_path.exists() && !backup_path.exists() {
         return Ok(None);
     }
@@ -306,6 +353,7 @@ fn save_secure_vault_sync(
         return Err("前端资产库版本与预期版本不一致".to_string());
     }
     let (vault_path, backup_path) = vault_paths(app)?;
+    restrict_existing_vault_files(&vault_path, &backup_path)?;
     let key = get_or_create_local_vault_key(app, vault_path.exists() || backup_path.exists())?;
     let (current_content, source) = load_existing_vault(&vault_path, &backup_path, &key)?;
     let current_revision = current_content
@@ -325,8 +373,8 @@ fn save_secure_vault_sync(
         .checked_add(1)
         .ok_or_else(|| "资产库版本号已达到上限".to_string())?;
     payload["revision"] = Value::from(next_revision);
-    let content = serde_json::to_string(&payload)
-        .map_err(|error| format!("无法编码资产库内容：{error}"))?;
+    let content =
+        serde_json::to_string(&payload).map_err(|error| format!("无法编码资产库内容：{error}"))?;
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|error| format!("无法初始化加密器：{error}"))?;
     let nonce = Nonce::generate();
@@ -358,6 +406,7 @@ fn save_secure_vault_sync(
     let mut temporary_file = temporary_options
         .open(&temporary_path)
         .map_err(|error| format!("无法创建临时资产库：{error}"))?;
+    restrict_private_file(&temporary_path, "临时资产库")?;
     temporary_file
         .write_all(&encoded)
         .map_err(|error| format!("无法写入临时资产库：{error}"))?;
@@ -375,24 +424,27 @@ fn save_secure_vault_sync(
         if backup_path.exists() {
             fs::remove_file(&backup_path)
                 .map_err(|error| format!("无法清理旧资产库快照：{error}"))?;
+            sync_parent_directory(&backup_path)?;
         }
         fs::rename(&vault_path, &backup_path)
             .map_err(|error| format!("无法创建资产库安全快照：{error}"))?;
+        sync_parent_directory(&backup_path)?;
     }
     if let Err(error) = fs::rename(&temporary_path, &vault_path) {
         if backup_path.exists() && !vault_path.exists() {
             let _ = fs::rename(&backup_path, &vault_path);
+            let _ = sync_parent_directory(&vault_path);
         }
         return Err(format!("无法替换加密资产库：{error}"));
     }
+    sync_parent_directory(&vault_path)?;
 
     let persisted = decrypt_vault_file(&vault_path, &key)?;
     if persisted != content {
         return Err("加密资产库落盘校验不一致".to_string());
     }
-    if backup_path.exists() {
-        let _ = fs::remove_file(&backup_path);
-    }
+    // Keep the previous successfully written version as a recovery point. The
+    // next save rotates it before replacing the primary file.
     Ok(content)
 }
 
@@ -405,6 +457,7 @@ fn migrate_legacy_vault_key_sync(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
     let (vault_path, backup_path) = vault_paths(app)?;
+    restrict_existing_vault_files(&vault_path, &backup_path)?;
     if !vault_path.exists() && !backup_path.exists() {
         return Err("找不到需要迁移的旧版资产库".to_string());
     }
@@ -421,6 +474,7 @@ fn recover_vault_backup_sync(app: &AppHandle) -> Result<(), String> {
         .map_err(|_| "资产库文件锁已损坏".to_string())?;
     let _file_guard = lock_vault_file(app)?;
     let (vault_path, backup_path) = vault_paths(app)?;
+    restrict_existing_vault_files(&vault_path, &backup_path)?;
     if !backup_path.exists() {
         return Err("找不到可恢复的资产库安全备份".to_string());
     }
@@ -449,8 +503,8 @@ async fn save_secure_vault(
     tauri::async_runtime::spawn_blocking(move || {
         save_secure_vault_sync(&app, content, expected_revision)
     })
-        .await
-        .map_err(|error| format!("资产库保存任务失败：{error}"))?
+    .await
+    .map_err(|error| format!("资产库保存任务失败：{error}"))?
 }
 
 #[tauri::command]
@@ -472,18 +526,16 @@ pub fn run() {
     let mut builder = tauri::Builder::default();
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(
-            |app, _args, _cwd| {
-                #[cfg(target_os = "macos")]
-                let _ = app.show();
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            #[cfg(target_os = "macos")]
+            let _ = app.show();
 
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                }
-            },
-        ));
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }));
     }
 
     builder

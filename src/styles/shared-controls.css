@@ -1,0 +1,81 @@
+/* Shared buttons and cross-region control variants. */
+.tool-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #2e3135;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+
+.topbar-tool {
+  height: 40px;
+}
+
+.tool-button.accent {
+  color: var(--blue);
+}
+
+.icon-button.inline {
+  width: 36px;
+  height: 36px;
+}
+
+.danger-outline {
+  border-color: #f0c5bf;
+  color: #c4382b;
+}
+
+.danger-outline:hover {
+  background: #fff4f2;
+}
+
+.quiet-text {
+  color: var(--quiet);
+  font-size: 14px;
+}
+
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #d7dbe0;
+  border-radius: 10px;
+  background: #fff;
+  font-weight: 800;
+}
+
+.secondary-button:hover {
+  background: #f3f5f7;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.storage-blocked {
+  pointer-events: none;
+  user-select: none;
+}
+
+
+.danger-button {
+  border: 1px solid #b92f25;
+  border-radius: 8px;
+  color: #fff;
+  background: #c4382b;
+  font-weight: 800;
+}
+
+.danger-button:hover {
+  background: #ad2b22;
+}

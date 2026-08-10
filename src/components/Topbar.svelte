@@ -39,11 +39,11 @@
     />
   </label>
 
-  <button class="tool-button topbar-tool" data-tooltip="批量改密" aria-keyshortcuts="Meta+B Control+B" on:click={() => openBulkPasswordDialog()}>
+  <button class="tool-button topbar-tool" aria-label="批量改密" data-tooltip="批量改密" aria-keyshortcuts="Meta+B Control+B" on:click={() => openBulkPasswordDialog()}>
     <RotateCcwKey size={20} />
     <span>批量改密</span>
   </button>
-  <button class="tool-button topbar-tool accent" data-tooltip="密码生成器" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
+  <button class="tool-button topbar-tool accent" aria-label="密码生成器" data-tooltip="密码生成器" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
     <Sparkles size={20} />
     <span>密码生成器</span>
   </button>

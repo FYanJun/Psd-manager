@@ -17,6 +17,7 @@
   export let inputClass = "";
   export let inputRef: HTMLInputElement | null = null;
   export let revealResetToken = 0;
+  export let transformValue: ((value: string) => string) | undefined = undefined;
   export let onValueChange: ((value: string) => void) | undefined = undefined;
   export let onBlur: (() => void) | undefined = undefined;
   export let onKeydown: ((event: KeyboardEvent) => void) | undefined = undefined;
@@ -36,6 +37,7 @@
   $: showClearButton = clearable && hasValue;
 
   function setValue(nextValue: string) {
+    nextValue = transformValue?.(nextValue) ?? nextValue;
     if (!clearable && nextValue === "") {
       value = fallbackValue ?? value;
       return;
@@ -76,12 +78,12 @@
   {#if showClearButton || isPassword}
     <span class="clearable-input-actions">
       {#if showClearButton}
-        <button type="button" class="input-icon-button" aria-label="清空输入" on:click={clearValue}>
+        <button type="button" class="input-icon-button" aria-label="清空输入" data-tooltip="清空输入" on:click={clearValue}>
           <X size={15} />
         </button>
       {/if}
       {#if isPassword}
-        <button type="button" class="input-icon-button" aria-label={passwordVisible ? "隐藏密码" : "显示密码"} on:click={() => (passwordVisible = !passwordVisible)}>
+        <button type="button" class="input-icon-button" aria-label={passwordVisible ? "隐藏密码" : "显示密码"} data-tooltip={passwordVisible ? "隐藏密码" : "显示密码"} on:click={() => (passwordVisible = !passwordVisible)}>
           {#if passwordVisible}
             <EyeOff size={15} />
           {:else}

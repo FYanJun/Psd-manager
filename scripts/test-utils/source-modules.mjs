@@ -1,10 +1,12 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { transformWithEsbuild } from "vite";
 
 const moduleCache = new Map();
 const compiledLibDir = fileURLToPath(new URL("../../node_modules/.cache/device-password-manager-smoke-lib/", import.meta.url));
+const sourceLibDir = fileURLToPath(new URL("../../src/lib/", import.meta.url));
+let compilePromise = null;
 
 export async function importSourceModule(relativePath) {
   const cacheKey = relativePath;
@@ -20,25 +22,47 @@ export async function importSourceModule(relativePath) {
 
 async function compileLibModules() {
   if (moduleCache.has("__compiled_lib__")) return;
+  if (compilePromise) return compilePromise;
 
-  rmSync(compiledLibDir, { force: true, recursive: true });
-  mkdirSync(compiledLibDir, { recursive: true });
-  const libDir = new URL("../../src/lib/", import.meta.url);
-  const files = readdirSync(libDir).filter((file) => file.endsWith(".ts"));
+  compilePromise = (async () => {
+    rmSync(compiledLibDir, { force: true, recursive: true });
+    mkdirSync(compiledLibDir, { recursive: true });
+    const files = collectTypeScriptFiles(sourceLibDir);
 
-  await Promise.all(files.map(async (file) => {
-    const sourceUrl = new URL(file, libDir);
-    const transformed = await transformWithEsbuild(readFileSync(sourceUrl, "utf8"), sourceUrl.pathname, {
-      format: "esm",
-      loader: "ts",
-      sourcemap: false,
-    });
-    const code = transformed.code.replace(/from "(\.[^"]+)"/g, (match, specifier) => {
-      if (specifier.endsWith(".mjs")) return match;
-      return `from "${specifier}.mjs"`;
-    });
-    writeFileSync(join(compiledLibDir, file.replace(/\.ts$/, ".mjs")), code);
-  }));
+    await Promise.all(files.map(async (file) => {
+      const sourcePath = join(sourceLibDir, file);
+      const outputPath = join(compiledLibDir, file.replace(/\.ts$/, ".mjs"));
+      const transformed = await transformWithEsbuild(readFileSync(sourcePath, "utf8"), sourcePath, {
+        format: "esm",
+        loader: "ts",
+        sourcemap: false,
+      });
+      const code = rewriteRelativeImports(transformed.code);
+      mkdirSync(dirname(outputPath), { recursive: true });
+      writeFileSync(outputPath, code);
+    }));
 
-  moduleCache.set("__compiled_lib__", true);
+    moduleCache.set("__compiled_lib__", true);
+  })();
+
+  try {
+    await compilePromise;
+  } finally {
+    compilePromise = null;
+  }
+}
+
+function collectTypeScriptFiles(directory, prefix = "") {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = join(prefix, entry.name);
+    if (entry.isDirectory()) return collectTypeScriptFiles(join(directory, entry.name), relativePath);
+    return entry.isFile() && entry.name.endsWith(".ts") ? [relativePath] : [];
+  });
+}
+
+function rewriteRelativeImports(code) {
+  return code.replace(/(from\s+["']|import\(\s*["'])(\.[^"']+)(["'])/g, (_match, prefix, specifier, suffix) => {
+    if (/\.(?:mjs|js|json)$/.test(specifier)) return `${prefix}${specifier}${suffix}`;
+    return `${prefix}${specifier}.mjs${suffix}`;
+  });
 }

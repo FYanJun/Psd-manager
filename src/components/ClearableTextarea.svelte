@@ -32,7 +32,7 @@
     on:input={(event) => setValue((event.currentTarget as HTMLTextAreaElement).value)}
   ></textarea>
   {#if hasValue}
-    <button type="button" class="textarea-icon-button" aria-label="清空输入" on:click={clearValue}>
+    <button type="button" class="textarea-icon-button" aria-label="清空输入" data-tooltip="清空输入" on:click={clearValue}>
       <X size={15} />
     </button>
   {/if}
@@ -79,4 +79,3 @@
     outline-offset: 1px;
   }
 </style>
-

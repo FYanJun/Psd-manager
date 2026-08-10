@@ -10,36 +10,164 @@
   export let recoverBackup: () => void | Promise<void>;
   export let discardChangesAndExit: () => void | Promise<void>;
 
-  let confirmingDiscard = false;
+  type CriticalStorageAction = "recover-backup" | "migrate-legacy" | "discard-changes";
+
+  const criticalActionCopy: Record<CriticalStorageAction, { title: string; detail: string; confirmLabel: string }> = {
+    "recover-backup": {
+      title: "确认恢复安全备份？",
+      detail: "当前主资产库会被安全备份替换；请确认这是你要恢复的数据版本。",
+      confirmLabel: "确认恢复",
+    },
+    "migrate-legacy": {
+      title: "确认迁移旧版资产库？",
+      detail: "迁移会主动读取旧版密钥并写入当前资产库，只应在确认旧数据来源可信时执行。",
+      confirmLabel: "确认迁移",
+    },
+    "discard-changes": {
+      title: "确认放弃未保存修改？",
+      detail: "尚未写入资产库的最新修改会永久丢失，应用随后退出。",
+      confirmLabel: "放弃并退出",
+    },
+  };
+
+  let pendingCriticalAction: CriticalStorageAction | null = null;
+
+  async function confirmCriticalAction() {
+    const action = pendingCriticalAction;
+    pendingCriticalAction = null;
+    if (action === "recover-backup") await recoverBackup();
+    if (action === "migrate-legacy") await migrateLegacyKey();
+    if (action === "discard-changes") await discardChangesAndExit();
+  }
 </script>
 
 <div class="vault-storage-backdrop" role={state === "loading" ? "status" : "alert"}>
   <section class="vault-storage-status">
     <span class:error={state !== "loading"} class="vault-storage-icon">
-      {#if state !== "loading"}<AlertTriangle size={26} />{:else}<LoaderCircle class="spin" size={26} />{/if}
+      {#if state !== "loading"}
+        <AlertTriangle size={26} />
+      {:else}
+        <span class="spin"><LoaderCircle size={26} /></span>
+      {/if}
     </span>
     <div>
       <h1>{state === "load-error" ? "无法打开本地资产库" : state === "save-error" ? "无法保存本地资产库" : "正在读取本地资产库"}</h1>
       <p>{state === "loading" ? "正在读取本地加密资产库中的设备和账号。" : error}</p>
     </div>
-    {#if state !== "loading"}
+    {#if state !== "loading" && pendingCriticalAction}
+      {@const confirmation = criticalActionCopy[pendingCriticalAction]}
+      <div class="vault-storage-confirmation" role="alertdialog" aria-labelledby="vault-storage-confirm-title" aria-describedby="vault-storage-confirm-detail">
+        <strong id="vault-storage-confirm-title">{confirmation.title}</strong>
+        <p id="vault-storage-confirm-detail">{confirmation.detail}</p>
+        <div class="vault-storage-actions">
+          <button class="danger-button" on:click={() => confirmCriticalAction()}>{confirmation.confirmLabel}</button>
+          <button class="secondary-button" on:click={() => (pendingCriticalAction = null)}>取消</button>
+        </div>
+      </div>
+    {:else if state !== "loading"}
       <div class="vault-storage-actions">
         {#if state === "load-error" && canRecoverBackup}
-          <button class="primary-button" on:click={() => recoverBackup()}><RotateCcw size={17} /><span>恢复安全备份</span></button>
+          <button class="primary-button" on:click={() => (pendingCriticalAction = "recover-backup")}><RotateCcw size={17} /><span>恢复安全备份</span></button>
         {:else if state === "load-error" && canMigrateLegacyKey}
-          <button class="primary-button" on:click={() => migrateLegacyKey()}><KeyRound size={17} /><span>迁移旧版资产库</span></button>
+          <button class="primary-button" on:click={() => (pendingCriticalAction = "migrate-legacy")}><KeyRound size={17} /><span>迁移旧版资产库</span></button>
         {:else}
           <button class="secondary-button" on:click={() => retry()}><RefreshCw size={17} /><span>{state === "save-error" ? "重试保存" : "重新读取"}</span></button>
         {/if}
         {#if state === "save-error"}
-          {#if confirmingDiscard}
-            <button class="danger-button" on:click={() => discardChangesAndExit()}>确认放弃并退出</button>
-            <button class="secondary-button" on:click={() => (confirmingDiscard = false)}>取消</button>
-          {:else}
-            <button class="secondary-button danger-outline" on:click={() => (confirmingDiscard = true)}>放弃未保存修改</button>
-          {/if}
+          <button class="secondary-button danger-outline" on:click={() => (pendingCriticalAction = "discard-changes")}>放弃未保存修改</button>
         {/if}
       </div>
     {/if}
   </section>
 </div>
+
+<style>
+  .vault-storage-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(243, 245, 247, 0.96);
+  }
+
+  .vault-storage-status {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    width: min(560px, 100%);
+    padding: 20px;
+    border: 1px solid #d9dce0;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 18px 50px rgba(24, 28, 32, 0.16);
+  }
+
+  .vault-storage-actions {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .vault-storage-actions .primary-button,
+  .vault-storage-actions .secondary-button,
+  .vault-storage-actions .danger-button {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  .vault-storage-confirmation {
+    grid-column: 2;
+    display: grid;
+    gap: 8px;
+  }
+
+  .vault-storage-confirmation > strong {
+    font-size: 15px;
+  }
+
+  .vault-storage-confirmation .vault-storage-actions {
+    grid-column: auto;
+  }
+
+  .vault-storage-status h1 {
+    margin: 0 0 4px;
+    font-size: 18px;
+  }
+
+  .vault-storage-status p {
+    margin: 0;
+    color: #646b73;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .vault-storage-icon {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    color: #1769aa;
+    background: #e8f3fb;
+  }
+
+  .vault-storage-icon.error {
+    color: #a82d2d;
+    background: #fbecec;
+  }
+
+  .spin {
+    display: inline-flex;
+    animation: vault-spin 0.9s linear infinite;
+  }
+
+  @keyframes vault-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+</style>

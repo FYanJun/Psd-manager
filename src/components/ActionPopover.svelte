@@ -1,257 +1,278 @@
 <script lang="ts">
-  import {
-    ArrowDownAZ,
-    ArrowDownUp,
-    ArchiveRestore,
-    ChartNoAxesColumnDecreasing,
-    ClockArrowDown,
-    Copy,
-    Download,
-    KeyRound,
-    Pencil,
-    Plus,
-    Rows3,
-    Search,
-    Tags,
-    Trash2,
-    Upload,
-  } from "@lucide/svelte";
+  import { tick } from "svelte";
   import type { ActivePopover, DeviceType, DeviceTypeSortMode, PopoverPosition, SortMode } from "../lib/types";
+  import type { ActionPopoverActions, ActionPopoverModel } from "../lib/view-models";
+  import AccountContextMenu from "./popovers/AccountContextMenu.svelte";
+  import BlankDeviceContextMenu from "./popovers/BlankDeviceContextMenu.svelte";
+  import ConfigMenu from "./popovers/ConfigMenu.svelte";
+  import DeviceActionsMenu from "./popovers/DeviceActionsMenu.svelte";
+  import DeviceSortMenu from "./popovers/DeviceSortMenu.svelte";
+  import DeviceTypeSortMenu from "./popovers/DeviceTypeSortMenu.svelte";
+  import TypeBlankContextMenu from "./popovers/TypeBlankContextMenu.svelte";
+  import TypeContextMenu from "./popovers/TypeContextMenu.svelte";
 
-  export let activePopover: ActivePopover = null;
-  export let popoverPosition: PopoverPosition;
-  export let deviceTypeSortMode: DeviceTypeSortMode;
-  export let sortMode: SortMode;
-  export let contextDeviceType: "全部设备" | DeviceType;
-  export let selectedDeviceType: "全部设备" | DeviceType;
-  export let searchQuery = "";
-  export let listContextLabel = "";
-  export let selectedDeviceName = "";
-  export let selectedAccountLabel = "";
-  export let selectedAccountHasPassword = false;
-  export let deviceTypeOptionsLength = 0;
-  export let hasSelectedDevice = false;
+  export let model: ActionPopoverModel;
+  export let actions: ActionPopoverActions;
 
-  export let setDeviceTypeSortMode: (mode: DeviceTypeSortMode) => void;
-  export let setSortMode: (mode: SortMode) => void;
-  export let selectDeviceType: (deviceType: "全部设备" | DeviceType) => void;
-  export let openEditTypeDialog: (deviceType?: "全部设备" | DeviceType) => void;
-  export let requestDeleteDeviceType: (deviceType?: "全部设备" | DeviceType) => void;
-  export let canDeleteDeviceType: (deviceType: "全部设备" | DeviceType) => boolean;
-  export let getDeviceTypeCount: (deviceType: "全部设备" | DeviceType) => number;
-  export let openAddTypeDialog: () => void;
-  export let clearSearch: () => void;
-  export let openAddDeviceDialog: (deviceType?: "全部设备" | DeviceType) => void;
-  export let openEditDeviceDialog: () => void;
-  export let requestDeleteSelectedDevice: () => void;
-  export let copySelectedDeviceInfo: () => void;
-  export let openPasswordDialog: () => void;
-  export let copySelectedAccountInfo: () => void;
-  export let openEditAccountDialog: () => void;
-  export let requestDeleteSelectedAccount: () => void;
-  export let chooseConfigFile: () => void;
-  export let openExportConfigDialog: () => void;
-  export let openSnapshotsDialog: () => void;
-  export let setActivePopover: (popover: ActivePopover) => void;
+  let activePopover: ActivePopover;
+  let popoverPosition: PopoverPosition;
+  let deviceTypeSortMode: DeviceTypeSortMode;
+  let sortMode: SortMode;
+  let contextDeviceType: "全部设备" | DeviceType;
+  let selectedDeviceType: "全部设备" | DeviceType;
+  let searchQuery: string;
+  let listContextLabel: string;
+  let selectedDeviceName: string;
+  let selectedAccountLabel: string;
+  let selectedAccountHasPassword: boolean;
+  let deviceTypeOptionsLength: number;
+  let hasSelectedDevice: boolean;
+  let setDeviceTypeSortMode: ActionPopoverActions["setDeviceTypeSortMode"];
+  let setSortMode: ActionPopoverActions["setSortMode"];
+  let selectDeviceType: ActionPopoverActions["selectDeviceType"];
+  let openEditTypeDialog: ActionPopoverActions["openEditTypeDialog"];
+  let requestDeleteDeviceType: ActionPopoverActions["requestDeleteDeviceType"];
+  let canDeleteDeviceType: ActionPopoverActions["canDeleteDeviceType"];
+  let getDeviceTypeCount: ActionPopoverActions["getDeviceTypeCount"];
+  let openAddTypeDialog: ActionPopoverActions["openAddTypeDialog"];
+  let clearSearch: ActionPopoverActions["clearSearch"];
+  let openAddDeviceDialog: ActionPopoverActions["openAddDeviceDialog"];
+  let openEditDeviceDialog: ActionPopoverActions["openEditDeviceDialog"];
+  let requestDeleteSelectedDevice: ActionPopoverActions["requestDeleteSelectedDevice"];
+  let copySelectedDeviceInfo: ActionPopoverActions["copySelectedDeviceInfo"];
+  let openPasswordDialog: ActionPopoverActions["openPasswordDialog"];
+  let copySelectedAccountInfo: ActionPopoverActions["copySelectedAccountInfo"];
+  let openEditAccountDialog: ActionPopoverActions["openEditAccountDialog"];
+  let requestDeleteSelectedAccount: ActionPopoverActions["requestDeleteSelectedAccount"];
+  let chooseConfigFile: ActionPopoverActions["chooseConfigFile"];
+  let openExportConfigDialog: ActionPopoverActions["openExportConfigDialog"];
+  let openSnapshotsDialog: ActionPopoverActions["openSnapshotsDialog"];
+  let setActivePopover: ActionPopoverActions["setActivePopover"];
+  let menuElement: HTMLDivElement;
+  let previousPopover: ActivePopover = null;
+
+  function getMenuItems() {
+    return menuElement
+      ? Array.from(menuElement.querySelectorAll<HTMLButtonElement>("button.menu-item:not(:disabled)"))
+      : [];
+  }
+
+  async function focusFirstMenuItem() {
+    await tick();
+    getMenuItems()[0]?.focus({ preventScroll: true });
+  }
+
+  function handleMenuKeydown(event: KeyboardEvent) {
+    const menuItems = getMenuItems();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setActivePopover(null);
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || menuItems.length === 0) return;
+    event.preventDefault();
+    const currentIndex = menuItems.findIndex((item) => item === document.activeElement);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? menuItems.length - 1
+        : event.key === "ArrowDown"
+          ? (currentIndex + 1 + menuItems.length) % menuItems.length
+          : (currentIndex - 1 + menuItems.length) % menuItems.length;
+    menuItems[nextIndex]?.focus({ preventScroll: true });
+  }
+
+  $: ({
+    activePopover,
+    popoverPosition,
+    deviceTypeSortMode,
+    sortMode,
+    contextDeviceType,
+    selectedDeviceType,
+    searchQuery,
+    listContextLabel,
+    selectedDeviceName,
+    selectedAccountLabel,
+    selectedAccountHasPassword,
+    deviceTypeOptionsLength,
+    hasSelectedDevice,
+  } = model);
+  $: ({
+    setDeviceTypeSortMode,
+    setSortMode,
+    selectDeviceType,
+    openEditTypeDialog,
+    requestDeleteDeviceType,
+    canDeleteDeviceType,
+    getDeviceTypeCount,
+    openAddTypeDialog,
+    clearSearch,
+    openAddDeviceDialog,
+    openEditDeviceDialog,
+    requestDeleteSelectedDevice,
+    copySelectedDeviceInfo,
+    openPasswordDialog,
+    copySelectedAccountInfo,
+    openEditAccountDialog,
+    requestDeleteSelectedAccount,
+    chooseConfigFile,
+    openExportConfigDialog,
+    openSnapshotsDialog,
+    setActivePopover,
+  } = actions);
+  $: if (activePopover !== previousPopover) {
+    previousPopover = activePopover;
+    if (activePopover) void focusFirstMenuItem();
+  }
 </script>
 
 {#if activePopover}
-  <div class="action-popover" role="menu" tabindex="-1" style={`top: ${popoverPosition.top}px; left: ${popoverPosition.left}px;`} on:contextmenu={(event) => event.preventDefault()}>
+  <div bind:this={menuElement} class="action-popover" role="menu" aria-label="操作菜单" tabindex="-1" style={`top: ${popoverPosition.top}px; left: ${popoverPosition.left}px;`} on:keydown={handleMenuKeydown} on:contextmenu={(event) => event.preventDefault()}>
     {#if activePopover === "type-sort"}
-      <div class="context-menu-title">
-        <strong>类型排序</strong>
-        <span>调整左栏设备类型顺序</span>
-      </div>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "default"} on:click={() => { setDeviceTypeSortMode("default"); setActivePopover(null); }}>
-        <Rows3 size={16} />
-        <span>按创建顺序</span>
-      </button>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "nameAsc"} on:click={() => { setDeviceTypeSortMode("nameAsc"); setActivePopover(null); }}>
-        <ArrowDownAZ size={16} />
-        <span>按类型名称</span>
-      </button>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "countDesc"} on:click={() => { setDeviceTypeSortMode("countDesc"); setActivePopover(null); }}>
-        <ChartNoAxesColumnDecreasing size={16} />
-        <span>按设备数量</span>
-      </button>
+      <DeviceTypeSortMenu mode={deviceTypeSortMode} setMode={setDeviceTypeSortMode} {setActivePopover} showTitle />
     {:else if activePopover === "device-sort"}
-      <div class="context-menu-title">
-        <strong>设备排序</strong>
-        <span>调整中栏设备列表顺序</span>
-      </div>
-      <button class="menu-item" class:selected={sortMode === "updatedDesc"} on:click={() => { setSortMode("updatedDesc"); setActivePopover(null); }}>
-        <ClockArrowDown size={16} />
-        <span>按最近更新</span>
-      </button>
-      <button class="menu-item" class:selected={sortMode === "nameAsc"} on:click={() => { setSortMode("nameAsc"); setActivePopover(null); }}>
-        <ArrowDownAZ size={16} />
-        <span>按设备名称</span>
-      </button>
-      <button class="menu-item" class:selected={sortMode === "typeAsc"} on:click={() => { setSortMode("typeAsc"); setActivePopover(null); }}>
-        <Tags size={16} />
-        <span>按设备类型</span>
-      </button>
+      <DeviceSortMenu mode={sortMode} setMode={setSortMode} {setActivePopover} showTitle />
     {:else if activePopover === "type-context"}
-      <div class="context-menu-title">
-        <strong>{contextDeviceType}</strong>
-        <span>设备类型</span>
-      </div>
-      {#if contextDeviceType !== selectedDeviceType || searchQuery.trim()}
-        <button class="menu-item" on:click={() => { selectDeviceType(contextDeviceType); setActivePopover(null); }}>
-          <Search size={16} />
-          <span>显示此类型</span>
-        </button>
-      {/if}
-      {#if contextDeviceType !== "全部设备"}
-        <div class="menu-separator"></div>
-        <button class="menu-item" on:click={() => openEditTypeDialog(contextDeviceType)}>
-          <Pencil size={16} />
-          <span>编辑设备类型</span>
-        </button>
-        <button
-          class="menu-item danger-menu-item"
-          disabled={!canDeleteDeviceType(contextDeviceType)}
-          title={getDeviceTypeCount(contextDeviceType) > 0 ? "该类型下还有设备，不能直接删除" : "删除设备类型"}
-          on:click={() => requestDeleteDeviceType(contextDeviceType)}
-        >
-          <Trash2 size={16} />
-          <span>删除设备类型</span>
-        </button>
-      {/if}
-      <button class="menu-item" on:click={() => openAddTypeDialog()}>
-        <Plus size={16} />
-        <span>新增设备类型</span>
-      </button>
-      <div class="menu-separator"></div>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "default"} on:click={() => { setDeviceTypeSortMode("default"); setActivePopover(null); }}>
-        <Rows3 size={16} />
-        <span>按创建顺序</span>
-      </button>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "nameAsc"} on:click={() => { setDeviceTypeSortMode("nameAsc"); setActivePopover(null); }}>
-        <ArrowDownAZ size={16} />
-        <span>按类型名称</span>
-      </button>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "countDesc"} on:click={() => { setDeviceTypeSortMode("countDesc"); setActivePopover(null); }}>
-        <ChartNoAxesColumnDecreasing size={16} />
-        <span>按设备数量</span>
-      </button>
+      <TypeContextMenu
+        {contextDeviceType}
+        {selectedDeviceType}
+        {searchQuery}
+        {deviceTypeSortMode}
+        {selectDeviceType}
+        {openEditTypeDialog}
+        {requestDeleteDeviceType}
+        {canDeleteDeviceType}
+        {getDeviceTypeCount}
+        {openAddTypeDialog}
+        {setDeviceTypeSortMode}
+        {setActivePopover}
+      />
     {:else if activePopover === "type-blank-context"}
-      <div class="context-menu-title">
-        <strong>设备类型</strong>
-        <span>管理设备分类</span>
-      </div>
-      <button class="menu-item" on:click={() => openAddTypeDialog()}>
-        <Plus size={16} />
-        <span>新增设备类型</span>
-      </button>
-      <div class="menu-separator"></div>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "default"} on:click={() => { setDeviceTypeSortMode("default"); setActivePopover(null); }}>
-        <Rows3 size={16} />
-        <span>按创建顺序</span>
-      </button>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "nameAsc"} on:click={() => { setDeviceTypeSortMode("nameAsc"); setActivePopover(null); }}>
-        <ArrowDownAZ size={16} />
-        <span>按类型名称</span>
-      </button>
-      <button class="menu-item" class:selected={deviceTypeSortMode === "countDesc"} on:click={() => { setDeviceTypeSortMode("countDesc"); setActivePopover(null); }}>
-        <ChartNoAxesColumnDecreasing size={16} />
-        <span>按设备数量</span>
-      </button>
+      <TypeBlankContextMenu {deviceTypeSortMode} {openAddTypeDialog} {setDeviceTypeSortMode} {setActivePopover} />
     {:else if activePopover === "list-blank-context" || activePopover === "detail-blank-context"}
-      <div class="context-menu-title">
-        <strong>{activePopover === "detail-blank-context" ? "设备账号" : listContextLabel}</strong>
-        <span>{activePopover === "detail-blank-context" ? "未选择设备" : "当前资产库范围"}</span>
-      </div>
-      {#if searchQuery.trim()}
-        <button class="menu-item" on:click={() => { clearSearch(); setActivePopover(null); }}>
-          <Search size={16} />
-          <span>清空搜索</span>
-        </button>
-      {/if}
-      <button
-        class="menu-item"
-        disabled={deviceTypeOptionsLength === 0}
-        title={deviceTypeOptionsLength === 0 ? "请先在左栏创建设备类型" : "新增设备"}
-        on:click={() => openAddDeviceDialog(contextDeviceType)}
-      >
-        <Plus size={16} />
-        <span>新增设备</span>
-      </button>
-      <div class="menu-separator"></div>
-      <button class="menu-item" class:selected={sortMode === "updatedDesc"} on:click={() => { setSortMode("updatedDesc"); setActivePopover(null); }}>
-        <ClockArrowDown size={16} />
-        <span>按最近更新</span>
-      </button>
-      <button class="menu-item" class:selected={sortMode === "nameAsc"} on:click={() => { setSortMode("nameAsc"); setActivePopover(null); }}>
-        <ArrowDownAZ size={16} />
-        <span>按设备名称</span>
-      </button>
-      <button class="menu-item" class:selected={sortMode === "typeAsc"} on:click={() => { setSortMode("typeAsc"); setActivePopover(null); }}>
-        <Tags size={16} />
-        <span>按设备类型</span>
-      </button>
+      <BlankDeviceContextMenu
+        {activePopover}
+        {listContextLabel}
+        {searchQuery}
+        {deviceTypeOptionsLength}
+        {contextDeviceType}
+        {sortMode}
+        {clearSearch}
+        {openAddDeviceDialog}
+        {setSortMode}
+        {setActivePopover}
+      />
     {:else if activePopover === "device-actions"}
-      <div class="context-menu-title">
-        <strong>{selectedDeviceName || "设备操作"}</strong>
-        <span>设备操作</span>
-      </div>
-      <button class="menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "编辑设备信息" : "请先选择设备"} on:click={() => openEditDeviceDialog()}>
-        <Pencil size={16} />
-        <span>编辑设备信息</span>
-      </button>
-      <button class="menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "复制设备信息" : "请先选择设备"} on:click={() => copySelectedDeviceInfo()}>
-        <Copy size={16} />
-        <span>复制设备信息</span>
-      </button>
-      <button class="menu-item danger-menu-item" disabled={!hasSelectedDevice} title={hasSelectedDevice ? "删除设备" : "请先选择设备"} on:click={() => requestDeleteSelectedDevice()}>
-        <Trash2 size={16} />
-        <span>删除设备</span>
-      </button>
-      <div class="menu-separator"></div>
-      <button class="menu-item" on:click={() => setActivePopover("device-sort")}>
-        <ArrowDownUp size={16} />
-        <span>设备排序</span>
-      </button>
+      <DeviceActionsMenu {selectedDeviceName} {hasSelectedDevice} {openEditDeviceDialog} {requestDeleteSelectedDevice} {copySelectedDeviceInfo} {setActivePopover} />
     {:else if activePopover === "account-context"}
-      <div class="context-menu-title">
-        <strong>{selectedAccountLabel}</strong>
-        <span>账号操作</span>
-      </div>
-      <button class="menu-item" on:click={() => openPasswordDialog()}>
-        <KeyRound size={16} />
-        <span>更新密码</span>
-      </button>
-      <button class="menu-item" disabled={!selectedAccountHasPassword} title={selectedAccountHasPassword ? "复制账号密码" : "该账号未设置密码"} on:click={() => copySelectedAccountInfo()}>
-        <Copy size={16} />
-        <span>复制账号密码</span>
-      </button>
-      <button class="menu-item" on:click={() => openEditAccountDialog()}>
-        <Pencil size={16} />
-        <span>编辑账号</span>
-      </button>
-      <div class="menu-separator"></div>
-      <button class="menu-item danger-menu-item" on:click={() => requestDeleteSelectedAccount()}>
-        <Trash2 size={16} />
-        <span>删除账号</span>
-      </button>
+      <AccountContextMenu {selectedAccountLabel} {selectedAccountHasPassword} {openPasswordDialog} {copySelectedAccountInfo} {openEditAccountDialog} {requestDeleteSelectedAccount} />
     {:else if activePopover === "config"}
-      <div class="context-menu-title">
-        <strong>资产库工具</strong>
-        <span>数据恢复和配置管理</span>
-      </div>
-      <button class="menu-item" on:click={() => openSnapshotsDialog()}>
-        <ArchiveRestore size={16} />
-        <span>数据快照</span>
-      </button>
-      <div class="menu-separator"></div>
-      <button class="menu-item" on:click={() => openExportConfigDialog()}>
-        <Upload size={16} />
-        <span>导出配置</span>
-      </button>
-      <button class="menu-item" on:click={() => chooseConfigFile()}>
-        <Download size={16} />
-        <span>导入配置</span>
-      </button>
+      <ConfigMenu {chooseConfigFile} {openExportConfigDialog} {openSnapshotsDialog} />
     {/if}
   </div>
 {/if}
+
+<style>
+  .action-popover {
+    position: fixed;
+    z-index: 25;
+    display: grid;
+    gap: 4px;
+    width: min(236px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid #d9dce0;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+
+  .action-popover :global(h3) {
+    margin: 4px 6px 6px;
+    color: #5f666d;
+    font-size: 12px;
+  }
+
+  .action-popover :global(.context-menu-title) {
+    display: grid;
+    gap: 2px;
+    padding: 7px 8px 8px;
+    border-bottom: 1px solid #eef0f2;
+    margin-bottom: 3px;
+  }
+
+  .action-popover :global(.context-menu-title strong),
+  .action-popover :global(.context-menu-title span) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .action-popover :global(.context-menu-title strong) {
+    color: #24282c;
+    font-size: 13px;
+  }
+
+  .action-popover :global(.context-menu-title span) {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .action-popover :global(button) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    border-radius: 7px;
+    padding: 0 9px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 650;
+  }
+
+  .action-popover :global(button.menu-item) {
+    justify-content: flex-start;
+  }
+
+  .action-popover :global(button.menu-item svg) {
+    flex: 0 0 auto;
+    color: #687079;
+  }
+
+  .action-popover :global(button.menu-item.danger-menu-item svg) {
+    color: currentColor;
+  }
+
+  .action-popover :global(.menu-separator) {
+    height: 1px;
+    margin: 4px 6px;
+    background: #eef0f2;
+  }
+
+  .action-popover :global(button small) {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .action-popover :global(button:hover),
+  .action-popover :global(button.selected) {
+    background: #eef3fb;
+  }
+
+  .action-popover :global(button:disabled) {
+    color: #9aa1a9;
+    cursor: default;
+    opacity: 0.58;
+  }
+
+  .action-popover :global(button:disabled:hover) {
+    background: transparent;
+  }
+
+  .action-popover :global(.danger-menu-item) {
+    color: #c4382b;
+  }
+</style>

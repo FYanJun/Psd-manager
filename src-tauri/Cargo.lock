@@ -849,7 +849,7 @@ dependencies = [
 
 [[package]]
 name = "device-password-manager"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "aes-gcm",
  "fs4",

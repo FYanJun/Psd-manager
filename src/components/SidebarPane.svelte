@@ -26,11 +26,11 @@
       <button class="icon-button compact-action" aria-label="新增设备类型" data-tooltip="新增设备类型" on:click={() => openAddTypeDialog()}>
         <Plus size={18} />
       </button>
-      <button class="icon-button compact-action" aria-label="编辑设备类型" data-tooltip="编辑设备类型" disabled={selectedDeviceType === "全部设备"} on:click={() => openEditTypeDialog()}>
+      <button class="icon-button compact-action sidebar-edit-action" aria-label="编辑设备类型" data-tooltip="编辑设备类型" disabled={selectedDeviceType === "全部设备"} on:click={() => openEditTypeDialog()}>
         <Pencil size={17} />
       </button>
       <button
-        class="icon-button compact-action"
+        class="icon-button compact-action sidebar-delete-action"
         aria-label="删除设备类型"
         disabled={!canDeleteSelectedDeviceType}
         data-tooltip={selectedDeviceType === "全部设备" ? "全部设备不能删除" : selectedTypeDeviceCount > 0 ? "该类型下还有设备，不能直接删除" : "删除设备类型"}
@@ -38,7 +38,7 @@
       >
         <Trash2 size={17} />
       </button>
-      <button class="icon-button compact-action" aria-label="类型排序" data-tooltip="类型排序" on:click={openTypeSortPopover}>
+      <button class="icon-button compact-action sidebar-sort-action" aria-label="类型排序" data-tooltip="类型排序" on:click={openTypeSortPopover}>
         <ArrowDownUp size={18} />
       </button>
     </div>

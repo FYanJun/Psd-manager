@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ArchiveRestore, X } from "@lucide/svelte";
+  import { ArchiveRestore } from "@lucide/svelte";
+  import ModalFrame from "./ModalFrame.svelte";
   import type { VaultSnapshot } from "../lib/types";
   import { getAccounts } from "../lib/vault";
 
@@ -19,12 +20,7 @@
 </script>
 
 {#if open}
-  <div class="modal-backdrop">
-    <div class="modal snapshots-modal" role="dialog" aria-modal="true" aria-labelledby="snapshots-title">
-      <header class="modal-header">
-        <h2 id="snapshots-title">数据快照</h2>
-        <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" on:click={() => close()}><X size={20} /></button>
-      </header>
+  <ModalFrame title="数据快照" titleId="snapshots-title" modalClass="snapshots-modal" dialogWidth="760px" {close}>
       <div class="snapshot-list">
         {#if snapshots.length === 0}
           <div class="snapshot-empty"><ArchiveRestore size={26} /><strong>暂无安全快照</strong><span>删除或配置导入前会自动保存。</span></div>
@@ -41,6 +37,46 @@
         {/if}
       </div>
       <footer class="modal-actions"><button class="primary-button" on:click={() => close()}>完成</button></footer>
-    </div>
-  </div>
+  </ModalFrame>
 {/if}
+
+<style>
+  .snapshot-list {
+    display: grid;
+    gap: 0;
+    min-height: 0;
+    max-height: min(52vh, 520px);
+    overflow: auto;
+    padding: 4px 22px 18px;
+  }
+
+  .snapshot-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid #e4e7ea;
+  }
+
+  .snapshot-row > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .snapshot-row span,
+  .snapshot-empty span {
+    color: #6a7179;
+    font-size: 13px;
+  }
+
+  .snapshot-empty {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 44px 20px;
+    color: #68717a;
+    text-align: center;
+  }
+</style>
