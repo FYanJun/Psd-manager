@@ -1,8 +1,8 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { STORAGE_KEY } from "../constants";
+import { LEGACY_STORAGE_KEY, STORAGE_KEY } from "../constants";
 import { parsePersistedVaultContent, validatePersistedVaultState } from "../persisted-vault";
-import type { PersistedVaultState } from "../types";
+import type { CloseBehavior, PersistedVaultState } from "../types";
 
 export type VaultStorageState = "loading" | "ready" | "load-error" | "save-error";
 
@@ -26,6 +26,7 @@ type VaultStoragePort = {
   applyLoaded(state: PersistedVaultState): void;
   clampLayout(): void;
   showStatus(message: string, duration?: number): void;
+  requestCloseChoice(): Promise<CloseBehavior | null>;
   writeViewState(state: VaultStorageViewState): void;
 };
 
@@ -48,9 +49,11 @@ export function createVaultStorageController(port: VaultStoragePort) {
   let persistedDataSignature = "";
   let saveGeneration = 0;
   let saveInFlight = false;
+  let activeSave: PendingVaultSave | null = null;
   let saveTimer: ReturnType<typeof window.setTimeout> | null = null;
   let saveWaiters: VaultSaveWaiter[] = [];
   let allowDiscardedExit = false;
+  let closeInProgress = false;
   let removeCloseRequestedListener: (() => void) | null = null;
   let destroyed = false;
 
@@ -130,13 +133,15 @@ export function createVaultStorageController(port: VaultStoragePort) {
     rejected.forEach((waiter) => waiter.reject(error));
   }
 
+  function waitForGeneration(generation: number) {
+    return new Promise<void>((resolve, reject) => saveWaiters.push({ generation, resolve, reject }));
+  }
+
   function enqueue(content: string, waitForCompletion = false) {
     const generation = ++saveGeneration;
     pendingSave = { generation, content };
     updateDirtyContent(content);
-    const completion = waitForCompletion
-      ? new Promise<void>((resolve, reject) => saveWaiters.push({ generation, resolve, reject }))
-      : Promise.resolve();
+    const completion = waitForCompletion ? waitForGeneration(generation) : Promise.resolve();
     void flushQueue();
     return completion;
   }
@@ -152,6 +157,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
       while (pendingSave) {
         const batch = pendingSave;
         pendingSave = null;
+        activeSave = batch;
         try {
           const persistedContent = await writeContent(batch.content);
           persistedDataSignature = getDataSignature(persistedContent);
@@ -172,6 +178,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
         else updateDirtyContent(captureContent());
       }
     } finally {
+      activeSave = null;
       saveInFlight = false;
     }
   }
@@ -180,15 +187,33 @@ export function createVaultStorageController(port: VaultStoragePort) {
     if (storageState !== "ready") throw new Error(storageError || "资产库当前不可写");
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = null;
-    await enqueue(captureContent(), true);
+    const content = captureContent();
+    const contentSignature = getDataSignature(content);
+    const queuedSave = pendingSave;
+    if (queuedSave && getDataSignature(queuedSave.content) === contentSignature) {
+      await waitForGeneration(queuedSave.generation);
+      return;
+    }
+    if (saveInFlight && activeSave && getDataSignature(activeSave.content) === contentSignature) {
+      await waitForGeneration(activeSave.generation);
+      return;
+    }
+    await enqueue(content, true);
   }
 
   function schedule() {
     if (!hydrated || storageState !== "ready") return;
+    const content = captureContent();
+    if (!pendingSave && !saveInFlight && getDataSignature(content) === persistedDataSignature) {
+      if (saveTimer) window.clearTimeout(saveTimer);
+      saveTimer = null;
+      dirtyContent = "";
+      return;
+    }
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = null;
-      enqueue(captureContent());
+      enqueue(content);
     }, 250);
   }
 
@@ -221,8 +246,10 @@ export function createVaultStorageController(port: VaultStoragePort) {
           successfulContent = storedContent;
         }
         window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
       } else {
-        const legacyContent = window.localStorage.getItem(STORAGE_KEY);
+        const legacyContent = window.localStorage.getItem(STORAGE_KEY)
+          ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
         if (legacyContent) {
           const parsed = parsePersistedVaultContent(legacyContent);
           revision = parsed.state.revision;
@@ -234,6 +261,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
         const verifiedContent = await readContent();
         if (verifiedContent !== persistedContent) throw new Error("加密资产库迁移校验失败，旧数据仍保留");
         window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
       }
       port.clampLayout();
       pendingSave = null;
@@ -321,17 +349,31 @@ export function createVaultStorageController(port: VaultStoragePort) {
     const appWindow = getCurrentWindow();
     void appWindow.onCloseRequested(async (event) => {
       if (allowDiscardedExit || storageState === "load-error" || storageState === "loading") return;
-      if (storageState === "save-error") {
+      if (closeInProgress) {
         event.preventDefault();
         return;
       }
-      if (!hasUnsavedChanges()) return;
       event.preventDefault();
+      closeInProgress = true;
+      if (storageState === "save-error") {
+        closeInProgress = false;
+        port.showStatus("资产库尚未安全保存，请先重试或放弃未保存修改", 5000);
+        return;
+      }
       try {
-        await persistImmediately();
-        await appWindow.destroy();
-      } catch {
-        port.showStatus("资产库尚未安全保存，已取消退出", 5000);
+        const closeBehavior = await port.requestCloseChoice();
+        if (!closeBehavior) return;
+        if (hasUnsavedChanges()) await persistImmediately();
+        if (closeBehavior === "minimize") {
+          await appWindow.minimize();
+        } else {
+          await appWindow.destroy();
+        }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error ?? "");
+        port.showStatus(reason ? `关闭失败：${reason}` : "资产库尚未安全保存，已取消退出", 7000);
+      } finally {
+        closeInProgress = false;
       }
     }).then((removeListener) => {
       if (destroyed) removeListener();

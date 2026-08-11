@@ -16,7 +16,6 @@ import {
 export { ConfigImportError } from "./config/shared";
 export {
   normalizeDeviceTypeMetaList,
-  normalizeHiddenDeviceTypes,
   normalizeVaultIdentityData,
 } from "./config/normalization";
 
@@ -31,10 +30,9 @@ export function createConfigMeta() {
 export function createConfigPayload(
   items: VaultItem[],
   customDeviceTypes: DeviceTypeMeta[],
-  hiddenDeviceTypes: string[],
   format: ConfigFormat,
 ) {
-  const config = createConfigData(items, customDeviceTypes, hiddenDeviceTypes);
+  const config = createConfigData(items, customDeviceTypes);
   if (format === "csv") return createCsvConfigPayload(config);
   if (format === "yaml") return createYamlConfigPayload(config);
   return JSON.stringify(createJsonConfigPayload(config), null, 2);
@@ -139,12 +137,11 @@ export function formatConfigSummary(summary: ConfigSummary) {
   ];
 }
 
-function createConfigData(items: VaultItem[], customDeviceTypes: DeviceTypeMeta[], hiddenDeviceTypes: string[]): ConfigData {
+function createConfigData(items: VaultItem[], customDeviceTypes: DeviceTypeMeta[]): ConfigData {
   const normalized = normalizeVaultIdentityData(items, customDeviceTypes);
   return {
     meta: createConfigMeta(),
     items: normalized.items,
     customDeviceTypes: normalized.customDeviceTypes,
-    hiddenDeviceTypes,
   };
 }

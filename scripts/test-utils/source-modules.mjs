@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { transformWithEsbuild } from "vite";
 
 const moduleCache = new Map();
-const compiledLibDir = fileURLToPath(new URL("../../node_modules/.cache/device-password-manager-smoke-lib/", import.meta.url));
+const compiledLibDir = fileURLToPath(new URL("../../node_modules/.cache/psd-manager-smoke-lib/", import.meta.url));
 const sourceLibDir = fileURLToPath(new URL("../../src/lib/", import.meta.url));
 let compilePromise = null;
 

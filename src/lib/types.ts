@@ -1,5 +1,6 @@
 export type DeviceType = string;
 export type ConfigImportMode = "replace" | "add-missing";
+export type CloseBehavior = "exit" | "minimize";
 export type ConfirmationSummaryItem = { label: string; value: string };
 export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
@@ -153,7 +154,6 @@ export type VaultSnapshot = {
   reason: string;
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  hiddenDeviceTypes: string[];
 };
 
 export type PersistedVaultState = {
@@ -161,7 +161,6 @@ export type PersistedVaultState = {
   revision: number;
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  hiddenDeviceTypes: string[];
   paneLayout: {
     sidebarRatio?: number;
     listRatio?: number;
@@ -194,7 +193,6 @@ export type ConfigFormat = "json" | "csv" | "yaml";
 export type ConfigData = {
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  hiddenDeviceTypes: string[];
   meta: {
     appName: string;
     formatVersion: number;

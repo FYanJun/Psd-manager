@@ -25,14 +25,13 @@ export function getFilteredVaultItems(
 
 export function getVisibleDeviceTypeOptions(
   customDeviceTypes: DeviceTypeMeta[],
-  hiddenDeviceTypes: string[],
 ) {
   return [
     ...defaultDeviceTypeMeta
-      .filter((type) => type.label !== "全部设备" && !hiddenDeviceTypes.includes(type.label))
+      .filter((type) => type.label !== "全部设备")
       .map((type) => customDeviceTypes.find((custom) => custom.label === type.label) ?? type),
     ...customDeviceTypes.filter((custom) =>
-      !defaultDeviceTypeMeta.some((type) => type.label === custom.label) || hiddenDeviceTypes.includes(custom.label)
+      !defaultDeviceTypeMeta.some((type) => type.label === custom.label)
     ),
   ];
 }

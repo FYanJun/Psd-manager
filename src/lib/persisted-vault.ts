@@ -1,6 +1,6 @@
 import { VAULT_SCHEMA_VERSION } from "./constants";
 import type { DeviceAccount, DeviceTypeMeta, PasswordHistory, PersistedVaultState, VaultItem, VaultSnapshot } from "./types";
-import { normalizeHiddenDeviceTypes, normalizeVaultIdentityData } from "./config";
+import { normalizeVaultIdentityData } from "./config";
 import { isUuid } from "./uuid";
 import { getAccounts, syncItemWithAccounts } from "./vault";
 
@@ -171,15 +171,6 @@ function validateDeviceTypes(value: unknown, path: string, requireIdentity: bool
   });
 }
 
-function validateHiddenTypes(value: unknown, path: string) {
-  const result = requireArray(value, path).map((entry, index) => {
-    if (typeof entry !== "string") throw new VaultSchemaError(`${path}[${index}]必须是文本`);
-    return entry;
-  });
-  if (new Set(result).size !== result.length) throw new VaultSchemaError(`${path}存在重复类型`);
-  return result;
-}
-
 function validateSnapshots(value: unknown, path: string, requireIdentity: boolean): VaultSnapshot[] {
   const ids = new Set<string>();
   return requireArray(value, path).map((entry, index) => {
@@ -197,7 +188,6 @@ function validateSnapshots(value: unknown, path: string, requireIdentity: boolea
       reason: requireString(record, "reason", entryPath),
       items: validateItems(record.items, `${entryPath}.items`, requireIdentity, deviceTypes),
       customDeviceTypes,
-      hiddenDeviceTypes: validateHiddenTypes(record.hiddenDeviceTypes, `${entryPath}.hiddenDeviceTypes`),
     };
   });
 }
@@ -227,7 +217,6 @@ function validateVersionedState(value: unknown, expectedVersion: number): Persis
     revision: requireInteger(record, "revision", "资产库"),
     items: validateItems(record.items, "items", requireIdentity, deviceTypes),
     customDeviceTypes,
-    hiddenDeviceTypes: validateHiddenTypes(record.hiddenDeviceTypes, "hiddenDeviceTypes"),
     paneLayout: validatePaneLayout(record.paneLayout),
     snapshots: validateSnapshots(record.snapshots, "snapshots", requireIdentity).slice(0, 10),
   };
@@ -291,14 +280,12 @@ function migrateLegacySnapshot(value: unknown, index: number, registry: LegacyId
     reason: typeof record.reason === "string" ? record.reason : "旧版数据快照",
     items: normalized.items,
     customDeviceTypes: normalized.customDeviceTypes,
-    hiddenDeviceTypes: normalizeHiddenDeviceTypes(record.hiddenDeviceTypes, normalized.items),
   };
 }
 
 function migrateLegacyState(value: Record<string, unknown>): PersistedVaultState {
   const registry = createLegacyIdentityRegistry();
   const normalized = normalizeLegacyIdentityData(requireArray(value.items, "items"), value.customDeviceTypes, registry);
-  const hiddenDeviceTypes = normalizeHiddenDeviceTypes(value.hiddenDeviceTypes, normalized.items);
   const paneLayout = isRecord(value.paneLayout) ? validatePaneLayout(value.paneLayout) : {};
   const snapshots = value.snapshots === undefined
     ? []
@@ -310,7 +297,6 @@ function migrateLegacyState(value: Record<string, unknown>): PersistedVaultState
     revision: Number.isSafeInteger(value.revision) ? value.revision : 0,
     items: normalized.items,
     customDeviceTypes: normalized.customDeviceTypes,
-    hiddenDeviceTypes,
     paneLayout,
     snapshots,
   }, VAULT_SCHEMA_VERSION);

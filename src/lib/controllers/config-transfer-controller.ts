@@ -10,7 +10,6 @@ import {
   getConfigMimeType,
   getConfigSummary,
   inferConfigFormat,
-  normalizeHiddenDeviceTypes,
   parseConfigContentWithFallback,
 } from "../config";
 import type {
@@ -32,7 +31,6 @@ import {
 export type ConfigTransferState = {
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  hiddenDeviceTypes: string[];
   pendingImportedConfig: ConfigData | null;
   pendingConfigFormat: ConfigFormat;
   importConfigMode: ConfigImportMode;
@@ -74,7 +72,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
 
   async function exportConfig(format: ConfigFormat = port.read().exportConfigFormat) {
     const state = port.read();
-    const payload = createConfigPayload(state.items, state.customDeviceTypes, state.hiddenDeviceTypes, format);
+    const payload = createConfigPayload(state.items, state.customDeviceTypes, format);
     const filename = createConfigFilename(format);
     const formatLabel = format.toUpperCase();
     port.setActivePopover(null);
@@ -163,7 +161,6 @@ export function createConfigTransferController(port: ConfigTransferPort) {
       mergedConfig = mergeMissingImportedConfig(
         state.items,
         state.customDeviceTypes,
-        state.hiddenDeviceTypes,
         config,
       );
     } catch (error) {
@@ -229,7 +226,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     const state = port.read();
     const nextConfig = mode === "replace"
       ? config
-      : mergeMissingImportedConfig(state.items, state.customDeviceTypes, state.hiddenDeviceTypes, config);
+      : mergeMissingImportedConfig(state.items, state.customDeviceTypes, config);
     const diff = getConfigDiffSummary(state.items, state.customDeviceTypes, nextConfig);
     const hasChanges = Object.values(diff).some((count) => count > 0);
     if (mode === "add-missing" && !hasChanges) {
@@ -246,7 +243,6 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     port.write({
       items: nextItems,
       customDeviceTypes: normalized.customDeviceTypes,
-      hiddenDeviceTypes: normalizeHiddenDeviceTypes(nextConfig.hiddenDeviceTypes, nextItems),
     });
     if (mode === "replace") port.resetWorkspaceAfterReplace(nextItems);
     port.offerSnapshotUndo(snapshot.id, `${format.toUpperCase()} 配置已按“${modeLabel}”导入`);

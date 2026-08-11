@@ -848,22 +848,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "device-password-manager"
-version = "0.1.10"
-dependencies = [
- "aes-gcm",
- "fs4",
- "keyring",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-single-instance",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2906,6 +2890,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "psd-manager"
+version = "0.1.11"
+dependencies = [
+ "aes-gcm",
+ "fs4",
+ "keyring",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-single-instance",
 ]
 
 [[package]]

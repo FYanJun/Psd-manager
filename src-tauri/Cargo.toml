@@ -1,16 +1,16 @@
 [package]
-name = "device-password-manager"
-version = "0.1.10"
-description = "密码管理器"
+name = "psd-manager"
+version = "0.1.11"
+description = "Psd Manager - 密码管理器"
 authors = ["FanYanJun"]
 edition = "2021"
 
 [lib]
-name = "device_password_manager_lib"
+name = "psd_manager_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "device-password-manager"
+name = "psd-manager"
 path = "src/main.rs"
 
 [build-dependencies]

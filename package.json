@@ -1,6 +1,6 @@
 {
-  "name": "device-password-manager",
-  "version": "0.1.10",
+  "name": "psd-manager",
+  "version": "0.1.11",
   "private": true,
   "type": "module",
   "scripts": {

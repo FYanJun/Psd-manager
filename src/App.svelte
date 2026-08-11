@@ -41,6 +41,7 @@
     ConfigData,
     ConfigFormat,
     ConfigImportMode,
+    CloseBehavior,
     ConfirmationAction,
     DeviceForm,
     DeviceType,
@@ -62,7 +63,6 @@
   import { filterDeviceTypeChoices } from "./lib/utils";
   import {
     normalizeDeviceTypeMetaList,
-    normalizeHiddenDeviceTypes,
     normalizeVaultIdentityData,
   } from "./lib/config";
   import {
@@ -77,12 +77,13 @@
 
   let items: VaultItem[] = initialItems;
   let customDeviceTypes: DeviceTypeMeta[] = [];
-  let hiddenDeviceTypes: string[] = [];
   let vaultSnapshots: VaultSnapshot[] = [];
   let vaultStorageState: VaultStorageState = "loading";
   let vaultStorageError = "";
   let legacyVaultKeyMigrationRequired = false;
   let vaultBackupRecoveryRequired = false;
+  let closePromptOpen = false;
+  let closeChoiceResolver: ((choice: CloseBehavior | null) => void) | null = null;
   let hydrated = false;
   let searchQuery = "";
   let selectedDeviceType: "全部设备" | DeviceType = "全部设备";
@@ -150,6 +151,22 @@
   let passwordStrengthRequestId = 0;
   let canUseGeneratorForCurrentAccount = true;
   let canUseGeneratorForBulkUpdate = true;
+
+  function requestCloseChoice() {
+    return new Promise<CloseBehavior | null>((resolve) => {
+      closeChoiceResolver?.(null);
+      closeChoiceResolver = resolve;
+      closePromptOpen = true;
+      activePopover = null;
+    });
+  }
+
+  function resolveCloseChoice(choice: CloseBehavior | null) {
+    const resolve = closeChoiceResolver;
+    closeChoiceResolver = null;
+    closePromptOpen = false;
+    resolve?.(choice);
+  }
 
   const layoutController = createWorkspaceLayoutController({
     read: () => ({ sidebarRatio, listRatio, generatorRatio }),
@@ -247,14 +264,13 @@
       searchInput?.select();
     },
     isDeviceTypeAvailable: (deviceType) => deviceType === "全部设备"
-      || getVisibleDeviceTypeOptions(customDeviceTypes, hiddenDeviceTypes).some((type) => type.label === deviceType),
+      || getVisibleDeviceTypeOptions(customDeviceTypes).some((type) => type.label === deviceType),
   });
 
   const deviceTypeController = createDeviceTypeController({
     read: (): DeviceTypeControllerState => ({
       items,
       customDeviceTypes,
-      hiddenDeviceTypes,
       selectedDeviceType,
       selectedId,
       selectedAccountIds,
@@ -263,7 +279,6 @@
     write: (patch) => {
       if (patch.items) items = patch.items;
       if (patch.customDeviceTypes) customDeviceTypes = patch.customDeviceTypes;
-      if (patch.hiddenDeviceTypes) hiddenDeviceTypes = patch.hiddenDeviceTypes;
       if (patch.selectedDeviceType) selectedDeviceType = patch.selectedDeviceType;
       if (patch.selectedId !== undefined) selectedId = patch.selectedId;
       if (patch.selectedAccountIds) selectedAccountIds = patch.selectedAccountIds;
@@ -459,10 +474,11 @@
       vaultBackupRecoveryRequired = state.canRecoverBackup;
       hydrated = state.hydrated;
     },
+    requestCloseChoice,
   });
 
   const snapshotController = createSnapshotController({
-    read: () => ({ items, customDeviceTypes, hiddenDeviceTypes, snapshots: vaultSnapshots }),
+    read: () => ({ items, customDeviceTypes, snapshots: vaultSnapshots }),
     writeSnapshots: (snapshots) => (vaultSnapshots = snapshots),
     applySnapshot: applySnapshotData,
     setActiveDialog: (dialog) => (activeDialog = dialog),
@@ -476,7 +492,6 @@
     read: (): ConfigTransferState => ({
       items,
       customDeviceTypes,
-      hiddenDeviceTypes,
       pendingImportedConfig,
       pendingConfigFormat,
       importConfigMode,
@@ -485,7 +500,6 @@
     write: (patch) => {
       if (patch.items) items = patch.items;
       if (patch.customDeviceTypes) customDeviceTypes = patch.customDeviceTypes;
-      if (patch.hiddenDeviceTypes) hiddenDeviceTypes = patch.hiddenDeviceTypes;
       if ("pendingImportedConfig" in patch) pendingImportedConfig = patch.pendingImportedConfig ?? null;
       if (patch.pendingConfigFormat) pendingConfigFormat = patch.pendingConfigFormat;
       if (patch.importConfigMode) importConfigMode = patch.importConfigMode;
@@ -507,7 +521,6 @@
     items = normalized.items;
     customDeviceTypes = normalized.customDeviceTypes;
     ensureDeviceTypeMetaForItems(items);
-    hiddenDeviceTypes = normalizeHiddenDeviceTypes(parsed.hiddenDeviceTypes, items);
     vaultSnapshots = Array.isArray(parsed.snapshots) ? parsed.snapshots.slice(0, 10) : [];
     layoutController.restore(parsed.paneLayout);
   }
@@ -518,7 +531,6 @@
       revision,
       items,
       customDeviceTypes,
-      hiddenDeviceTypes,
       snapshots: vaultSnapshots,
       paneLayout: { sidebarRatio, listRatio, generatorRatio },
     };
@@ -531,7 +543,6 @@
   function applySnapshotData(snapshot: VaultSnapshot) {
     items = normalizeVaultItems(snapshot.items);
     customDeviceTypes = normalizeDeviceTypeMetaList(snapshot.customDeviceTypes);
-    hiddenDeviceTypes = normalizeHiddenDeviceTypes(snapshot.hiddenDeviceTypes, items);
     ensureDeviceTypeMetaForItems(items);
     resetWorkspaceForDataset(items);
   }
@@ -591,7 +602,6 @@
   $: if (hydrated) {
     items;
     customDeviceTypes;
-    hiddenDeviceTypes;
     vaultSnapshots;
     sidebarRatio;
     listRatio;
@@ -618,7 +628,7 @@
     selectedAccountIds = [];
   }
 
-  $: deviceTypeOptions = getVisibleDeviceTypeOptions(customDeviceTypes, hiddenDeviceTypes);
+  $: deviceTypeOptions = getVisibleDeviceTypeOptions(customDeviceTypes);
   $: deviceTypeRows = getDeviceTypeRows(deviceTypeOptions, deviceTypeSortMode, items);
   $: filteredDeviceTypeOptions = filterDeviceTypeChoices(deviceTypeOptions, deviceTypeSearch);
   $: filteredBulkTypeRows = filterDeviceTypeChoices(deviceTypeRows, bulkTypeSearch);
@@ -1437,6 +1447,9 @@
     {dismissStatus}
     {statusActionLabel}
     {runStatusAction}
+    {closePromptOpen}
+    chooseCloseBehavior={(behavior) => resolveCloseChoice(behavior)}
+    cancelCloseChoice={() => resolveCloseChoice(null)}
     tooltipEnabled={vaultStorageState === "ready"}
   />
 </main>

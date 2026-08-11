@@ -64,10 +64,3 @@ export function normalizeVaultIdentityData(itemsValue: unknown, typesValue: unkn
     customDeviceTypes,
   };
 }
-
-export function normalizeHiddenDeviceTypes(value: unknown, protectedItems: VaultItem[] = []) {
-  if (!Array.isArray(value)) return [];
-  const protectedLabels = new Set(protectedItems.map((item) => item.deviceType.trim()).filter(Boolean));
-  return Array.from(new Set(value.map((type) => readString(type).trim())))
-    .filter((type) => Boolean(type) && type !== "全部设备" && !protectedLabels.has(type));
-}

@@ -1,4 +1,4 @@
-import { defaultDeviceTypeMeta, fallbackDeviceTypeMeta } from "../constants";
+import { fallbackDeviceTypeMeta } from "../constants";
 import { isValidDeviceTypeColor, isValidDeviceTypeIconText } from "../input-validation";
 import { getVisibleDeviceTypeOptions } from "../selectors/device-selectors";
 import type {
@@ -19,7 +19,6 @@ type DeviceTypeSelection = "全部设备" | DeviceType;
 export type DeviceTypeControllerState = {
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  hiddenDeviceTypes: string[];
   selectedDeviceType: DeviceTypeSelection;
   selectedId: number;
   selectedAccountIds: number[];
@@ -41,7 +40,7 @@ export type DeviceTypeControllerPort = {
 };
 
 function getVisibleTypes(state: DeviceTypeControllerState) {
-  return getVisibleDeviceTypeOptions(state.customDeviceTypes, state.hiddenDeviceTypes);
+  return getVisibleDeviceTypeOptions(state.customDeviceTypes);
 }
 
 export function createDeviceTypeController(port: DeviceTypeControllerPort) {
@@ -166,14 +165,8 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       port.showStatus(`该类型下已有 ${currentDeviceCount} 个设备，已取消删除`);
       return;
     }
-    const currentDeviceType = currentTypeMeta.label;
     port.pushNavigationState();
-    const isVisibleDefault = defaultDeviceTypeMeta.some((type) => type.label === currentDeviceType)
-      && !current.hiddenDeviceTypes.includes(currentDeviceType);
     port.write({
-      hiddenDeviceTypes: isVisibleDefault
-        ? [...current.hiddenDeviceTypes, currentDeviceType]
-        : current.hiddenDeviceTypes,
       customDeviceTypes: current.customDeviceTypes.filter((type) => type.uuid !== typeMeta.uuid),
       selectedDeviceType: "全部设备",
       selectedId: current.items[0]?.id ?? 0,
@@ -267,20 +260,10 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       iconText: form.iconText.trim() || label.slice(0, 1),
       color: form.color,
     };
-    let hiddenDeviceTypes = state.hiddenDeviceTypes;
-    if (defaultDeviceTypeMeta.some((type) => type.label === label) && hiddenDeviceTypes.includes(label)) {
-      hiddenDeviceTypes = hiddenDeviceTypes.filter((type) => type !== label);
-    }
-
     let customDeviceTypes = state.customDeviceTypes;
     let items = state.items;
     const updatedAt = originalLabel ? formatDateTime(new Date()) : "";
     if (originalLabel) {
-      const renamedDefault = originalLabel !== label
-        && defaultDeviceTypeMeta.some((type) => type.label === originalLabel);
-      if (renamedDefault && !hiddenDeviceTypes.includes(originalLabel)) {
-        hiddenDeviceTypes = [...hiddenDeviceTypes, originalLabel];
-      }
       customDeviceTypes = [
         ...customDeviceTypes.filter((type) => type.uuid !== originalUuid),
         nextMeta,
@@ -303,7 +286,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       customDeviceTypes = [...customDeviceTypes, nextMeta];
     }
 
-    port.write({ items, customDeviceTypes, hiddenDeviceTypes });
+    port.write({ items, customDeviceTypes });
     port.pushNavigationState();
     port.write({ selectedDeviceType: label });
     port.setActiveDialog(null);

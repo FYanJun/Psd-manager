@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "密码管理器",
-  "version": "0.1.10",
-  "identifier": "com.fan.device-password-manager",
+  "productName": "Psd Manager",
+  "version": "0.1.11",
+  "identifier": "com.fan.psd-manager",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:5173",
@@ -18,6 +18,8 @@
         "minWidth": 1024,
         "minHeight": 720,
         "resizable": true,
+        "minimizable": true,
+        "closable": true,
         "devtools": false,
         "fullscreen": false
       }

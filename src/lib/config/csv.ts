@@ -202,7 +202,6 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
     },
     items: normalized.items,
     customDeviceTypes: normalized.customDeviceTypes,
-    hiddenDeviceTypes: [],
   };
 }
 

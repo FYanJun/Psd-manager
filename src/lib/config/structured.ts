@@ -114,7 +114,6 @@ export function parseStructuredConfigPayload(parsed: Record<string, unknown>): C
     },
     items: normalized.items,
     customDeviceTypes: normalized.customDeviceTypes,
-    hiddenDeviceTypes: [],
   };
 }
 

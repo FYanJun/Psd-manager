@@ -4,7 +4,6 @@ import { createVaultSnapshot } from "../vault-recovery";
 type SnapshotState = {
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  hiddenDeviceTypes: string[];
   snapshots: VaultSnapshot[];
 };
 
@@ -21,14 +20,14 @@ type SnapshotControllerPort = {
 
 export function createSnapshotController(port: SnapshotControllerPort) {
   function dataSignature() {
-    const { items, customDeviceTypes, hiddenDeviceTypes } = port.read();
-    return JSON.stringify({ items, customDeviceTypes, hiddenDeviceTypes });
+    const { items, customDeviceTypes } = port.read();
+    return JSON.stringify({ items, customDeviceTypes });
   }
 
   async function createSafetySnapshot(reason: string) {
     const state = port.read();
     const previousSnapshots = state.snapshots;
-    const snapshot = createVaultSnapshot(reason, state.items, state.customDeviceTypes, state.hiddenDeviceTypes);
+    const snapshot = createVaultSnapshot(reason, state.items, state.customDeviceTypes);
     port.writeSnapshots([snapshot, ...previousSnapshots].slice(0, 10));
     try {
       await port.persistImmediately();

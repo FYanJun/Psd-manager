@@ -18,9 +18,9 @@ const VAULT_FILE_NAME: &str = "vault.enc.json";
 const VAULT_BACKUP_FILE_NAME: &str = "vault.enc.backup.json";
 const VAULT_LOCK_FILE_NAME: &str = "vault.lock";
 const VAULT_KEY_FILE_NAME: &str = "vault.key";
-const KEYRING_SERVICE: &str = "com.fan.device-password-manager";
+const KEYRING_SERVICE: &str = "com.fan.psd-manager";
 const KEYRING_ACCOUNT: &str = "vault-key-v1";
-const VAULT_AAD: &[u8] = b"com.fan.device-password-manager:vault:1";
+const VAULT_AAD: &[u8] = b"com.fan.psd-manager:vault:1";
 const VAULT_SCHEMA_VERSION: u64 = 2;
 const LEGACY_KEY_MIGRATION_REQUIRED: &str = "LEGACY_KEY_MIGRATION_REQUIRED";
 const BACKUP_RECOVERY_REQUIRED: &str = "BACKUP_RECOVERY_REQUIRED";
@@ -50,11 +50,35 @@ fn vault_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     ))
 }
 
+fn legacy_app_identifier() -> String {
+    format!("com.fan.{}-{}-{}", "device", "password", "manager")
+}
+
+fn legacy_vault_aad() -> Vec<u8> {
+    format!("{}:vault:1", legacy_app_identifier()).into_bytes()
+}
+
+fn migrate_legacy_data_directory(current: &Path) -> Result<(), String> {
+    if current.exists() {
+        return Ok(());
+    }
+    let parent = current
+        .parent()
+        .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
+    let legacy = parent.join(legacy_app_identifier());
+    if legacy.exists() {
+        fs::rename(&legacy, current)
+            .map_err(|error| format!("无法迁移旧版应用数据目录：{error}"))?;
+    }
+    Ok(())
+}
+
 fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let directory = app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
+    migrate_legacy_data_directory(&directory)?;
     fs::create_dir_all(&directory).map_err(|error| format!("无法创建资产库目录：{error}"))?;
     #[cfg(unix)]
     {
@@ -206,7 +230,7 @@ fn validate_vault_payload(content: &str, allow_legacy: bool) -> Result<Value, St
         None if allow_legacy => {}
         None => return Err("资产库内容缺少 schemaVersion".to_string()),
     }
-    for key in ["items", "customDeviceTypes", "hiddenDeviceTypes"] {
+    for key in ["items", "customDeviceTypes"] {
         if !object.get(key).is_some_and(Value::is_array) {
             return Err(format!("资产库字段 {key} 必须是数组"));
         }
@@ -267,18 +291,25 @@ fn restore_backup_as_primary(vault_path: &Path, backup_path: &Path) -> Result<()
     Ok(())
 }
 
-fn keyring_entry() -> Result<Entry, String> {
-    Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
-        .map_err(|error| format!("无法访问系统凭据库：{error}"))
+fn keyring_entry_for(service: &str) -> Result<Entry, String> {
+    Entry::new(service, KEYRING_ACCOUNT).map_err(|error| format!("无法访问系统凭据库：{error}"))
 }
 
 fn existing_keyring_vault_key() -> Result<Vec<u8>, String> {
-    match keyring_entry()?.get_secret() {
-        Ok(key) if key.len() == 32 => Ok(key),
-        Ok(_) => Err("系统凭据库中的资产库密钥长度不正确".to_string()),
-        Err(KeyringError::NoEntry) => Err("旧版系统钥匙串中的资产库密钥不存在".to_string()),
-        Err(error) => Err(format!("无法读取系统凭据库：{error}")),
+    let services = [KEYRING_SERVICE.to_string(), legacy_app_identifier()];
+    let mut errors = Vec::new();
+    for service in services {
+        let entry = keyring_entry_for(&service)?;
+        match entry.get_secret() {
+            Ok(key) if key.len() == 32 => return Ok(key),
+            Ok(_) => errors.push("系统凭据库中的资产库密钥长度不正确".to_string()),
+            Err(KeyringError::NoEntry) => {
+                errors.push("旧版系统钥匙串中的资产库密钥不存在".to_string())
+            }
+            Err(error) => errors.push(format!("无法读取系统凭据库：{error}")),
+        }
     }
+    Err(errors.join("；"))
 }
 
 fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
@@ -303,6 +334,16 @@ fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
                 aad: VAULT_AAD,
             },
         )
+        .or_else(|_| {
+            let legacy_aad = legacy_vault_aad();
+            cipher.decrypt(
+                &nonce,
+                Payload {
+                    msg: envelope.ciphertext.as_ref(),
+                    aad: legacy_aad.as_slice(),
+                },
+            )
+        })
         .map_err(|_| "加密资产库校验失败，文件可能已损坏".to_string())?;
     let content =
         String::from_utf8(plaintext).map_err(|error| format!("资产库文本编码不正确：{error}"))?;

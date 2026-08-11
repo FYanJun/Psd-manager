@@ -101,7 +101,6 @@ function makeConfig(items = [makeItem()], customDeviceTypes = makeTypes()) {
   return {
     items: clone(items),
     customDeviceTypes: clone(customDeviceTypes),
-    hiddenDeviceTypes: [],
     meta: {
       appName: "密码管理器",
       formatVersion: 3,
@@ -292,7 +291,7 @@ test("JSON, CSV, and YAML configuration payloads round-trip UUID and account his
   const config = makeConfig();
 
   for (const format of ["json", "csv", "yaml"]) {
-    const payload = createConfigPayload(config.items, config.customDeviceTypes, config.hiddenDeviceTypes, format);
+    const payload = createConfigPayload(config.items, config.customDeviceTypes, format);
     const parsed = parseConfigContent(payload, format);
     assert.equal(parsed.meta.formatVersion, 3);
     assert.equal(parsed.items[0].uuid, IDS.deviceA);
@@ -342,7 +341,6 @@ test("only-add import merges missing accounts and history, then rejects ownershi
   const merged = mergeMissingImportedConfig(
     [currentItem],
     makeTypes(),
-    [],
     makeConfig([incomingItem]),
   );
   assert.equal(merged.items[0].accounts.length, 2);
@@ -356,7 +354,7 @@ test("only-add import merges missing accounts and history, then rejects ownershi
     accounts: [makeAccount()],
   });
   assert.throws(
-    () => mergeMissingImportedConfig([currentItem], makeTypes(), [], makeConfig([movedAccount])),
+    () => mergeMissingImportedConfig([currentItem], makeTypes(), makeConfig([movedAccount])),
     /账号 UUID .*已属于设备/,
   );
 
@@ -364,7 +362,7 @@ test("only-add import merges missing accounts and history, then rejects ownershi
     accounts: [makeAccount({ history: [makeHistory({ password: "tampered" })] })],
   });
   assert.throws(
-    () => mergeMissingImportedConfig([currentItem], makeTypes(), [], makeConfig([changedHistory])),
+    () => mergeMissingImportedConfig([currentItem], makeTypes(), makeConfig([changedHistory])),
     /密码历史 UUID .*内容不一致/,
   );
 });
@@ -377,7 +375,6 @@ test("persisted vault validation accepts schema v2 and rejects duplicate identit
     revision: 7,
     items: [item],
     customDeviceTypes: makeTypes(),
-    hiddenDeviceTypes: [],
     paneLayout: { sidebarRatio: 0.14, listRatio: 0.21, generatorRatio: 0.32 },
     snapshots: [],
   };

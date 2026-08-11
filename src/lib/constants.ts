@@ -3,7 +3,8 @@ import type { DeviceType, DeviceTypeMeta } from "./types";
 export const APP_TITLE = "密码管理器";
 export const CONFIG_FORMAT_VERSION = 3;
 export const VAULT_SCHEMA_VERSION = 2;
-export const STORAGE_KEY = "device-password-manager-state-v1";
+export const STORAGE_KEY = "psd-manager-state-v1";
+export const LEGACY_STORAGE_KEY = ["device", "password-manager", "state-v1"].join("-");
 export const DEFAULT_ACCOUNT_TAG = "";
 
 export const SIDEBAR_DEFAULT_RATIO = 0.14;

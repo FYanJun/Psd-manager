@@ -62,7 +62,7 @@ jobs:
           const packageLock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
           const tauri = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
           const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8").match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-          const cargoLock = fs.readFileSync("src-tauri/Cargo.lock", "utf8").match(/\[\[package\]\][\s\S]*?^name = "device-password-manager"$\r?\n^version = "([^"]+)"/m)?.[1];
+          const cargoLock = fs.readFileSync("src-tauri/Cargo.lock", "utf8").match(/\[\[package\]\][\s\S]*?^name = "psd-manager"$\r?\n^version = "([^"]+)"/m)?.[1];
           const versions = [packageJson.version, packageLock.version, packageLock.packages?.[""].version, tauri.version, cargo, cargoLock];
           if (versions.some((version) => version !== expected)) {
             throw new Error(`发布 tag ${expected} 与本地版本不一致：${versions.join(", ")}`);
@@ -112,7 +112,7 @@ jobs:
 
           let source;
           if (platform === "windows" && kind === "portable") {
-            source = path.join(root, "src-tauri", "target", "release", "device-password-manager.exe");
+            source = path.join(root, "src-tauri", "target", "release", "psd-manager.exe");
             if (!fs.existsSync(source)) throw new Error(`未找到 Windows 免安装程序：${source}`);
           } else if (platform === "macos" && kind === "installer") {
             source = firstFile(path.join(root, "src-tauri", "target", "release", "bundle", "dmg"), ".dmg");
@@ -169,6 +169,6 @@ jobs:
             macOS 当前未配置 Apple Developer ID 签名和公证。如果 macOS 提示“已损坏，无法打开”，请将应用拖入“应用程序”后执行：
 
             ```bash
-            xattr -dr com.apple.quarantine "/Applications/密码管理器.app"
+            xattr -dr com.apple.quarantine "/Applications/Psd Manager.app"
             ```
           files: release-assets/*

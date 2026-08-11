@@ -1,5 +1,5 @@
 import type { ConfigData, ConfigDiffSummary, DeviceAccount, DeviceTypeMeta, PasswordHistory, VaultItem, VaultSnapshot } from "./types";
-import { ConfigImportError, normalizeHiddenDeviceTypes } from "./config";
+import { ConfigImportError } from "./config";
 import { getAccounts, normalizeVaultItems, syncItemWithAccounts } from "./vault";
 
 function cloneValue<T>(value: T): T {
@@ -106,7 +106,6 @@ export function createVaultSnapshot(
   reason: string,
   items: VaultItem[],
   customDeviceTypes: DeviceTypeMeta[],
-  hiddenDeviceTypes: string[]
 ): VaultSnapshot {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -114,7 +113,6 @@ export function createVaultSnapshot(
     reason,
     items: cloneValue(items),
     customDeviceTypes: cloneValue(customDeviceTypes),
-    hiddenDeviceTypes: cloneValue(hiddenDeviceTypes),
   };
 }
 
@@ -146,7 +144,6 @@ export function getConfigDiffSummary(
 export function mergeMissingImportedConfig(
   currentItems: VaultItem[],
   currentTypes: DeviceTypeMeta[],
-  currentHiddenTypes: string[],
   incoming: ConfigData,
 ): ConfigData {
   const incomingDevices = new Map(incoming.items.map((item) => [item.uuid, item]));
@@ -278,7 +275,6 @@ export function mergeMissingImportedConfig(
   return {
     items,
     customDeviceTypes,
-    hiddenDeviceTypes: normalizeHiddenDeviceTypes(currentHiddenTypes, items),
     meta: cloneValue(incoming.meta),
   };
 }
