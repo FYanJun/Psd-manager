@@ -14,11 +14,13 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-#[cfg(target_os = "windows")]
+#[cfg(desktop)]
+use tauri::Emitter;
+
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    WindowEvent,
 };
 
 const VAULT_FILE_NAME: &str = "vault.enc.json";
@@ -256,7 +258,7 @@ fn validate_vault_payload(content: &str, allow_legacy: bool) -> Result<Value, St
     Ok(value)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(desktop)]
 fn restore_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -613,36 +615,23 @@ pub fn run() {
                     let _ = window.set_size(PhysicalSize::new(width.max(1024), height.max(720)));
                     let _ = window.center();
                 }
-
-                #[cfg(target_os = "windows")]
-                {
-                    let minimized_window = window.clone();
-                    window.on_window_event(move |event| {
-                        if matches!(event, WindowEvent::Resized(_) | WindowEvent::Focused(false))
-                            && minimized_window.is_minimized().unwrap_or(false)
-                        {
-                            let _ = minimized_window.unminimize();
-                            let _ = minimized_window.hide();
-                        }
-                    });
-                }
             }
 
-            #[cfg(target_os = "windows")]
+            #[cfg(desktop)]
             {
                 let show_item =
                     MenuItem::with_id(app, "show", "打开密码管理器", true, None::<&str>)?;
-                let exit_item = MenuItem::with_id(app, "exit", "退出应用", true, None::<&str>)?;
+                let exit_item = MenuItem::with_id(app, "exit", "关闭程序", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_item, &exit_item])?;
                 let mut tray = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .tooltip("密码管理器")
-                    .show_menu_on_left_click(true)
+                    .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| {
                         if event.id() == "show" {
                             restore_main_window(app);
                         } else if event.id() == "exit" {
-                            app.exit(0);
+                            let _ = app.emit("tray-exit-requested", ());
                         }
                     });
                 if let Some(icon) = app.default_window_icon().cloned() {

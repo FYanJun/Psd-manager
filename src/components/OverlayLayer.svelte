@@ -1,7 +1,6 @@
 <script lang="ts">
   import ActionPopover from "./ActionPopover.svelte";
   import AppDialog from "./AppDialog.svelte";
-  import CloseChoiceDialog from "./CloseChoiceDialog.svelte";
   import ConfirmationDialog from "./ConfirmationDialog.svelte";
   import GlobalTooltip from "./GlobalTooltip.svelte";
   import PasswordGeneratorDrawer from "./PasswordGeneratorDrawer.svelte";
@@ -13,7 +12,6 @@
     BulkPasswordForm,
     ConfigFormat,
     ConfigImportMode,
-    CloseBehavior,
     DeviceForm,
     PendingConfirmation,
     TypeForm,
@@ -75,9 +73,6 @@
   export let statusActionLabel = "";
   export let runStatusAction: () => void;
   export let tooltipEnabled = true;
-  export let closePromptOpen = false;
-  export let chooseCloseBehavior: (behavior: CloseBehavior) => void;
-  export let cancelCloseChoice: () => void;
 </script>
 
 <ActionPopover model={actionPopoverModel} actions={actionPopoverActions} />
@@ -141,5 +136,4 @@
   actionLabel={statusActionLabel}
   runAction={runStatusAction}
 />
-<CloseChoiceDialog open={closePromptOpen} choose={chooseCloseBehavior} cancel={cancelCloseChoice} />
 <GlobalTooltip enabled={tooltipEnabled} />

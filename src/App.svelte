@@ -41,7 +41,6 @@
     ConfigData,
     ConfigFormat,
     ConfigImportMode,
-    CloseBehavior,
     ConfirmationAction,
     DeviceForm,
     DeviceType,
@@ -82,8 +81,6 @@
   let vaultStorageError = "";
   let legacyVaultKeyMigrationRequired = false;
   let vaultBackupRecoveryRequired = false;
-  let closePromptOpen = false;
-  let closeChoiceResolver: ((choice: CloseBehavior | null) => void) | null = null;
   let hydrated = false;
   let searchQuery = "";
   let selectedDeviceType: "全部设备" | DeviceType = "全部设备";
@@ -151,22 +148,6 @@
   let passwordStrengthRequestId = 0;
   let canUseGeneratorForCurrentAccount = true;
   let canUseGeneratorForBulkUpdate = true;
-
-  function requestCloseChoice() {
-    return new Promise<CloseBehavior | null>((resolve) => {
-      closeChoiceResolver?.(null);
-      closeChoiceResolver = resolve;
-      closePromptOpen = true;
-      activePopover = null;
-    });
-  }
-
-  function resolveCloseChoice(choice: CloseBehavior | null) {
-    const resolve = closeChoiceResolver;
-    closeChoiceResolver = null;
-    closePromptOpen = false;
-    resolve?.(choice);
-  }
 
   const layoutController = createWorkspaceLayoutController({
     read: () => ({ sidebarRatio, listRatio, generatorRatio }),
@@ -474,7 +455,6 @@
       vaultBackupRecoveryRequired = state.canRecoverBackup;
       hydrated = state.hydrated;
     },
-    requestCloseChoice,
   });
 
   const snapshotController = createSnapshotController({
@@ -575,10 +555,6 @@
 
   async function retryVaultStorage() {
     await vaultStorageController.retry();
-  }
-
-  async function discardUnsavedChangesAndExit() {
-    await vaultStorageController.discardAndExit();
   }
 
   onMount(() => {
@@ -1387,7 +1363,6 @@
     migrateLegacyKey={migrateLegacyVaultKey}
     canRecoverBackup={vaultBackupRecoveryRequired}
     recoverBackup={recoverVaultBackup}
-    discardChangesAndExit={discardUnsavedChangesAndExit}
   />
 {/if}
 
@@ -1447,9 +1422,6 @@
     {dismissStatus}
     {statusActionLabel}
     {runStatusAction}
-    {closePromptOpen}
-    chooseCloseBehavior={(behavior) => resolveCloseChoice(behavior)}
-    cancelCloseChoice={() => resolveCloseChoice(null)}
     tooltipEnabled={vaultStorageState === "ready"}
   />
 </main>

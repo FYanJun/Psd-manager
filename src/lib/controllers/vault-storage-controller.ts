@@ -1,8 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { LEGACY_STORAGE_KEY, STORAGE_KEY } from "../constants";
 import { parsePersistedVaultContent, validatePersistedVaultState } from "../persisted-vault";
-import type { CloseBehavior, PersistedVaultState } from "../types";
+import type { PersistedVaultState } from "../types";
 
 export type VaultStorageState = "loading" | "ready" | "load-error" | "save-error";
 
@@ -26,7 +27,6 @@ type VaultStoragePort = {
   applyLoaded(state: PersistedVaultState): void;
   clampLayout(): void;
   showStatus(message: string, duration?: number): void;
-  requestCloseChoice(): Promise<CloseBehavior | null>;
   writeViewState(state: VaultStorageViewState): void;
 };
 
@@ -52,9 +52,10 @@ export function createVaultStorageController(port: VaultStoragePort) {
   let activeSave: PendingVaultSave | null = null;
   let saveTimer: ReturnType<typeof window.setTimeout> | null = null;
   let saveWaiters: VaultSaveWaiter[] = [];
-  let allowDiscardedExit = false;
   let closeInProgress = false;
+  let exitInProgress = false;
   let removeCloseRequestedListener: (() => void) | null = null;
+  let removeTrayExitListener: (() => void) | null = null;
   let destroyed = false;
 
   function publish() {
@@ -330,16 +331,6 @@ export function createVaultStorageController(port: VaultStoragePort) {
     }
   }
 
-  async function discardAndExit() {
-    allowDiscardedExit = true;
-    if (saveTimer) window.clearTimeout(saveTimer);
-    saveTimer = null;
-    pendingSave = null;
-    dirtyContent = "";
-    rejectWaiters(new Error("用户已放弃未保存的修改"));
-    if (isTauri()) await getCurrentWindow().destroy();
-  }
-
   function hasUnsavedChanges() {
     return Boolean(saveTimer || pendingSave || saveInFlight || dirtyContent);
   }
@@ -347,31 +338,45 @@ export function createVaultStorageController(port: VaultStoragePort) {
   function mountCloseProtection() {
     if (!isTauri()) return;
     const appWindow = getCurrentWindow();
+    void listen("tray-exit-requested", () => {
+      if (exitInProgress || closeInProgress) return;
+      exitInProgress = true;
+      void (async () => {
+        try {
+          if (storageState === "save-error") {
+            throw new Error("资产库尚未安全保存，请先重试保存");
+          }
+          if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+          await appWindow.destroy();
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error ?? "");
+          port.showStatus(reason || "资产库尚未安全保存，请先重试保存", 7000);
+          exitInProgress = false;
+        }
+      })();
+    }).then((removeListener) => {
+      if (destroyed) removeListener();
+      else removeTrayExitListener = removeListener;
+    });
     void appWindow.onCloseRequested(async (event) => {
-      if (allowDiscardedExit || storageState === "load-error" || storageState === "loading") return;
+      if (exitInProgress) return;
       if (closeInProgress) {
         event.preventDefault();
         return;
       }
       event.preventDefault();
       closeInProgress = true;
-      if (storageState === "save-error") {
-        closeInProgress = false;
-        port.showStatus("资产库尚未安全保存，请先重试或放弃未保存修改", 5000);
-        return;
-      }
       try {
-        const closeBehavior = await port.requestCloseChoice();
-        if (!closeBehavior) return;
-        if (hasUnsavedChanges()) await persistImmediately();
-        if (closeBehavior === "minimize") {
-          await appWindow.hide();
-        } else {
-          await appWindow.destroy();
-        }
+        if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+        await appWindow.hide();
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error ?? "");
-        port.showStatus(reason ? `关闭失败：${reason}` : "资产库尚未安全保存，已取消退出", 7000);
+        port.showStatus(reason ? `保存失败，窗口已隐藏：${reason}` : "窗口已隐藏，资产库尚未安全保存", 7000);
+        try {
+          await appWindow.hide();
+        } catch {
+          // The close request remains prevented; keep the process alive if hiding fails.
+        }
       } finally {
         closeInProgress = false;
       }
@@ -387,6 +392,8 @@ export function createVaultStorageController(port: VaultStoragePort) {
     saveTimer = null;
     removeCloseRequestedListener?.();
     removeCloseRequestedListener = null;
+    removeTrayExitListener?.();
+    removeTrayExitListener = null;
   }
 
   publish();
@@ -398,7 +405,6 @@ export function createVaultStorageController(port: VaultStoragePort) {
     retry,
     migrateLegacyKey,
     recoverBackup,
-    discardAndExit,
     hasUnsavedChanges,
     mountCloseProtection,
     destroy,

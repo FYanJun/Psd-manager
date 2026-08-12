@@ -1,6 +1,5 @@
 export type DeviceType = string;
 export type ConfigImportMode = "replace" | "add-missing";
-export type CloseBehavior = "exit" | "minimize";
 export type ConfirmationSummaryItem = { label: string; value: string };
 export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";

@@ -8,9 +8,8 @@
   export let migrateLegacyKey: () => void | Promise<void>;
   export let canRecoverBackup = false;
   export let recoverBackup: () => void | Promise<void>;
-  export let discardChangesAndExit: () => void | Promise<void>;
 
-  type CriticalStorageAction = "recover-backup" | "migrate-legacy" | "discard-changes";
+  type CriticalStorageAction = "recover-backup" | "migrate-legacy";
 
   const criticalActionCopy: Record<CriticalStorageAction, { title: string; detail: string; confirmLabel: string }> = {
     "recover-backup": {
@@ -23,11 +22,6 @@
       detail: "迁移会主动读取旧版密钥并写入当前资产库，只应在确认旧数据来源可信时执行。",
       confirmLabel: "确认迁移",
     },
-    "discard-changes": {
-      title: "确认放弃未保存修改？",
-      detail: "尚未写入资产库的最新修改会永久丢失，应用随后退出。",
-      confirmLabel: "放弃并退出",
-    },
   };
 
   let pendingCriticalAction: CriticalStorageAction | null = null;
@@ -37,7 +31,6 @@
     pendingCriticalAction = null;
     if (action === "recover-backup") await recoverBackup();
     if (action === "migrate-legacy") await migrateLegacyKey();
-    if (action === "discard-changes") await discardChangesAndExit();
   }
 </script>
 
@@ -72,9 +65,6 @@
           <button class="primary-button" on:click={() => (pendingCriticalAction = "migrate-legacy")}><KeyRound size={17} /><span>迁移旧版资产库</span></button>
         {:else}
           <button class="secondary-button" on:click={() => retry()}><RefreshCw size={17} /><span>{state === "save-error" ? "重试保存" : "重新读取"}</span></button>
-        {/if}
-        {#if state === "save-error"}
-          <button class="secondary-button danger-outline" on:click={() => (pendingCriticalAction = "discard-changes")}>放弃未保存修改</button>
         {/if}
       </div>
     {/if}
