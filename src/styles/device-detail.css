@@ -155,18 +155,6 @@
   color: #a0a5aa;
 }
 
-.identity-ip {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.identity-account-tag {
-  flex: 0 1 auto;
-  overflow: hidden;
-  color: #536170;
-  text-overflow: ellipsis;
-}
-
 .device-info-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -228,10 +216,6 @@
     justify-content: center;
   }
 
-  .identity-ip,
-  .identity-account-tag {
-    display: none;
-  }
 }
 
 @container device-detail (max-width: 520px) {

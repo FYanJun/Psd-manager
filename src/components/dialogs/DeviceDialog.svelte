@@ -2,7 +2,12 @@
   import { ChevronDown, Search } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
   import ClearableTextarea from "../ClearableTextarea.svelte";
-  import { sanitizeConnectionAddressInput } from "../../lib/input-validation";
+  import {
+    INPUT_LIMITS,
+    sanitizeConnectionAddressInput,
+    sanitizeMultilineTextInput,
+    sanitizeSingleLineTextInput,
+  } from "../../lib/input-validation";
   import type { DeviceForm, DeviceType, DeviceTypeMeta, TypePickerScope } from "../../lib/types";
 
   export let deviceForm: DeviceForm;
@@ -20,7 +25,7 @@
 <div class="form-grid">
   <label>
     <span>设备名称</span>
-    <ClearableInput bind:value={deviceForm.deviceName} />
+    <ClearableInput bind:value={deviceForm.deviceName} maxlength={INPUT_LIMITS.deviceName} transformValue={sanitizeSingleLineTextInput} />
   </label>
   <div class="form-control type-combo-field">
     <span>设备类型</span>
@@ -45,7 +50,7 @@
           <div class="type-combo-popover" id="device-type-options">
             <div class="type-combo-search">
               <Search size={15} />
-              <ClearableInput bind:value={deviceTypeSearch} placeholder="搜索设备类型" ariaLabel="搜索设备类型" />
+              <ClearableInput bind:value={deviceTypeSearch} placeholder="搜索设备类型" ariaLabel="搜索设备类型" maxlength={INPUT_LIMITS.deviceTypeName} transformValue={sanitizeSingleLineTextInput} />
             </div>
             <div class="type-combo-list" role="listbox" aria-label="设备类型">
               {#if filteredDeviceTypeOptions.length === 0}
@@ -72,19 +77,19 @@
   </div>
   <label>
     <span>连接地址</span>
-    <ClearableInput bind:value={deviceForm.ipAddress} placeholder="例如：https://nas.local 或 ssh://server.local" transformValue={sanitizeConnectionAddressInput} />
+    <ClearableInput bind:value={deviceForm.ipAddress} placeholder="例如：https://nas.local 或 ssh://server.local" maxlength={INPUT_LIMITS.connectionAddress} transformValue={sanitizeConnectionAddressInput} />
   </label>
   <label>
     <span>资产编号</span>
-    <ClearableInput bind:value={deviceForm.assetCode} />
+    <ClearableInput bind:value={deviceForm.assetCode} maxlength={INPUT_LIMITS.assetCode} transformValue={sanitizeSingleLineTextInput} />
   </label>
   <label>
     <span>设备位置</span>
-    <ClearableInput bind:value={deviceForm.location} />
+    <ClearableInput bind:value={deviceForm.location} maxlength={INPUT_LIMITS.location} transformValue={sanitizeSingleLineTextInput} />
   </label>
   <label class="wide-field">
     <span>备注</span>
-    <ClearableTextarea bind:value={deviceForm.notes} />
+    <ClearableTextarea bind:value={deviceForm.notes} maxlength={INPUT_LIMITS.notes} transformValue={sanitizeMultilineTextInput} />
   </label>
 </div>
 <footer class="modal-actions">

@@ -12,7 +12,7 @@
   <ModalFrame title="关闭应用" titleId="close-choice-title" modalClass="close-choice-modal" close={cancel}>
     <div class="close-choice-body">
       <strong>请选择关闭后的处理方式</strong>
-      <p>可以退出应用，也可以将应用保留在任务栏中。</p>
+      <p>可以退出应用，也可以将应用保留在状态栏中。</p>
       <div class="close-choice-list">
         <button class="close-choice-item" type="button" data-modal-autofocus on:click={() => choose("exit")}>
           <span class="close-choice-icon exit-icon"><Power size={19} /></span>
@@ -24,8 +24,8 @@
         <button class="close-choice-item" type="button" on:click={() => choose("minimize")}>
           <span class="close-choice-icon minimize-icon"><Minimize2 size={19} /></span>
           <span>
-            <strong>最小化到任务栏</strong>
-            <small>保留应用运行，稍后可继续使用</small>
+            <strong>最小化到状态栏</strong>
+            <small>保留应用运行，稍后可从状态栏恢复</small>
           </span>
         </button>
       </div>

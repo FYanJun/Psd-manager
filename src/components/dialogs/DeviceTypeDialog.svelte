@@ -1,6 +1,7 @@
 <script lang="ts">
   import ClearableInput from "../ClearableInput.svelte";
   import { typeColorOptions } from "../../lib/constants";
+  import { INPUT_LIMITS, sanitizeSingleLineTextInput } from "../../lib/input-validation";
   import type { TypeForm } from "../../lib/types";
 
   export let typeForm: TypeForm;
@@ -19,11 +20,11 @@
   <div class="type-editor-fields">
     <label>
       <span>类型名称</span>
-      <ClearableInput bind:value={typeForm.label} placeholder="例如：交换机" />
+      <ClearableInput bind:value={typeForm.label} placeholder="例如：交换机" maxlength={INPUT_LIMITS.deviceTypeName} transformValue={sanitizeSingleLineTextInput} />
     </label>
     <label>
       <span>图标文字</span>
-      <ClearableInput bind:value={typeForm.iconText} placeholder="例如：交" maxlength={2} />
+      <ClearableInput bind:value={typeForm.iconText} placeholder="例如：交" maxlength={INPUT_LIMITS.deviceTypeIcon} transformValue={sanitizeSingleLineTextInput} />
     </label>
   </div>
   <div class="form-control type-color-control">

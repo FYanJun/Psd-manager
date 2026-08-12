@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Grid2X2 } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
-  import { sanitizeAsciiSymbols } from "../../lib/input-validation";
+  import { INPUT_LIMITS, sanitizeAsciiSymbols } from "../../lib/input-validation";
   import type { PasswordGeneratorActions } from "../../lib/view-models";
 
   export let useUpper = true;
@@ -28,6 +28,6 @@
 
   <label class="text-control">
     <span>允许使用的符号</span>
-    <ClearableInput value={allowedSymbols} clearable={false} fallbackValue="!@#$%^&*+-_=?." disabled={!useSymbols} transformValue={sanitizeAsciiSymbols} onValueChange={setAllowedSymbols} />
+    <ClearableInput value={allowedSymbols} clearable={false} fallbackValue="!@#$%^&*+-_=?." maxlength={INPUT_LIMITS.generatorCharacters} disabled={!useSymbols} transformValue={sanitizeAsciiSymbols} onValueChange={setAllowedSymbols} />
   </label>
 </section>

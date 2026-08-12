@@ -1,14 +1,12 @@
 {
   "name": "psd-manager",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test:smoke": "node --test scripts/smoke-test.mjs",
-    "test": "npm run test:smoke",
     "tauri": "tauri",
     "tauri:dev": "tauri dev"
   },

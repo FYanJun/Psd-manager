@@ -1,7 +1,7 @@
 import { APP_TITLE, CONFIG_FORMAT_VERSION } from "./constants";
 import type { ConfigData, ConfigSummary, ConfigFormat, DeviceTypeMeta, VaultItem } from "./types";
 import { getAccounts } from "./vault";
-import { formatDateTime, padDatePart } from "./utils";
+import { padDatePart } from "./utils";
 import { createCsvConfigPayload, parseCsvConfigContent } from "./config/csv";
 import { createJsonConfigPayload, parseJsonConfigContent } from "./config/structured";
 import { createYamlConfigPayload, parseYamlConfigContent } from "./config/yaml";
@@ -101,13 +101,6 @@ export function getConfigMimeType(format: ConfigFormat) {
   return "application/json";
 }
 
-export function formatConfigExportedAt(value: string) {
-  if (!value) return "";
-  const exportedAt = new Date(value);
-  if (Number.isNaN(exportedAt.getTime())) return "";
-  return formatDateTime(exportedAt);
-}
-
 export function getConfigSummary(config: ConfigData): ConfigSummary {
   const accountCount = config.items.reduce((count, item) => count + getAccounts(item).length, 0);
   const historyCount = config.items.reduce(
@@ -121,7 +114,6 @@ export function getConfigSummary(config: ConfigData): ConfigSummary {
     accountCount,
     historyCount,
     typeCount: new Set([...itemTypeLabels, ...customTypeLabels]).size,
-    exportedAtText: formatConfigExportedAt(config.meta.exportedAt),
     formatVersion: config.meta.formatVersion,
   };
 }
@@ -133,7 +125,6 @@ export function formatConfigSummary(summary: ConfigSummary) {
     { label: "历史", value: `${summary.historyCount} 条` },
     { label: "类型", value: `${summary.typeCount} 个` },
     { label: "格式", value: `v${summary.formatVersion}` },
-    { label: "导出时间", value: summary.exportedAtText || "未记录" },
   ];
 }
 

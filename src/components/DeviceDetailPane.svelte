@@ -5,7 +5,6 @@
   import DeviceInfoCard from "./device-detail/DeviceInfoCard.svelte";
   import type { DeviceAccount, PasswordHistory, VaultItem } from "../lib/types";
   import type { DeviceDetailActions, DeviceDetailModel } from "../lib/view-models";
-  import { formatAccountTag } from "../lib/vault";
 
   export let passwordVisible = false;
   export let historyOpen = false;
@@ -55,8 +54,6 @@
     maskPassword, toggleHistoryPassword, requestRestoreHistoryPassword, toggleHistorySort,
     clearSearch, openAddDeviceDialog } = actions);
 
-  let selectedAccountTag = "";
-  $: selectedAccountTag = selectedAccount.id ? formatAccountTag(selectedAccount, selectedItem.deviceType, selectedItem.tag) : "";
 </script>
 
 <section class="detail-pane" aria-label="设备详情" on:contextmenu={openDetailBlankContextMenu}>
@@ -71,12 +68,6 @@
           <p class="identity-subtitle">
             <span>{selectedItem.deviceType}</span>
             <span>{selectedAccounts.length} 个账号</span>
-            {#if selectedItem.ipAddress}
-              <span class="identity-ip">{selectedItem.ipAddress}</span>
-            {/if}
-            {#if selectedAccountTag}
-              <span class="identity-account-tag">{selectedAccountTag}</span>
-            {/if}
           </p>
         </div>
       </div>

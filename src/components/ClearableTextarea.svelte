@@ -5,6 +5,8 @@
   export let placeholder = "";
   export let ariaLabel = "";
   export let disabled = false;
+  export let maxlength: number | undefined = undefined;
+  export let transformValue: ((value: string) => string) | undefined = undefined;
   export let onValueChange: ((value: string) => void) | undefined = undefined;
 
   let textareaRef: HTMLTextAreaElement | null = null;
@@ -12,6 +14,7 @@
   $: hasValue = value.length > 0;
 
   function setValue(nextValue: string) {
+    nextValue = transformValue?.(nextValue) ?? nextValue;
     value = nextValue;
     onValueChange?.(nextValue);
   }
@@ -29,6 +32,7 @@
     {placeholder}
     aria-label={ariaLabel || undefined}
     {disabled}
+    {maxlength}
     on:input={(event) => setValue((event.currentTarget as HTMLTextAreaElement).value)}
   ></textarea>
   {#if hasValue}

@@ -1,7 +1,7 @@
 import { APP_TITLE, CONFIG_FORMAT_VERSION, DEFAULT_ACCOUNT_TAG } from "../constants";
 import type { ConfigData, DeviceAccount, PasswordHistory, VaultItem } from "../types";
-import { getAccounts } from "../vault";
-import { formatDateTime, readNumber, readString } from "../utils";
+import { getAccounts, iconClassForColor } from "../vault";
+import { formatDateTime, readString } from "../utils";
 import { isUuid } from "../uuid";
 import { buildDeviceTypeGroups } from "./export-utils";
 import { normalizeVaultIdentityData } from "./normalization";
@@ -57,7 +57,7 @@ export function createCsvRow({
     if (header === "设备名称") return item?.deviceName ?? "";
     if (header === "资产编号") return item?.assetCode ?? "";
     if (header === "设备位置") return item?.location ?? "";
-    if (header === "设备信息") return item?.ipAddress ?? "";
+    if (header === "连接地址") return item?.ipAddress ?? "";
     if (header === "设备备注") return item?.notes ?? "";
     if (header === "设备图标") return item?.iconText ?? type?.iconText ?? "";
     if (header === "设备更新时间") return item?.updatedAt ?? "";
@@ -77,7 +77,6 @@ export function createCsvHistoryRecords(history: PasswordHistory[]) {
   return [...history]
     .sort((left, right) => left.id - right.id)
     .map((entry) => ({
-      历史ID: entry.id,
       历史UUID: entry.uuid,
       旧密码: entry.password,
       新密码: entry.newPassword,
@@ -100,14 +99,13 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
 
   const uuidHeaders = ["设备类型UUID", "设备UUID", "账号UUID"];
   const uuidHeaderCount = uuidHeaders.filter((header) => headers.includes(header)).length;
-  if (uuidHeaderCount > 0 && uuidHeaderCount < uuidHeaders.length) {
-    throw new ConfigImportError("CSV 配置的 UUID 列不完整：必须同时包含设备类型UUID、设备UUID和账号UUID");
+  if (uuidHeaderCount !== uuidHeaders.length) {
+    throw new ConfigImportError("CSV 配置缺少当前格式的 UUID 列：必须包含设备类型UUID、设备UUID和账号UUID");
   }
 
   const records = rows.slice(1)
     .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
-  const hasUuidColumns = headers.includes("设备UUID") && headers.includes("账号UUID") && headers.includes("设备类型UUID");
-  if (hasUuidColumns) assertCsvConfigIdentities(records);
+  assertCsvConfigIdentities(records);
 
   const typeRecords = new Map<string, Record<string, string>>();
   const devicesByKey = new Map<string, VaultItem>();
@@ -161,7 +159,7 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
         ipAddress: deviceInfo,
         tag: deviceType || DEFAULT_ACCOUNT_TAG,
         iconText: deviceIcon,
-        iconClass: "",
+        iconClass: iconClassForColor(typeColor),
         updatedAt: readRecordValue(record, "设备更新时间").trim() || formatDateTime(new Date()),
         notes: deviceNotes,
         history: [],
@@ -197,7 +195,7 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
   return {
     meta: {
       appName: APP_TITLE,
-      formatVersion: hasUuidColumns ? CONFIG_FORMAT_VERSION : 2,
+      formatVersion: CONFIG_FORMAT_VERSION,
       exportedAt: "",
     },
     items: normalized.items,
@@ -222,7 +220,7 @@ export function parseCsvHistory(value: string, rowNumber: number): PasswordHisto
     const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
     return {
       uuid: readString(record["历史UUID"]),
-      id: readNumber(record["历史ID"], index + 1),
+      id: index + 1,
       password: readString(record["旧密码"]),
       newPassword: readString(record["新密码"]),
       changedAt: readString(record["修改时间"]),

@@ -1,6 +1,6 @@
 [package]
 name = "psd-manager"
-version = "0.1.11"
+version = "0.1.12"
 description = "Psd Manager - 密码管理器"
 authors = ["FanYanJun"]
 edition = "2021"
@@ -20,7 +20,7 @@ tauri-build = { version = "2", features = [] }
 aes-gcm = "0.11"
 fs4 = { version = "1.1.0", default-features = false, features = ["sync"] }
 keyring = "4.1.4"
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"

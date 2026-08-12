@@ -2,7 +2,11 @@
   import { ChevronDown, Search } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
   import { formatAccountTag } from "../../lib/vault";
-  import { sanitizePasswordInput } from "../../lib/input-validation";
+  import {
+    INPUT_LIMITS,
+    sanitizePasswordInput,
+    sanitizeSingleLineTextInput,
+  } from "../../lib/input-validation";
   import type {
     BulkPasswordForm,
     BulkUsernameSuggestion,
@@ -60,7 +64,7 @@
         <div class="type-combo-popover" id="bulk-type-options">
           <div class="type-combo-search">
             <Search size={15} />
-            <ClearableInput bind:value={bulkTypeSearch} placeholder="搜索设备类型" ariaLabel="搜索批量改密设备类型" />
+            <ClearableInput bind:value={bulkTypeSearch} placeholder="搜索设备类型" ariaLabel="搜索批量改密设备类型" maxlength={INPUT_LIMITS.deviceTypeName} transformValue={sanitizeSingleLineTextInput} />
           </div>
           <div class="type-combo-list" role="listbox" aria-label="批量改密设备类型">
             {#if filteredBulkTypeRows.length === 0}
@@ -80,7 +84,7 @@
   </div>
   <div class="form-control bulk-username-field">
     <span>匹配用户名</span>
-    <ClearableInput value={bulkUsernameSearch} placeholder="输入用户名，先选择完整用户名" onValueChange={updateBulkUsernameSearch} />
+    <ClearableInput value={bulkUsernameSearch} placeholder="输入用户名，先选择完整用户名" maxlength={INPUT_LIMITS.username} transformValue={sanitizeSingleLineTextInput} onValueChange={updateBulkUsernameSearch} />
     {#if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim() && bulkUsernameSuggestions.length > 0}
       <div class="bulk-username-suggestions" role="listbox" aria-label="完整用户名候选">
         {#each bulkUsernameSuggestions.slice(0, 8) as suggestion}
@@ -93,11 +97,11 @@
   </div>
   <label>
     <span>新密码</span>
-    <ClearableInput bind:value={bulkPasswordForm.password} type="password" transformValue={sanitizePasswordInput} {revealResetToken} />
+    <ClearableInput bind:value={bulkPasswordForm.password} type="password" maxlength={INPUT_LIMITS.password} transformValue={sanitizePasswordInput} {revealResetToken} />
   </label>
   <label class="wide-field">
     <span>更新原因</span>
-    <ClearableInput bind:value={bulkPasswordForm.reason} />
+    <ClearableInput bind:value={bulkPasswordForm.reason} maxlength={INPUT_LIMITS.passwordReason} transformValue={sanitizeSingleLineTextInput} />
   </label>
   <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("bulk-password"); setActiveDialog(null); }}>使用随机密码</button>
 

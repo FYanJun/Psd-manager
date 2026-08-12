@@ -365,7 +365,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
         if (!closeBehavior) return;
         if (hasUnsavedChanges()) await persistImmediately();
         if (closeBehavior === "minimize") {
-          await appWindow.minimize();
+          await appWindow.hide();
         } else {
           await appWindow.destroy();
         }

@@ -1,5 +1,10 @@
 import { formatDateTime } from "../utils";
-import { CONNECTION_ADDRESS_ERROR, isValidConnectionAddress } from "../input-validation";
+import {
+  CONNECTION_ADDRESS_ERROR,
+  getTextInputValidationError,
+  INPUT_LIMITS,
+  isValidConnectionAddress,
+} from "../input-validation";
 import type {
   ActiveDialog,
   ActivePopover,
@@ -118,6 +123,20 @@ export function createDeviceController(port: DeviceControllerPort) {
     if (!form.deviceType.trim()) {
       port.showStatus("请先新增设备类型");
       return;
+    }
+    const textFields: Array<[string, string, number, boolean]> = [
+      ["设备名称", form.deviceName, INPUT_LIMITS.deviceName, false],
+      ["设备类型", form.deviceType, INPUT_LIMITS.deviceTypeName, false],
+      ["资产编号", form.assetCode, INPUT_LIMITS.assetCode, false],
+      ["设备位置", form.location, INPUT_LIMITS.location, false],
+      ["设备备注", form.notes, INPUT_LIMITS.notes, true],
+    ];
+    for (const [label, value, maxLength, allowLineBreaks] of textFields) {
+      const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
+      if (error) {
+        port.showStatus(`${label}${error}`, 5000);
+        return;
+      }
     }
     if (!isValidConnectionAddress(form.ipAddress)) {
       port.showStatus(CONNECTION_ADDRESS_ERROR, 5000);

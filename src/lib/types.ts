@@ -205,7 +205,6 @@ export type ConfigSummary = {
   accountCount: number;
   historyCount: number;
   typeCount: number;
-  exportedAtText: string;
   formatVersion: number;
 };
 

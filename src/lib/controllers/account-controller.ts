@@ -1,5 +1,10 @@
 import { createAccountFromForm, formatDeviceAccountInfo, updateAccountPassword } from "../device-commands";
-import { hasValidPasswordCharacters, PASSWORD_CHARACTER_ERROR } from "../input-validation";
+import {
+  getTextInputValidationError,
+  hasValidPasswordCharacters,
+  INPUT_LIMITS,
+  PASSWORD_CHARACTER_ERROR,
+} from "../input-validation";
 import type { AccountForm, DeviceAccount, PendingConfirmation, VaultItem } from "../types";
 import { formatDateTime } from "../utils";
 import { createEmptyAccountForm, getAccounts, isBlankPlaceholderAccount, syncItemWithAccounts } from "../vault";
@@ -144,6 +149,18 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     if (!username) {
       port.showStatus("请输入用户名");
       return false;
+    }
+    const textFields: Array<[string, string, number, boolean]> = [
+      ["用户名", form.username, INPUT_LIMITS.username, false],
+      ["账号标签", form.tag, INPUT_LIMITS.accountTag, false],
+      ["账号备注", form.notes, INPUT_LIMITS.notes, true],
+    ];
+    for (const [label, value, maxLength, allowLineBreaks] of textFields) {
+      const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
+      if (error) {
+        port.showStatus(`${label}${error}`, 5000);
+        return false;
+      }
     }
     if (!hasValidPasswordCharacters(form.password)) {
       port.showStatus(PASSWORD_CHARACTER_ERROR, 5000);

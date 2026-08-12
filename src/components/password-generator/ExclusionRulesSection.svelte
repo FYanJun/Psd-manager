@@ -1,7 +1,7 @@
 <script lang="ts">
   import { KeyRound } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
-  import { sanitizePasswordInput } from "../../lib/input-validation";
+  import { INPUT_LIMITS, sanitizePasswordInput } from "../../lib/input-validation";
   import type { PasswordGeneratorActions } from "../../lib/view-models";
 
   export let excludeSimilar = true;
@@ -24,6 +24,6 @@
 
   <label class="text-control">
     <span>额外排除字符</span>
-    <ClearableInput value={excludedCharacters} placeholder="例如：@ / \\ &quot;" transformValue={sanitizePasswordInput} onValueChange={setExcludedCharacters} />
+    <ClearableInput value={excludedCharacters} placeholder="例如：@ / \\ &quot;" maxlength={INPUT_LIMITS.generatorCharacters} transformValue={sanitizePasswordInput} onValueChange={setExcludedCharacters} />
   </label>
 </section>

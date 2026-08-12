@@ -1,5 +1,7 @@
 import {
+  getTextInputValidationError,
   hasValidPasswordCharacters,
+  INPUT_LIMITS,
   CONNECTION_ADDRESS_ERROR,
   isValidDeviceTypeColor,
   isValidDeviceTypeIconText,
@@ -11,6 +13,16 @@ import { getAccounts } from "../vault";
 import { readString } from "../utils";
 import { isUuid } from "../uuid";
 import { ConfigImportError, readRecordValue } from "./shared";
+
+function assertValidTextField(
+  value: string,
+  label: string,
+  maxLength: number,
+  allowLineBreaks = false,
+) {
+  const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
+  if (error) throw new ConfigImportError(`${label}${error}`);
+}
 
 export function assertValidConfigNames(items: ConfigData["items"]) {
   const deviceKeys = new Set<string>();
@@ -43,8 +55,13 @@ export function assertValidConfigNames(items: ConfigData["items"]) {
 export function assertValidConfigFields(config: ConfigData) {
   config.customDeviceTypes.forEach((type, typeIndex) => {
     const typeLabel = type.label.trim() || `第 ${typeIndex + 1} 个设备类型`;
-    if (!isValidDeviceTypeIconText(type.iconText)) {
-      throw new ConfigImportError(`设备类型“${typeLabel}”的图标文字不能超过 2 个字符`);
+    if (!type.label.trim()) {
+      throw new ConfigImportError(`${typeLabel}缺少设备类型名称`);
+    }
+    assertValidTextField(type.label, `设备类型“${typeLabel}”的名称`, INPUT_LIMITS.deviceTypeName);
+    const typeIconError = getTextInputValidationError(type.iconText, INPUT_LIMITS.deviceTypeIcon);
+    if (typeIconError || !isValidDeviceTypeIconText(type.iconText)) {
+      throw new ConfigImportError(`设备类型“${typeLabel}”的图标文字${typeIconError ?? "不能超过 2 个字符"}`);
     }
     if (!isValidDeviceTypeColor(type.color)) {
       throw new ConfigImportError(`设备类型“${typeLabel}”使用了不支持的颜色“${type.color}”`);
@@ -52,14 +69,23 @@ export function assertValidConfigFields(config: ConfigData) {
   });
   config.items.forEach((item) => {
     const deviceName = item.deviceName.trim() || "未命名设备";
-    if (!isValidDeviceTypeIconText(item.iconText)) {
-      throw new ConfigImportError(`设备“${deviceName}”的图标文字不能超过 2 个字符`);
+    assertValidTextField(item.deviceName, `设备“${deviceName}”的名称`, INPUT_LIMITS.deviceName);
+    assertValidTextField(item.deviceType, `设备“${deviceName}”的设备类型`, INPUT_LIMITS.deviceTypeName);
+    assertValidTextField(item.assetCode, `设备“${deviceName}”的资产编号`, INPUT_LIMITS.assetCode);
+    assertValidTextField(item.location, `设备“${deviceName}”的设备位置`, INPUT_LIMITS.location);
+    assertValidTextField(item.notes, `设备“${deviceName}”的设备备注`, INPUT_LIMITS.notes, true);
+    const deviceIconError = getTextInputValidationError(item.iconText, INPUT_LIMITS.deviceTypeIcon);
+    if (deviceIconError || !isValidDeviceTypeIconText(item.iconText)) {
+      throw new ConfigImportError(`设备“${deviceName}”的图标文字${deviceIconError ?? "不能超过 2 个字符"}`);
     }
     if (!isValidConnectionAddress(item.ipAddress)) {
       throw new ConfigImportError(`设备“${deviceName}”的${CONNECTION_ADDRESS_ERROR}`);
     }
     getAccounts(item).forEach((account) => {
       const accountName = account.username.trim() || "未命名账号";
+      assertValidTextField(account.username, `设备“${deviceName}”账号“${accountName}”的用户名`, INPUT_LIMITS.username);
+      assertValidTextField(account.tag, `设备“${deviceName}”账号“${accountName}”的账号标签`, INPUT_LIMITS.accountTag);
+      assertValidTextField(account.notes, `设备“${deviceName}”账号“${accountName}”的账号备注`, INPUT_LIMITS.notes, true);
       if (!hasValidPasswordCharacters(account.password)) {
         throw new ConfigImportError(`设备“${deviceName}”账号“${accountName}”的${PASSWORD_CHARACTER_ERROR}`);
       }
@@ -67,13 +93,17 @@ export function assertValidConfigFields(config: ConfigData) {
         if (!hasValidPasswordCharacters(history.password) || !hasValidPasswordCharacters(history.newPassword)) {
           throw new ConfigImportError(`设备“${deviceName}”账号“${accountName}”的第 ${historyIndex + 1} 条密码历史包含不合规字符`);
         }
+        assertValidTextField(
+          history.reason,
+          `设备“${deviceName}”账号“${accountName}”的第 ${historyIndex + 1} 条密码历史修改原因`,
+          INPUT_LIMITS.passwordReason,
+        );
       });
     });
   });
 }
 
 export function assertValidConfigIdentities(config: ConfigData) {
-  if (config.meta.formatVersion < 3) return;
   const typeUuids = new Set<string>();
   const typesByUuid = new Map<string, ConfigData["customDeviceTypes"][number]>();
   config.customDeviceTypes.forEach((type, index) => {

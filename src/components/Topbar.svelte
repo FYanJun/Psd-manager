@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronRight, MoreVertical, RotateCcwKey, Search, Sparkles } from "@lucide/svelte";
   import ClearableInput from "./ClearableInput.svelte";
+  import { INPUT_LIMITS, sanitizeSingleLineTextInput } from "../lib/input-validation";
 
   export let backDisabled = false;
   export let forwardDisabled = false;
@@ -34,6 +35,8 @@
       placeholder={searchPlaceholder}
       ariaLabel="搜索设备"
       ariaKeyshortcuts="Meta+F Control+F Meta+K Control+K"
+      maxlength={INPUT_LIMITS.connectionAddress}
+      transformValue={sanitizeSingleLineTextInput}
       onValueChange={updateSearchValue}
       className="topbar-search-input"
     />

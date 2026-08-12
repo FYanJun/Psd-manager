@@ -4,7 +4,12 @@ import {
   getBulkUsernameSuggestions,
   updateAccountPassword,
 } from "../device-commands";
-import { hasValidPasswordCharacters, PASSWORD_CHARACTER_ERROR } from "../input-validation";
+import {
+  getTextInputValidationError,
+  hasValidPasswordCharacters,
+  INPUT_LIMITS,
+  PASSWORD_CHARACTER_ERROR,
+} from "../input-validation";
 import type {
   BulkPasswordMatch,
   BulkUsernameSuggestion,
@@ -29,6 +34,15 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     }
     if (!hasValidPasswordCharacters(password)) {
       port.showStatus(PASSWORD_CHARACTER_ERROR, 5000);
+      return false;
+    }
+    return true;
+  }
+
+  function validatePasswordReason(reason: string) {
+    const error = getTextInputValidationError(reason, INPUT_LIMITS.passwordReason);
+    if (error) {
+      port.showStatus(`更新原因${error}`, 5000);
       return false;
     }
     return true;
@@ -286,6 +300,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       return;
     }
     if (!validateNewPassword(state.passwordForm.password)) return;
+    if (!validatePasswordReason(state.passwordForm.reason)) return;
     const updatesMultipleAccounts = selectedAccountTargets.length > 1;
     port.setPendingConfirmation({
       action: "update-password",
@@ -320,6 +335,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       return;
     }
     if (!validateNewPassword(password)) return;
+    if (!validatePasswordReason(confirmation.reasonValue ?? "")) return;
     const selectedAccounts = getAccounts(item);
     const selectedAccountTargets = selectedAccounts.filter((account) => accountUuids.includes(account.uuid));
     if (selectedAccountTargets.length !== accountUuids.length) {
@@ -354,6 +370,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   function validateBulkPasswordUpdate(state: AccountPasswordState) {
     const derived = derivePasswordState(state);
     if (!validateNewPassword(state.bulkPasswordForm.password)) return null;
+    if (!validatePasswordReason(state.bulkPasswordForm.reason)) return null;
     if (derived.bulkPasswordMatches.length === 0) {
       port.showStatus("没有匹配账号");
       return null;
@@ -394,6 +411,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const targets = confirmation.accountTargets ?? [];
     const password = confirmation.passwordValue ?? "";
     if (!validateNewPassword(password)) return;
+    if (!validatePasswordReason(confirmation.reasonValue ?? "")) return;
     if (targets.length === 0) {
       port.showStatus("更新失败：批量改密目标不完整", 5000);
       return;

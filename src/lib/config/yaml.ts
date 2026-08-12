@@ -32,5 +32,5 @@ export function parseYamlConfigContent(content: string): ConfigData {
     throw new ConfigImportError(`YAML 配置语法错误：${reason}`);
   }
   if (isStructuredConfigPayload(parsed)) return parseStructuredConfigPayload(parsed);
-  throw new ConfigImportError("YAML 配置结构错误：缺少“设备类型”数组或有效的“元信息”");
+  throw new ConfigImportError("YAML 配置结构错误：只支持以“设备类型”为顶层且不包含“元信息”的当前格式");
 }

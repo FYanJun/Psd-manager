@@ -1,7 +1,11 @@
 <script lang="ts">
   import ClearableInput from "../ClearableInput.svelte";
   import { formatAccountTag } from "../../lib/vault";
-  import { sanitizePasswordInput } from "../../lib/input-validation";
+  import {
+    INPUT_LIMITS,
+    sanitizePasswordInput,
+    sanitizeSingleLineTextInput,
+  } from "../../lib/input-validation";
   import type { ActiveDialog, DeviceAccount, VaultItem } from "../../lib/types";
 
   export let passwordForm: { password: string; reason: string };
@@ -25,11 +29,11 @@
   </section>
   <label class="wide-field">
     <span>新密码</span>
-    <ClearableInput bind:value={passwordForm.password} type="password" transformValue={sanitizePasswordInput} {revealResetToken} />
+    <ClearableInput bind:value={passwordForm.password} type="password" maxlength={INPUT_LIMITS.password} transformValue={sanitizePasswordInput} {revealResetToken} />
   </label>
   <label class="wide-field">
     <span>更新原因</span>
-    <ClearableInput bind:value={passwordForm.reason} />
+    <ClearableInput bind:value={passwordForm.reason} maxlength={INPUT_LIMITS.passwordReason} transformValue={sanitizeSingleLineTextInput} />
   </label>
   <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("current-account"); setActiveDialog(null); }}>使用随机密码</button>
 </div>

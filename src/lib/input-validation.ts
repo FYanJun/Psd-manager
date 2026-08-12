@@ -1,6 +1,21 @@
 import { typeColorOptions } from "./constants";
 
-export const PASSWORD_CHARACTER_ERROR = "密码只能使用半角英文、数字和常用符号，不能包含中文、空格或全角字符";
+export const INPUT_LIMITS = {
+  deviceTypeName: 40,
+  deviceName: 120,
+  username: 120,
+  accountTag: 40,
+  assetCode: 80,
+  location: 120,
+  connectionAddress: 2048,
+  notes: 2000,
+  passwordReason: 200,
+  password: 1024,
+  generatorCharacters: 128,
+  deviceTypeIcon: 2,
+} as const;
+
+export const PASSWORD_CHARACTER_ERROR = `密码只能使用半角英文、数字和常用符号，不能包含中文、空格或全角字符，且不能超过 ${INPUT_LIMITS.password} 个字符`;
 export const CONNECTION_ADDRESS_ERROR = "连接地址格式不正确，请输入有效的 IPv4、IPv6、主机名或网络 URL";
 
 const validDeviceTypeColors = new Set(typeColorOptions.map((option) => option.value));
@@ -29,6 +44,51 @@ function isAsciiSymbol(character: string) {
     && !((code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a));
 }
 
+function isInvisibleControlCharacter(character: string, allowLineBreaks = false) {
+  const code = character.charCodeAt(0);
+  if (code >= 0x00 && code <= 0x1f) {
+    return !(allowLineBreaks && (character === "\n" || character === "\r"));
+  }
+  if (code >= 0x7f && code <= 0x9f) return true;
+  // Zero-width and bidi controls can make otherwise identical values display differently.
+  return (code >= 0x200b && code <= 0x200f)
+    || (code >= 0x202a && code <= 0x202e)
+    || (code >= 0x2060 && code <= 0x206f)
+    || code === 0xfeff;
+}
+
+export function sanitizeTextInput(value: string, allowLineBreaks = false) {
+  return Array.from(value)
+    .filter((character) => !isInvisibleControlCharacter(character, allowLineBreaks))
+    .join("");
+}
+
+export function sanitizeSingleLineTextInput(value: string) {
+  return sanitizeTextInput(value);
+}
+
+export function sanitizeMultilineTextInput(value: string) {
+  return sanitizeTextInput(value, true);
+}
+
+export function getTextInputValidationError(
+  value: string,
+  maxLength: number,
+  allowLineBreaks = false,
+) {
+  if (sanitizeTextInput(value, allowLineBreaks) !== value) {
+    return allowLineBreaks
+      ? "不能包含不可见控制字符"
+      : "不能包含换行或不可见控制字符";
+  }
+  if (Array.from(value).length > maxLength) return `不能超过 ${maxLength} 个字符`;
+  return null;
+}
+
+export function hasValidTextInput(value: string, maxLength: number, allowLineBreaks = false) {
+  return getTextInputValidationError(value, maxLength, allowLineBreaks) === null;
+}
+
 export function sanitizePasswordInput(value: string) {
   return Array.from(value).filter(isVisibleAsciiCharacter).join("");
 }
@@ -37,17 +97,12 @@ export function sanitizeAsciiSymbols(value: string) {
   return Array.from(value).filter(isAsciiSymbol).join("");
 }
 
-function isAddressControlCharacter(character: string) {
-  const code = character.charCodeAt(0);
-  return (code >= 0x00 && code <= 0x1f) || (code >= 0x7f && code <= 0x9f);
-}
-
 export function sanitizeConnectionAddressInput(value: string) {
-  return Array.from(value).filter((character) => !isAddressControlCharacter(character)).join("");
+  return sanitizeSingleLineTextInput(value);
 }
 
 export function hasValidPasswordCharacters(value: string) {
-  return sanitizePasswordInput(value) === value;
+  return sanitizePasswordInput(value) === value && Array.from(value).length <= INPUT_LIMITS.password;
 }
 
 function isValidIpv4(value: string) {
@@ -109,6 +164,8 @@ function isValidParsedConnectionUrl(value: string, hasExplicitScheme: boolean) {
 export function isValidConnectionAddress(value: string) {
   const normalized = value.trim();
   if (normalized === "") return true;
+  if (Array.from(normalized).length > INPUT_LIMITS.connectionAddress) return false;
+  if (sanitizeSingleLineTextInput(normalized) !== normalized) return false;
   if (/[^\S\r\n]|[\u0000-\u001f\u007f-\u009f]/u.test(normalized)) return false;
   if (isValidIpv4(normalized) || isValidIpv6(normalized)) return true;
 
@@ -117,7 +174,7 @@ export function isValidConnectionAddress(value: string) {
 }
 
 export function isValidDeviceTypeIconText(value: string) {
-  return Array.from(value.trim()).length <= 2;
+  return hasValidTextInput(value.trim(), INPUT_LIMITS.deviceTypeIcon);
 }
 
 export function isValidDeviceTypeColor(value: string) {

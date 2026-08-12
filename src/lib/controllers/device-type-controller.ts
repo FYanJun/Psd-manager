@@ -1,5 +1,10 @@
 import { fallbackDeviceTypeMeta } from "../constants";
-import { isValidDeviceTypeColor, isValidDeviceTypeIconText } from "../input-validation";
+import {
+  getTextInputValidationError,
+  INPUT_LIMITS,
+  isValidDeviceTypeColor,
+  isValidDeviceTypeIconText,
+} from "../input-validation";
 import { getVisibleDeviceTypeOptions } from "../selectors/device-selectors";
 import type {
   ActiveDialog,
@@ -186,8 +191,14 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       port.showStatus("请输入设备类型名称");
       return;
     }
-    if (!isValidDeviceTypeIconText(typeForm.iconText)) {
-      port.showStatus("设备类型图标最多输入 2 个字符");
+    const labelError = getTextInputValidationError(typeForm.label, INPUT_LIMITS.deviceTypeName);
+    if (labelError) {
+      port.showStatus(`设备类型名称${labelError}`, 5000);
+      return;
+    }
+    const iconError = getTextInputValidationError(typeForm.iconText, INPUT_LIMITS.deviceTypeIcon);
+    if (iconError || !isValidDeviceTypeIconText(typeForm.iconText)) {
+      port.showStatus(`设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
       return;
     }
     if (!isValidDeviceTypeColor(typeForm.color)) {
@@ -241,8 +252,14 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       port.showStatus("请输入设备类型名称");
       return;
     }
-    if (!isValidDeviceTypeIconText(form.iconText)) {
-      port.showStatus("设备类型图标最多输入 2 个字符");
+    const labelError = getTextInputValidationError(form.label, INPUT_LIMITS.deviceTypeName);
+    if (labelError) {
+      port.showStatus(`设备类型名称${labelError}`, 5000);
+      return;
+    }
+    const iconError = getTextInputValidationError(form.iconText, INPUT_LIMITS.deviceTypeIcon);
+    if (iconError || !isValidDeviceTypeIconText(form.iconText)) {
+      port.showStatus(`设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
       return;
     }
     if (!isValidDeviceTypeColor(form.color)) {
