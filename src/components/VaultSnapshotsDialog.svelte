@@ -56,7 +56,7 @@
     align-items: center;
     gap: 14px;
     padding: 14px 0;
-    border-bottom: 1px solid #e4e7ea;
+    border-bottom: 1px solid var(--border);
   }
 
   .snapshot-row > div {
@@ -67,8 +67,8 @@
 
   .snapshot-row span,
   .snapshot-empty span {
-    color: #6a7179;
-    font-size: 13px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-13);
   }
 
   .snapshot-empty {
@@ -76,7 +76,7 @@
     justify-items: center;
     gap: 6px;
     padding: 44px 20px;
-    color: #68717a;
+    color: var(--text-secondary);
     text-align: center;
   }
 </style>

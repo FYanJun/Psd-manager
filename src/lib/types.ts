@@ -4,7 +4,10 @@ export type ConfirmationSummaryItem = { label: string; value: string };
 export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
-export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | null;
+export type ThemePreference = "system" | "light" | "dark";
+export type DensityPreference = "standard" | "compact";
+export type FontSizePreference = "small" | "standard" | "large";
+export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | "settings" | null;
 export type ActivePopover =
   | "type-sort"
   | "device-sort"
@@ -14,7 +17,6 @@ export type ActivePopover =
   | "type-blank-context"
   | "list-blank-context"
   | "detail-blank-context"
-  | "config"
   | null;
 export type ConfirmationAction =
   | "delete-device"
@@ -160,7 +162,7 @@ export type PersistedVaultState = {
   revision: number;
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  paneLayout: {
+  paneLayout?: {
     sidebarRatio?: number;
     listRatio?: number;
     generatorRatio?: number;
@@ -188,6 +190,54 @@ export type GeneratorTarget = "current-account" | "bulk-password" | null;
 export type TypePickerScope = "device" | "bulk";
 export type ResizePane = "sidebar" | "list" | "generator";
 export type ConfigFormat = "json" | "csv" | "yaml";
+
+export type AppSettings = {
+  schemaVersion: 2;
+  interface: {
+    tooltipEnabled: boolean;
+    theme: ThemePreference;
+    density: DensityPreference;
+    fontSize: FontSizePreference;
+    reduceMotion: boolean;
+  };
+  workspace: {
+    rememberLayout: boolean;
+    paneLayout: {
+      sidebarRatio: number;
+      listRatio: number;
+      generatorRatio: number;
+    };
+    deviceSortMode: SortMode;
+    deviceTypeSortMode: DeviceTypeSortMode;
+    rememberLastView: boolean;
+    rememberWindowBounds: boolean;
+    windowBounds: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null;
+    lastView: {
+      deviceType: "全部设备" | DeviceType;
+      searchQuery: string;
+      sortMode: SortMode;
+      selectedDeviceUuid: string;
+    };
+  };
+  passwordGenerator: {
+    length: number;
+    useUpper: boolean;
+    useLower: boolean;
+    useNumbers: boolean;
+    useSymbols: boolean;
+    excludeSimilar: boolean;
+    preventRepeats: boolean;
+    minimumNumbers: number;
+    minimumSymbols: number;
+    allowedSymbols: string;
+    excludedCharacters: string;
+  };
+};
 
 export type ConfigData = {
   items: VaultItem[];

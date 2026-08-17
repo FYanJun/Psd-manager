@@ -27,6 +27,7 @@ type VaultStoragePort = {
   applyLoaded(state: PersistedVaultState): void;
   clampLayout(): void;
   showStatus(message: string, duration?: number): void;
+  persistAppSettings(): Promise<void>;
   writeViewState(state: VaultStorageViewState): void;
 };
 
@@ -347,7 +348,11 @@ export function createVaultStorageController(port: VaultStoragePort) {
             throw new Error("资产库尚未安全保存，请先重试保存");
           }
           if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
-          await appWindow.destroy();
+          await port.persistAppSettings();
+          // The Rust command exits the application, rather than destroying only
+          // the main window. A rejected invoke can happen when the process exits
+          // before the IPC response is delivered, so it is intentionally ignored.
+          await invoke("exit_application").catch(() => undefined);
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error ?? "");
           port.showStatus(reason || "资产库尚未安全保存，请先重试保存", 7000);

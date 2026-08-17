@@ -3,6 +3,7 @@ import type { DeviceType, DeviceTypeMeta } from "./types";
 export const APP_TITLE = "密码管理器";
 export const CONFIG_FORMAT_VERSION = 3;
 export const VAULT_SCHEMA_VERSION = 2;
+export const APP_SETTINGS_SCHEMA_VERSION = 2;
 export const STORAGE_KEY = "psd-manager-state-v1";
 export const LEGACY_STORAGE_KEY = ["device", "password-manager", "state-v1"].join("-");
 export const DEFAULT_ACCOUNT_TAG = "";
@@ -19,6 +20,49 @@ export const GENERATOR_MAX_RATIO = 0.48;
 export const RESIZER_RATIO = 0.005;
 
 export const initialItems = [];
+
+export const DEFAULT_APP_SETTINGS = {
+  schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+  interface: {
+    tooltipEnabled: true,
+    theme: "system" as const,
+    density: "standard" as const,
+    fontSize: "standard" as const,
+    reduceMotion: false,
+  },
+  workspace: {
+    rememberLayout: true,
+    paneLayout: {
+      sidebarRatio: SIDEBAR_DEFAULT_RATIO,
+      listRatio: LIST_DEFAULT_RATIO,
+      generatorRatio: GENERATOR_DEFAULT_RATIO,
+    },
+    deviceSortMode: "updatedDesc" as const,
+    deviceTypeSortMode: "default" as const,
+    rememberLastView: false,
+    rememberWindowBounds: true,
+    windowBounds: null,
+    lastView: {
+      deviceType: "全部设备" as const,
+      searchQuery: "",
+      sortMode: "updatedDesc" as const,
+      selectedDeviceUuid: "",
+    },
+  },
+  passwordGenerator: {
+    length: 8,
+    useUpper: true,
+    useLower: true,
+    useNumbers: true,
+    useSymbols: true,
+    excludeSimilar: true,
+    preventRepeats: false,
+    minimumNumbers: 2,
+    minimumSymbols: 2,
+    allowedSymbols: "!@#$%^&*+-_=?.",
+    excludedCharacters: "",
+  },
+};
 
 export const defaultDeviceTypeMeta: Array<DeviceTypeMeta & { label: "全部设备" | DeviceType }> = [
   { uuid: "", label: "全部设备", iconText: "全", color: "blue" },

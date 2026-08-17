@@ -73,6 +73,8 @@
   export let statusActionLabel = "";
   export let runStatusAction: () => void;
   export let tooltipEnabled = true;
+  export let settingsView: import("../lib/view-models").SettingsView;
+  export let settingsActions: import("../lib/view-models").SettingsActions;
 </script>
 
 <ActionPopover model={actionPopoverModel} actions={actionPopoverActions} />
@@ -91,6 +93,8 @@
   activeDialog={activeDialog === "snapshots" ? null : activeDialog}
   view={appDialogView}
   actions={appDialogActions}
+  {settingsView}
+  {settingsActions}
 />
 
 <VaultSnapshotsDialog

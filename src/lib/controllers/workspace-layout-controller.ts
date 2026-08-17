@@ -8,15 +8,20 @@ import {
   SIDEBAR_MIN_RATIO,
 } from "../constants";
 import { clampPaneRatio } from "../layout";
-import type { PersistedVaultState, ResizePane } from "../types";
+import type { ResizePane } from "../types";
 
-type LayoutSnapshot = Required<PersistedVaultState["paneLayout"]>;
+export type LayoutSnapshot = {
+  sidebarRatio: number;
+  listRatio: number;
+  generatorRatio: number;
+};
 
 type WorkspaceLayoutPort = {
   read(): LayoutSnapshot;
   write(layout: LayoutSnapshot): void;
   setResizingPane(pane: ResizePane | null): void;
   beforeResize(): void;
+  onResizeEnd(): void;
 };
 
 function formatPanePercent(ratio: number) {
@@ -27,6 +32,8 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
   let resizingPane: ResizePane | null = null;
   let resizeStartX = 0;
   let resizeStart: LayoutSnapshot = port.read();
+  let pendingPointerEvent: PointerEvent | null = null;
+  let resizeFrame: number | null = null;
 
   function normalize(layout: Partial<LayoutSnapshot>): LayoutSnapshot {
     return {
@@ -36,7 +43,7 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     };
   }
 
-  function restore(layout: PersistedVaultState["paneLayout"] | undefined) {
+  function restore(layout: Partial<LayoutSnapshot> | undefined) {
     port.write(normalize(layout ?? {}));
   }
 
@@ -64,7 +71,7 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     return typeof window === "undefined" ? 1440 : Math.max(1, window.innerWidth);
   }
 
-  function handleResize(event: PointerEvent) {
+  function applyResize(event: PointerEvent) {
     if (!resizingPane) return;
     const deltaX = event.clientX - resizeStartX;
     const next = { ...port.read() };
@@ -79,10 +86,30 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     port.write(next);
   }
 
+  function flushResizeFrame() {
+    resizeFrame = null;
+    const event = pendingPointerEvent;
+    pendingPointerEvent = null;
+    if (event) applyResize(event);
+  }
+
+  function handleResize(event: PointerEvent) {
+    pendingPointerEvent = event;
+    if (resizeFrame === null) resizeFrame = window.requestAnimationFrame(flushResizeFrame);
+  }
+
   function stopResize() {
     if (!resizingPane) return;
+    if (pendingPointerEvent) {
+      if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = null;
+      const event = pendingPointerEvent;
+      pendingPointerEvent = null;
+      applyResize(event);
+    }
     resizingPane = null;
     port.setResizingPane(null);
+    port.onResizeEnd();
     document.body.classList.remove("is-resizing-pane");
     window.removeEventListener("pointermove", handleResize);
     window.removeEventListener("pointerup", stopResize);

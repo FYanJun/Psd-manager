@@ -4,14 +4,17 @@ import type {
   BulkPasswordMatch,
   BulkUsernameSuggestion,
   ConfigFormat,
+  DensityPreference,
   DeviceAccount,
   DeviceType,
   DeviceTypeMeta,
   DeviceTypeSortMode,
+  FontSizePreference,
   PasswordHistory,
   PopoverPosition,
   ResizePane,
   SortMode,
+  ThemePreference,
   TypePickerScope,
   VaultItem,
 } from "./types";
@@ -64,7 +67,54 @@ export type WorkspaceTopbarActions = {
   updateSearchValue(value: string): void;
   openBulkPasswordDialog(): void;
   openGeneratorPanel(): void;
-  openConfigPopover(event: MouseEvent): void;
+  openSettings(): void;
+};
+
+export type SettingsView = {
+  activeSection: "interface" | "workspace" | "generator" | "data" | "about";
+  tooltipEnabled: boolean;
+  theme: ThemePreference;
+  density: DensityPreference;
+  fontSize: FontSizePreference;
+  reduceMotion: boolean;
+  rememberLayout: boolean;
+  rememberLastView: boolean;
+  rememberWindowBounds: boolean;
+  deviceSortMode: SortMode;
+  deviceTypeSortMode: DeviceTypeSortMode;
+  generator: {
+    length: number;
+    useUpper: boolean;
+    useLower: boolean;
+    useNumbers: boolean;
+    useSymbols: boolean;
+    excludeSimilar: boolean;
+    preventRepeats: boolean;
+    minimumNumbers: number;
+    minimumSymbols: number;
+    allowedSymbols: string;
+    excludedCharacters: string;
+  };
+  version: string;
+};
+
+export type SettingsActions = {
+  setSection(section: SettingsView["activeSection"]): void;
+  setTooltipEnabled(value: boolean): void;
+  setTheme(value: ThemePreference): void;
+  setDensity(value: DensityPreference): void;
+  setFontSize(value: FontSizePreference): void;
+  setReduceMotion(value: boolean): void;
+  setRememberLayout(value: boolean): void;
+  setRememberLastView(value: boolean): void;
+  setRememberWindowBounds(value: boolean): void;
+  setDeviceSortMode(value: SortMode): void;
+  setDeviceTypeSortMode(value: DeviceTypeSortMode): void;
+  setGeneratorValue<K extends keyof SettingsView["generator"]>(key: K, value: SettingsView["generator"][K]): void;
+  openSnapshotsDialog(): void;
+  openExportConfigDialog(): void;
+  chooseConfigFile(): void;
+  reset(): void;
 };
 
 export type WorkspaceDeviceListActions = {
@@ -182,9 +232,6 @@ export type ActionPopoverActions = {
   copySelectedAccountInfo(): void;
   openEditAccountDialog(): void;
   requestDeleteSelectedAccount(): void;
-  chooseConfigFile(): void;
-  openExportConfigDialog(): void;
-  openSnapshotsDialog(): void;
   setActivePopover(popover: ActivePopover | null): void;
 };
 
@@ -240,6 +287,7 @@ export type PasswordGeneratorActions = {
   generatePassword(): void;
   copyGeneratedPassword(): void;
   setGeneratorLength(length: number, syncInput?: boolean): void;
+  persistGeneratorDefaults(): void;
   setGeneratorMinimumNumbers(value: number | string): void;
   setGeneratorMinimumSymbols(value: number | string): void;
   setAllowedSymbols(value: string): void;

@@ -12,6 +12,8 @@
   --quiet: #8b9095;
   --blue: #0f73e8;
   --blue-hover: #0b66d1;
+  --primary-fill: #0f73e8;
+  --primary-fill-hover: #0b66d1;
   --surface: #ffffff;
   --selected: #eeeeef;
   --field: #ffffff;
@@ -28,6 +30,30 @@
   --generator-max-share: 48%;
   --resizer-share: 0.5%;
   --toast-share: 44%;
+  --app-text: #242628;
+  --app-background: #eef0f2;
+  --surface-muted: #f7f8f9;
+  --surface-subtle: #f5f7f9;
+  --text-strong: #242628;
+  --text-secondary: #686d72;
+  --text-quiet: #8b9095;
+  --control-hover: rgba(0, 0, 0, 0.06);
+  --accent-subtle: #eaf3ff;
+  --overlay: rgba(36, 38, 40, 0.24);
+  --modal-shadow: 0 24px 70px rgba(24, 28, 32, 0.22);
+  --font-size-11: 11px;
+  --font-size-12: 12px;
+  --font-size-13: 13px;
+  --font-size-14: 14px;
+  --font-size-15: 15px;
+  --font-size-16: 16px;
+  --font-size-17: 17px;
+  --font-size-18: 18px;
+  --font-size-19: 19px;
+  --font-size-20: 20px;
+  --font-size-21: 21px;
+  --font-size-22: 22px;
+  --font-size-28: 28px;
 }
 
 * {
@@ -46,8 +72,15 @@ body {
   overflow: hidden;
 }
 
+#app {
+  width: 100%;
+  height: 100%;
+}
+
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 

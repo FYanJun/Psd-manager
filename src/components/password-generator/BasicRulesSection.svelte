@@ -16,6 +16,7 @@
   export let handleGeneratorLengthInput: PasswordGeneratorActions["handleGeneratorLengthInput"];
   export let commitGeneratorLengthInput: PasswordGeneratorActions["commitGeneratorLengthInput"];
   export let handleGeneratorLengthKeydown: PasswordGeneratorActions["handleGeneratorLengthKeydown"];
+  export let persistGeneratorDefaults: PasswordGeneratorActions["persistGeneratorDefaults"];
 </script>
 
 <section class="drawer-section">
@@ -38,9 +39,10 @@
       max="24"
       value={generatorLength}
       aria-label="拖动调整密码长度"
-      on:input={updateGeneratorLengthFromSlider}
+      on:input={(event) => { updateGeneratorLengthFromSlider(event); persistGeneratorDefaults(); }}
     />
     <ClearableInput
+      className="length-input-shell"
       inputClass="length-input"
       type="number"
       min="3"
@@ -49,8 +51,8 @@
       fallbackValue={generatorLength}
       value={generatorLengthInput}
       ariaLabel="密码长度"
-      onValueChange={handleGeneratorLengthInput}
-      onBlur={commitGeneratorLengthInput}
+      onValueChange={(value) => { handleGeneratorLengthInput(value); persistGeneratorDefaults(); }}
+      onBlur={() => { commitGeneratorLengthInput(); persistGeneratorDefaults(); }}
       onKeydown={handleGeneratorLengthKeydown}
     />
   </label>
@@ -66,7 +68,7 @@
         fallbackValue={minimumNumbers}
         value={minimumNumbers}
         disabled={!useNumbers}
-        onValueChange={setGeneratorMinimumNumbers}
+        onValueChange={(value) => { setGeneratorMinimumNumbers(value); persistGeneratorDefaults(); }}
       />
     </label>
     <label class="number-control">
@@ -79,7 +81,7 @@
         fallbackValue={minimumSymbols}
         value={minimumSymbols}
         disabled={!useSymbols}
-        onValueChange={setGeneratorMinimumSymbols}
+        onValueChange={(value) => { setGeneratorMinimumSymbols(value); persistGeneratorDefaults(); }}
       />
     </label>
   </div>

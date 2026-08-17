@@ -1,6 +1,6 @@
 import { DEFAULT_ACCOUNT_TAG, fallbackDeviceTypeMeta } from "./constants";
 import type { AccountForm, DeviceAccount, DeviceForm, DeviceTypeMeta, PasswordHistory, VaultItem } from "./types";
-import { formatDateTime, fuzzyContains, normalizeSearchValue, parseDateTimeValue, readNumber, readString } from "./utils";
+import { compactSearchValue, formatDateTime, normalizeSearchValue, parseDateTimeValue, readNumber, readString } from "./utils";
 import { createUuid, isUuid, normalizeUuid } from "./uuid";
 
 function uniqueUuid(value: unknown, usedUuids: Set<string>) {
@@ -209,15 +209,31 @@ export function getVaultItemUpdatedTimestamp(item: VaultItem) {
   return Math.max(parseDateTimeValue(item.updatedAt), ...getAccounts(item).map((account) => parseDateTimeValue(account.updatedAt)));
 }
 
-export function matchesVaultItemSearch(item: VaultItem, query: string) {
-  const deviceName = normalizeSearchValue(item.deviceName);
-  const ipAddress = normalizeSearchValue(item.ipAddress);
-  const assetCode = normalizeSearchValue(item.assetCode);
-  const location = normalizeSearchValue(item.location);
-  return fuzzyContains(deviceName, query) ||
-    fuzzyContains(ipAddress, query) ||
-    fuzzyContains(assetCode, query) ||
-    fuzzyContains(location, query);
+function getSearchMatchStrength(source: string, query: string) {
+  const normalizedSource = normalizeSearchValue(source);
+  const normalizedQuery = normalizeSearchValue(query);
+  if (!normalizedSource || !normalizedQuery) return 0;
+  if (normalizedSource === normalizedQuery) return 4;
+  if (normalizedSource.startsWith(normalizedQuery)) return 3;
+  if (normalizedSource.includes(normalizedQuery)) return 2;
+
+  const compactSource = compactSearchValue(normalizedSource);
+  const compactQuery = compactSearchValue(normalizedQuery);
+  return compactQuery && compactSource.includes(compactQuery) ? 1 : 0;
+}
+
+export function getVaultItemSearchScore(item: VaultItem, query: string) {
+  const deviceNameStrength = getSearchMatchStrength(item.deviceName, query);
+  if (deviceNameStrength) return 500 + deviceNameStrength;
+
+  const ipAddressStrength = getSearchMatchStrength(item.ipAddress, query);
+  const assetCodeStrength = getSearchMatchStrength(item.assetCode, query);
+  const locationStrength = getSearchMatchStrength(item.location, query);
+  return Math.max(
+    ipAddressStrength ? ipAddressStrength * 100 + 3 : 0,
+    assetCodeStrength ? assetCodeStrength * 100 + 2 : 0,
+    locationStrength ? locationStrength * 100 + 1 : 0,
+  );
 }
 
 export function createBlankItem(): VaultItem {

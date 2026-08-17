@@ -6,6 +6,7 @@
   import DeviceTypeDialog from "./dialogs/DeviceTypeDialog.svelte";
   import ExportConfigDialog from "./dialogs/ExportConfigDialog.svelte";
   import PasswordDialog from "./dialogs/PasswordDialog.svelte";
+  import SettingsDialog from "./dialogs/SettingsDialog.svelte";
   import type { ActiveDialog, AccountForm, BulkPasswordForm, ConfigFormat, DeviceForm, TypeForm, TypePickerScope } from "../lib/types";
   import type { AppDialogActions, AppDialogView } from "../lib/view-models";
 
@@ -22,6 +23,8 @@
   export let deviceTypeSearch = "";
   export let view: AppDialogView;
   export let actions: AppDialogActions;
+  export let settingsView: import("../lib/view-models").SettingsView;
+  export let settingsActions: import("../lib/view-models").SettingsActions;
 
   $: dialogTitle = activeDialog === "type"
     ? (typeForm.originalLabel ? "编辑设备类型" : "新增设备类型")
@@ -33,6 +36,8 @@
           ? (accountForm.id ? "编辑账号" : "新增账号")
           : activeDialog === "export-config"
             ? "导出配置"
+            : activeDialog === "settings"
+              ? "设置"
             : deviceForm.id
               ? "编辑设备信息"
               : "新增设备";
@@ -66,7 +71,7 @@
   <ModalFrame
     title={dialogTitle}
     titleId="business-dialog-title"
-    modalClass={activeDialog === "type" ? "type-modal" : activeDialog === "bulk-password" ? "bulk-modal" : ""}
+    modalClass={activeDialog === "type" ? "type-modal" : activeDialog === "bulk-password" ? "bulk-modal" : activeDialog === "settings" ? "settings-modal" : ""}
     close={actions.closeOverlays}
   >
 
@@ -95,6 +100,8 @@
         />
       {:else if activeDialog === "export-config"}
         <ExportConfigDialog bind:exportConfigFormat closeOverlays={actions.closeOverlays} exportConfig={actions.exportConfig} />
+      {:else if activeDialog === "settings"}
+        <SettingsDialog view={settingsView} actions={settingsActions} close={actions.closeOverlays} />
       {:else if activeDialog === "account"}
         <AccountDialog bind:accountForm selectedItem={view.selectedItem} revealResetToken={view.revealResetToken} closeOverlays={actions.closeOverlays} saveAccount={actions.saveAccount} />
       {:else}

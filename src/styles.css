@@ -5,6 +5,7 @@
 @import "./styles/password-generator.css";
 @import "./styles/dialogs.css";
 @import "./styles/responsive.css";
+@import "./styles/themes.css";
 
 .hidden-file-input {
   display: none;

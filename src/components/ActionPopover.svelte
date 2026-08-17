@@ -4,7 +4,6 @@
   import type { ActionPopoverActions, ActionPopoverModel } from "../lib/view-models";
   import AccountContextMenu from "./popovers/AccountContextMenu.svelte";
   import BlankDeviceContextMenu from "./popovers/BlankDeviceContextMenu.svelte";
-  import ConfigMenu from "./popovers/ConfigMenu.svelte";
   import DeviceActionsMenu from "./popovers/DeviceActionsMenu.svelte";
   import DeviceSortMenu from "./popovers/DeviceSortMenu.svelte";
   import DeviceTypeSortMenu from "./popovers/DeviceTypeSortMenu.svelte";
@@ -44,9 +43,6 @@
   let copySelectedAccountInfo: ActionPopoverActions["copySelectedAccountInfo"];
   let openEditAccountDialog: ActionPopoverActions["openEditAccountDialog"];
   let requestDeleteSelectedAccount: ActionPopoverActions["requestDeleteSelectedAccount"];
-  let chooseConfigFile: ActionPopoverActions["chooseConfigFile"];
-  let openExportConfigDialog: ActionPopoverActions["openExportConfigDialog"];
-  let openSnapshotsDialog: ActionPopoverActions["openSnapshotsDialog"];
   let setActivePopover: ActionPopoverActions["setActivePopover"];
   let menuElement: HTMLDivElement;
   let previousPopover: ActivePopover = null;
@@ -115,9 +111,6 @@
     copySelectedAccountInfo,
     openEditAccountDialog,
     requestDeleteSelectedAccount,
-    chooseConfigFile,
-    openExportConfigDialog,
-    openSnapshotsDialog,
     setActivePopover,
   } = actions);
   $: if (activePopover !== previousPopover) {
@@ -166,8 +159,6 @@
       <DeviceActionsMenu {selectedDeviceName} {hasSelectedDevice} {openEditDeviceDialog} {requestDeleteSelectedDevice} {copySelectedDeviceInfo} {setActivePopover} />
     {:else if activePopover === "account-context"}
       <AccountContextMenu {selectedAccountLabel} {selectedAccountHasPassword} {openPasswordDialog} {copySelectedAccountInfo} {openEditAccountDialog} {requestDeleteSelectedAccount} />
-    {:else if activePopover === "config"}
-      <ConfigMenu {chooseConfigFile} {openExportConfigDialog} {openSnapshotsDialog} />
     {/if}
   </div>
 {/if}
@@ -182,23 +173,24 @@
     max-height: calc(100vh - 24px);
     overflow: auto;
     padding: 8px;
-    border: 1px solid #d9dce0;
+    border: 1px solid var(--border);
     border-radius: 10px;
-    background: #fff;
+    color: var(--app-text);
+    background: var(--surface);
     box-shadow: var(--shadow);
   }
 
   .action-popover :global(h3) {
     margin: 4px 6px 6px;
-    color: #5f666d;
-    font-size: 12px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-12);
   }
 
   .action-popover :global(.context-menu-title) {
     display: grid;
     gap: 2px;
     padding: 7px 8px 8px;
-    border-bottom: 1px solid #eef0f2;
+    border-bottom: 1px solid var(--border);
     margin-bottom: 3px;
   }
 
@@ -210,13 +202,13 @@
   }
 
   .action-popover :global(.context-menu-title strong) {
-    color: #24282c;
-    font-size: 13px;
+    color: var(--text-strong);
+    font-size: var(--font-size-13);
   }
 
   .action-popover :global(.context-menu-title span) {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--font-size-12);
     font-weight: 700;
   }
 
@@ -229,7 +221,7 @@
     border-radius: 7px;
     padding: 0 9px;
     text-align: left;
-    font-size: 14px;
+    font-size: var(--font-size-14);
     font-weight: 650;
   }
 
@@ -239,7 +231,7 @@
 
   .action-popover :global(button.menu-item svg) {
     flex: 0 0 auto;
-    color: #687079;
+    color: var(--text-secondary);
   }
 
   .action-popover :global(button.menu-item.danger-menu-item svg) {
@@ -249,17 +241,17 @@
   .action-popover :global(.menu-separator) {
     height: 1px;
     margin: 4px 6px;
-    background: #eef0f2;
+    background: var(--border);
   }
 
   .action-popover :global(button small) {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--font-size-12);
   }
 
   .action-popover :global(button:hover),
   .action-popover :global(button.selected) {
-    background: #eef3fb;
+    background: var(--accent-subtle);
   }
 
   .action-popover :global(button:disabled) {

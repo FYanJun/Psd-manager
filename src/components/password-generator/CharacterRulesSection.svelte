@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Grid2X2 } from "@lucide/svelte";
+  import { CaseSensitive } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
   import { INPUT_LIMITS, sanitizeAsciiSymbols } from "../../lib/input-validation";
   import type { PasswordGeneratorActions } from "../../lib/view-models";
@@ -11,19 +11,20 @@
   export let allowedSymbols = "";
   export let generatePassword: PasswordGeneratorActions["generatePassword"];
   export let setAllowedSymbols: PasswordGeneratorActions["setAllowedSymbols"];
+  export let persistGeneratorDefaults: PasswordGeneratorActions["persistGeneratorDefaults"];
 </script>
 
 <section class="drawer-section">
   <div class="drawer-section-title">
-    <Grid2X2 size={24} />
+    <CaseSensitive size={22} />
     <h3>使用哪些字符</h3>
   </div>
 
   <div class="switch-list">
-    <label><input type="checkbox" bind:checked={useUpper} on:change={() => generatePassword()} /> 大写字母 A-Z</label>
-    <label><input type="checkbox" bind:checked={useLower} on:change={() => generatePassword()} /> 小写字母 a-z</label>
-    <label><input type="checkbox" bind:checked={useNumbers} on:change={() => generatePassword()} /> 数字 0-9</label>
-    <label><input type="checkbox" bind:checked={useSymbols} on:change={() => generatePassword()} /> 符号</label>
+    <label><input type="checkbox" bind:checked={useUpper} on:change={() => { generatePassword(); persistGeneratorDefaults(); }} /> 大写字母 A-Z</label>
+    <label><input type="checkbox" bind:checked={useLower} on:change={() => { generatePassword(); persistGeneratorDefaults(); }} /> 小写字母 a-z</label>
+    <label><input type="checkbox" bind:checked={useNumbers} on:change={() => { generatePassword(); persistGeneratorDefaults(); }} /> 数字 0-9</label>
+    <label><input type="checkbox" bind:checked={useSymbols} on:change={() => { generatePassword(); persistGeneratorDefaults(); }} /> 符号</label>
   </div>
 
   <label class="text-control">

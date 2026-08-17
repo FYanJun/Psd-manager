@@ -79,11 +79,11 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   }
 
   function canUseGeneratorForCurrentAccount() {
-    return port.getGeneratorState().target !== "bulk-password";
+    return port.getGeneratorState().target === "current-account";
   }
 
   function canUseGeneratorForBulkUpdate() {
-    return port.getGeneratorState().target !== "current-account";
+    return port.getGeneratorState().target === "bulk-password";
   }
 
   function ensureGeneratedPassword() {
@@ -96,7 +96,10 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   }
 
   function useGeneratedPasswordForCurrentDevice() {
-    if (!canUseGeneratorForCurrentAccount()) return;
+    if (!canUseGeneratorForCurrentAccount()) {
+      port.showStatus("请从修改密码窗口打开随机密码生成器");
+      return;
+    }
     const generatedPassword = ensureGeneratedPassword();
     if (!generatedPassword) return;
     port.write({ passwordForm: { password: generatedPassword, reason: "" } });
@@ -105,13 +108,15 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   }
 
   function useGeneratedPasswordForBulkUpdate() {
-    if (!canUseGeneratorForBulkUpdate()) return;
+    if (!canUseGeneratorForBulkUpdate()) {
+      port.showStatus("请从批量改密窗口打开随机密码生成器");
+      return;
+    }
     const generatedPassword = ensureGeneratedPassword();
     if (!generatedPassword) return;
     const target = port.getGeneratorState().target;
-    const bulkDialogWasOpen = port.getActiveDialog() === "bulk-password";
     port.closeGeneratorPanel(true);
-    if (target === "bulk-password" || bulkDialogWasOpen) {
+    if (target === "bulk-password") {
       const { bulkPasswordForm } = port.read();
       port.write({
         bulkPasswordForm: {
@@ -121,9 +126,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
         },
       });
       port.setActiveDialog("bulk-password");
-      return;
     }
-    openBulkPasswordDialog(true);
   }
 
   function openPasswordDialog() {

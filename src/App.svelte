@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { isTauri } from "@tauri-apps/api/core";
   import OverlayLayer from "./components/OverlayLayer.svelte";
   import VaultStorageStatus from "./components/VaultStorageStatus.svelte";
   import WorkspaceContent from "./components/WorkspaceContent.svelte";
@@ -11,6 +13,7 @@
     VAULT_SCHEMA_VERSION,
     initialItems,
   } from "./lib/constants";
+  import { createDefaultAppSettings, loadAppSettings, mergeLegacyPaneLayout, normalizeAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
   import {
     formatDeviceInfo,
   } from "./lib/device-commands";
@@ -30,9 +33,11 @@
   import { createStatusController } from "./lib/controllers/status-controller";
   import { createVaultStorageController, type VaultStorageState } from "./lib/controllers/vault-storage-controller";
   import { createWorkspaceLayoutController } from "./lib/controllers/workspace-layout-controller";
+  import { createWindowSettingsController } from "./lib/controllers/window-settings-controller";
   import { ensureDeviceTypeMetadata } from "./lib/device-type-meta";
   import type {
     AccountForm,
+    AppSettings,
     ActiveDialog,
     ActivePopover,
     BulkPasswordForm,
@@ -148,6 +153,92 @@
   let passwordStrengthRequestId = 0;
   let canUseGeneratorForCurrentAccount = true;
   let canUseGeneratorForBulkUpdate = true;
+  let appSettings: AppSettings = createDefaultAppSettings();
+  let settingsActiveSection: "interface" | "workspace" | "generator" | "data" | "about" = "interface";
+  let settingsLoaded = false;
+  let settingsHasStoredSettings = false;
+  let settingsSaveTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let settingsSaveQueue = Promise.resolve();
+  let systemThemeMediaQuery: MediaQueryList | null = null;
+  let tooltipEnabled = true;
+  let appVersion = "0.1.14";
+  let dataDialogReturnToSettings = false;
+
+  const windowSettingsController = createWindowSettingsController({
+    read: () => appSettings,
+    writeBounds: (windowBounds) => {
+      if (!settingsLoaded || !appSettings.workspace.rememberWindowBounds) return;
+      appSettings = {
+        ...appSettings,
+        workspace: { ...appSettings.workspace, windowBounds },
+      };
+      scheduleAppSettingsSave();
+    },
+  });
+
+  function applyGeneratorSettings(generator: AppSettings["passwordGenerator"]) {
+    generatorLength = generator.length;
+    generatorLengthInput = String(generator.length);
+    useUpper = generator.useUpper;
+    useLower = generator.useLower;
+    useNumbers = generator.useNumbers;
+    useSymbols = generator.useSymbols;
+    excludeSimilar = generator.excludeSimilar;
+    preventRepeats = generator.preventRepeats;
+    minimumNumbers = generator.minimumNumbers;
+    minimumSymbols = generator.minimumSymbols;
+    allowedSymbols = generator.allowedSymbols;
+    excludedCharacters = generator.excludedCharacters;
+  }
+
+  function applyAppSettings(settings: AppSettings, restoreLastView = false) {
+    tooltipEnabled = settings.interface.tooltipEnabled;
+    applyInterfaceSettings(settings);
+    sortMode = settings.workspace.deviceSortMode;
+    deviceTypeSortMode = settings.workspace.deviceTypeSortMode;
+    if (settings.workspace.rememberLayout) layoutController.restore(settings.workspace.paneLayout);
+    applyGeneratorSettings(settings.passwordGenerator);
+    if (restoreLastView && settings.workspace.rememberLastView) {
+      selectedDeviceType = settings.workspace.lastView.deviceType;
+      searchQuery = settings.workspace.lastView.searchQuery;
+      sortMode = settings.workspace.lastView.sortMode;
+    }
+  }
+
+  function scheduleAppSettingsSave() {
+    if (!settingsLoaded) return;
+    if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
+    settingsSaveTimer = window.setTimeout(() => {
+      settingsSaveTimer = null;
+      void persistAppSettings().catch((error) => {
+        showStatus(
+          `设置保存失败：${error instanceof Error ? error.message : String(error)}`,
+          6000,
+          "重试保存",
+          () => {
+            void persistAppSettings().then(() => showStatus("应用设置已保存")).catch((retryError) => {
+              showStatus(`设置保存失败：${retryError instanceof Error ? retryError.message : String(retryError)}`, 6000);
+            });
+          },
+        );
+      });
+    }, 220);
+  }
+
+  function persistAppSettings() {
+    if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
+    settingsSaveTimer = null;
+    const snapshot = appSettings;
+    const save = settingsSaveQueue.then(() => saveAppSettings(snapshot));
+    settingsSaveQueue = save.catch(() => undefined);
+    return save;
+  }
+
+  function updateAppSettings(next: AppSettings) {
+    appSettings = normalizeAppSettings(next);
+    applyAppSettings(appSettings);
+    scheduleAppSettingsSave();
+  }
 
   const layoutController = createWorkspaceLayoutController({
     read: () => ({ sidebarRatio, listRatio, generatorRatio }),
@@ -155,8 +246,29 @@
       sidebarRatio = layout.sidebarRatio;
       listRatio = layout.listRatio;
       generatorRatio = layout.generatorRatio;
+      if (settingsLoaded && appSettings.workspace.rememberLayout && !resizingPane) {
+        appSettings = {
+          ...appSettings,
+          workspace: {
+            ...appSettings.workspace,
+            paneLayout: { ...layout },
+          },
+        };
+        scheduleAppSettingsSave();
+      }
     },
     setResizingPane: (pane) => (resizingPane = pane),
+    onResizeEnd: () => {
+      if (!settingsLoaded || !appSettings.workspace.rememberLayout) return;
+      appSettings = {
+        ...appSettings,
+        workspace: {
+          ...appSettings.workspace,
+          paneLayout: { sidebarRatio, listRatio, generatorRatio },
+        },
+      };
+      scheduleAppSettingsSave();
+    },
     beforeResize: () => {
       activePopover = null;
       openTypePicker = null;
@@ -448,6 +560,7 @@
     applyLoaded: applyPersistedVaultState,
     clampLayout: () => layoutController.clamp(),
     showStatus,
+    persistAppSettings,
     writeViewState: (state) => {
       vaultStorageState = state.state;
       vaultStorageError = state.error;
@@ -502,7 +615,22 @@
     customDeviceTypes = normalized.customDeviceTypes;
     ensureDeviceTypeMetaForItems(items);
     vaultSnapshots = Array.isArray(parsed.snapshots) ? parsed.snapshots.slice(0, 10) : [];
-    layoutController.restore(parsed.paneLayout);
+    if (appSettings.workspace.rememberLastView) {
+      const rememberedType = appSettings.workspace.lastView.deviceType;
+      selectedDeviceType = rememberedType === "全部设备" || customDeviceTypes.some((type) => type.label === rememberedType)
+        ? rememberedType
+        : "全部设备";
+      searchQuery = appSettings.workspace.lastView.searchQuery;
+      sortMode = appSettings.workspace.lastView.sortMode;
+    }
+    if (!settingsHasStoredSettings && parsed.paneLayout) {
+      appSettings = mergeLegacyPaneLayout(appSettings, parsed.paneLayout as AppSettings["workspace"]["paneLayout"]);
+      applyAppSettings(appSettings, false);
+      void persistAppSettings();
+    }
+    if (appSettings.workspace.rememberLastView) {
+      selectedId = items.find((item) => item.uuid === appSettings.workspace.lastView.selectedDeviceUuid)?.id ?? items[0]?.id ?? 0;
+    }
   }
 
   function createPersistedVaultState(revision: number): PersistedVaultState {
@@ -512,7 +640,6 @@
       items,
       customDeviceTypes,
       snapshots: vaultSnapshots,
-      paneLayout: { sidebarRatio, listRatio, generatorRatio },
     };
   }
 
@@ -533,8 +660,57 @@
     historyContextKey = "";
   }
 
+  async function initializeAppSettings() {
+    try {
+      const loaded = await loadAppSettings();
+      settingsHasStoredSettings = loaded.hasStoredSettings;
+      appSettings = loaded.settings;
+      applyAppSettings(appSettings, true);
+      settingsLoaded = true;
+      await windowSettingsController.restore();
+      await windowSettingsController.mount();
+      if (loaded.needsMigration) scheduleAppSettingsSave();
+    } catch (error) {
+      settingsHasStoredSettings = false;
+      appSettings = createDefaultAppSettings();
+      applyAppSettings(appSettings, true);
+      settingsLoaded = true;
+      await windowSettingsController.mount();
+      showStatus(`应用设置读取失败，已使用默认设置：${error instanceof Error ? error.message : String(error)}`, 6000);
+    }
+    if (isTauri()) {
+      try {
+        appVersion = await getVersion();
+      } catch {
+        // Keep the package version fallback in browser preview or older runtimes.
+      }
+    }
+  }
+
+  function applyInterfaceSettings(settings: AppSettings) {
+    const resolvedTheme = settings.interface.theme === "system"
+      ? systemThemeMediaQuery?.matches ? "dark" : "light"
+      : settings.interface.theme;
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.themePreference = settings.interface.theme;
+    document.documentElement.dataset.density = settings.interface.density;
+    document.documentElement.dataset.fontSize = settings.interface.fontSize;
+    document.documentElement.classList.toggle("reduce-motion", settings.interface.reduceMotion);
+    void windowSettingsController.applyTheme(settings.interface.theme);
+  }
+
+  function handleSystemThemeChange() {
+    if (appSettings.interface.theme === "system") applyInterfaceSettings(appSettings);
+  }
+
   async function restoreSnapshot(snapshotId: string, createCurrentBackup: boolean) {
+    const returnToSettings = dataDialogReturnToSettings;
+    dataDialogReturnToSettings = false;
     await snapshotController.restoreSnapshot(snapshotId, createCurrentBackup);
+    if (returnToSettings && activeDialog === null) {
+      settingsActiveSection = "data";
+      activeDialog = "settings";
+    }
   }
 
   function offerSnapshotUndo(snapshotId: string, message: string) {
@@ -558,7 +734,12 @@
   }
 
   onMount(() => {
-    void vaultStorageController.initialize();
+    systemThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    systemThemeMediaQuery.addEventListener("change", handleSystemThemeChange);
+    void (async () => {
+      await initializeAppSettings();
+      await vaultStorageController.initialize();
+    })();
     vaultStorageController.mountCloseProtection();
     overlayController.mount();
     window.addEventListener("keydown", handleGlobalKeydown);
@@ -570,8 +751,12 @@
       window.removeEventListener("resize", clampPaneLayout);
       window.removeEventListener("blur", handleWindowBlur);
       vaultStorageController.destroy();
+      windowSettingsController.destroy();
+      systemThemeMediaQuery?.removeEventListener("change", handleSystemThemeChange);
+      systemThemeMediaQuery = null;
       statusController.destroy();
       stopPaneResize();
+      if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
     };
   });
 
@@ -579,9 +764,6 @@
     items;
     customDeviceTypes;
     vaultSnapshots;
-    sidebarRatio;
-    listRatio;
-    generatorRatio;
     vaultStorageController.schedule();
   }
 
@@ -667,8 +849,8 @@
   $: canDeleteSelectedDeviceType = selectedDeviceType !== "全部设备" && selectedTypeDeviceCount === 0;
   $: listContextLabel = selectedDeviceType;
   $: searchPlaceholder = selectedDeviceType === "全部设备"
-    ? "搜索设备名、连接地址或资产编号"
-    : `在${selectedDeviceType}中搜索设备名、连接地址或资产编号`;
+    ? "搜索设备名、连接地址、资产编号或位置"
+    : `在${selectedDeviceType}中搜索设备名、连接地址、资产编号或位置`;
   $: sortedHistory = sortPasswordHistory(selectedAccount, historySortDesc);
   $: bulkUsernameSuggestions = accountPasswordDerived.bulkUsernameSuggestions;
   $: bulkPasswordMatches = accountPasswordDerived.bulkPasswordMatches;
@@ -692,10 +874,12 @@
 
   function updateSearchValue(value: string) {
     navigationController.updateSearch(value);
+    persistLastView();
   }
 
   function clearSearch() {
     navigationController.clearSearch();
+    persistLastView();
   }
 
   function focusSearchInput() {
@@ -704,10 +888,30 @@
 
   function selectDeviceType(deviceType: "全部设备" | DeviceType) {
     navigationController.selectDeviceType(deviceType);
+    persistLastView();
+  }
+
+  function persistLastView(selectedDeviceUuid = selectedItem?.uuid ?? "") {
+    if (!settingsLoaded || !appSettings.workspace.rememberLastView) return;
+    appSettings = {
+      ...appSettings,
+      workspace: {
+        ...appSettings.workspace,
+        lastView: {
+          ...appSettings.workspace.lastView,
+          deviceType: selectedDeviceType,
+          searchQuery,
+          sortMode,
+          selectedDeviceUuid,
+        },
+      },
+    };
+    scheduleAppSettingsSave();
   }
 
   function selectDevice(id: number) {
     navigationController.selectDevice(id);
+    persistLastView(items.find((item) => item.id === id)?.uuid ?? "");
   }
 
   async function copyText(text: string, label: string) {
@@ -751,8 +955,133 @@
   }
 
   function openSnapshotsDialog() {
+    dataDialogReturnToSettings = activeDialog === "settings";
     activePopover = null;
     activeDialog = "snapshots";
+  }
+
+  function openSettings() {
+    dataDialogReturnToSettings = false;
+    activePopover = null;
+    settingsActiveSection = "interface";
+    activeDialog = "settings";
+  }
+
+  function setSettingsSection(section: "interface" | "workspace" | "generator" | "data" | "about") {
+    settingsActiveSection = section;
+  }
+
+  function setTooltipSetting(value: boolean) {
+    updateAppSettings({
+      ...appSettings,
+      interface: { ...appSettings.interface, tooltipEnabled: value },
+    });
+  }
+
+  function setThemeSetting(value: AppSettings["interface"]["theme"]) {
+    updateAppSettings({
+      ...appSettings,
+      interface: { ...appSettings.interface, theme: value },
+    });
+  }
+
+  function setDensitySetting(value: AppSettings["interface"]["density"]) {
+    updateAppSettings({
+      ...appSettings,
+      interface: { ...appSettings.interface, density: value },
+    });
+  }
+
+  function setFontSizeSetting(value: AppSettings["interface"]["fontSize"]) {
+    updateAppSettings({
+      ...appSettings,
+      interface: { ...appSettings.interface, fontSize: value },
+    });
+  }
+
+  function setReduceMotionSetting(value: boolean) {
+    updateAppSettings({
+      ...appSettings,
+      interface: { ...appSettings.interface, reduceMotion: value },
+    });
+  }
+
+  function setRememberLayout(value: boolean) {
+    updateAppSettings({
+      ...appSettings,
+      workspace: {
+        ...appSettings.workspace,
+        rememberLayout: value,
+        paneLayout: { sidebarRatio, listRatio, generatorRatio },
+      },
+    });
+  }
+
+  function setRememberLastView(value: boolean) {
+    updateAppSettings({
+      ...appSettings,
+      workspace: {
+        ...appSettings.workspace,
+        rememberLastView: value,
+        lastView: value
+          ? {
+              deviceType: selectedDeviceType,
+              searchQuery,
+              sortMode,
+              selectedDeviceUuid: selectedItem?.uuid ?? "",
+            }
+          : {
+              deviceType: "全部设备",
+              searchQuery: "",
+              sortMode: appSettings.workspace.deviceSortMode,
+              selectedDeviceUuid: "",
+            },
+      },
+    });
+  }
+
+  function setRememberWindowBounds(value: boolean) {
+    updateAppSettings({
+      ...appSettings,
+      workspace: { ...appSettings.workspace, rememberWindowBounds: value, windowBounds: value ? appSettings.workspace.windowBounds : null },
+    });
+  }
+
+  function setDeviceSortSetting(value: SortMode) {
+    updateAppSettings({
+      ...appSettings,
+      workspace: { ...appSettings.workspace, deviceSortMode: value },
+    });
+  }
+
+  function setDeviceTypeSortSetting(value: DeviceTypeSortMode) {
+    updateAppSettings({
+      ...appSettings,
+      workspace: { ...appSettings.workspace, deviceTypeSortMode: value },
+    });
+  }
+
+  function setGeneratorSetting<K extends keyof AppSettings["passwordGenerator"]>(key: K, value: AppSettings["passwordGenerator"][K]) {
+    const next = normalizeAppSettings({
+      ...appSettings,
+      passwordGenerator: { ...appSettings.passwordGenerator, [key]: value },
+    });
+    updateAppSettings(next);
+  }
+
+  async function resetSettings() {
+    try {
+      if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
+      settingsSaveTimer = null;
+      await settingsSaveQueue;
+      await resetAppSettings();
+      appSettings = createDefaultAppSettings();
+      applyAppSettings(appSettings);
+      await persistAppSettings();
+      showStatus("应用设置已恢复默认值");
+    } catch (error) {
+      showStatus(`恢复设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+    }
   }
 
   function showStatus(message: string, duration = 2200, actionLabel = "", action: (() => void) | null = null) {
@@ -789,22 +1118,49 @@
 
   function setGeneratorLength(length: number, syncInput = true) {
     passwordGeneratorController.setLength(length, syncInput);
+    persistGeneratorDefaults();
   }
 
   function setGeneratorMinimumNumbers(value: number | string) {
     passwordGeneratorController.setMinimumNumbers(value);
+    persistGeneratorDefaults();
   }
 
   function setGeneratorMinimumSymbols(value: number | string) {
     passwordGeneratorController.setMinimumSymbols(value);
+    persistGeneratorDefaults();
   }
 
   function setAllowedSymbols(value: string) {
     passwordGeneratorController.setAllowedSymbols(value);
+    persistGeneratorDefaults();
   }
 
   function setExcludedCharacters(value: string) {
     passwordGeneratorController.setExcludedCharacters(value);
+    persistGeneratorDefaults();
+  }
+
+  function persistGeneratorDefaults() {
+    if (!settingsLoaded) return;
+    appSettings = {
+      ...appSettings,
+      passwordGenerator: {
+        ...appSettings.passwordGenerator,
+        length: generatorLength,
+        useUpper,
+        useLower,
+        useNumbers,
+        useSymbols,
+        excludeSimilar,
+        preventRepeats,
+        minimumNumbers,
+        minimumSymbols,
+        allowedSymbols,
+        excludedCharacters,
+      },
+    };
+    scheduleAppSettingsSave();
   }
 
   function updateGeneratorLengthFromSlider(event: Event) {
@@ -825,11 +1181,20 @@
 
   function setSortMode(mode: SortMode) {
     navigationController.setSortMode(mode);
+    if (settingsLoaded && mode !== appSettings.workspace.deviceSortMode) {
+      appSettings = { ...appSettings, workspace: { ...appSettings.workspace, deviceSortMode: mode } };
+      scheduleAppSettingsSave();
+    }
+    persistLastView();
   }
 
   function setDeviceTypeSortMode(mode: DeviceTypeSortMode) {
     if (mode === deviceTypeSortMode) return;
     deviceTypeSortMode = mode;
+    if (settingsLoaded) {
+      appSettings = { ...appSettings, workspace: { ...appSettings.workspace, deviceTypeSortMode: mode } };
+      scheduleAppSettingsSave();
+    }
   }
 
   function clampPaneLayout() {
@@ -938,11 +1303,24 @@
   }
 
   function closeOverlays() {
+    const returnToSettings = dataDialogReturnToSettings
+      && (activeDialog === "export-config" || activeDialog === "snapshots");
     overlayController.closeOverlays();
+    dataDialogReturnToSettings = false;
+    if (returnToSettings) {
+      settingsActiveSection = "data";
+      activeDialog = "settings";
+    }
   }
 
   function cancelPendingConfirmation() {
+    const returnToSettings = dataDialogReturnToSettings && activeDialog === null;
     overlayController.cancelPendingConfirmation();
+    dataDialogReturnToSettings = false;
+    if (returnToSettings) {
+      settingsActiveSection = "data";
+      activeDialog = "settings";
+    }
   }
 
   function saveActiveDialog() {
@@ -1129,14 +1507,22 @@
   }
 
   function openExportConfigDialog() {
+    dataDialogReturnToSettings = activeDialog === "settings";
     configTransferController.openExportConfigDialog();
   }
 
   async function exportConfig(format: ConfigFormat = exportConfigFormat) {
+    const returnToSettings = dataDialogReturnToSettings;
+    dataDialogReturnToSettings = false;
     await configTransferController.exportConfig(format);
+    if (returnToSettings && activeDialog === null) {
+      settingsActiveSection = "data";
+      activeDialog = "settings";
+    }
   }
 
   async function chooseConfigFile() {
+    if (activeDialog === "settings") dataDialogReturnToSettings = true;
     await configTransferController.chooseConfigFile();
   }
 
@@ -1147,7 +1533,13 @@
   }
 
   async function applyImportedConfig(config: ConfigData, format: ConfigFormat, mode: ConfigImportMode) {
+    const returnToSettings = dataDialogReturnToSettings;
+    dataDialogReturnToSettings = false;
     await configTransferController.applyImportedConfig(config, format, mode);
+    if (returnToSettings && activeDialog === null) {
+      settingsActiveSection = "data";
+      activeDialog = "settings";
+    }
   }
 
   async function selectConfigFileFromBrowser(event: Event) {
@@ -1175,6 +1567,25 @@
     exportConfig,
   };
 
+  const settingsActions = {
+    setSection: setSettingsSection,
+    setTooltipEnabled: setTooltipSetting,
+    setTheme: setThemeSetting,
+    setDensity: setDensitySetting,
+    setFontSize: setFontSizeSetting,
+    setReduceMotion: setReduceMotionSetting,
+    setRememberLayout,
+    setRememberLastView,
+    setRememberWindowBounds,
+    setDeviceSortMode: setDeviceSortSetting,
+    setDeviceTypeSortMode: setDeviceTypeSortSetting,
+    setGeneratorValue: setGeneratorSetting,
+    openSnapshotsDialog,
+    openExportConfigDialog,
+    chooseConfigFile,
+    reset: resetSettings,
+  };
+
   const actionPopoverActions = {
     setDeviceTypeSortMode,
     setSortMode,
@@ -1193,9 +1604,6 @@
     copySelectedAccountInfo,
     openEditAccountDialog,
     requestDeleteSelectedAccount,
-    chooseConfigFile,
-    openExportConfigDialog,
-    openSnapshotsDialog,
     setActivePopover: (popover: ActivePopover | null) => (activePopover = popover),
   };
 
@@ -1236,7 +1644,7 @@
       updateSearchValue,
       openBulkPasswordDialog: () => openBulkPasswordDialog(),
       openGeneratorPanel: () => openGeneratorPanel(),
-      openConfigPopover: (event: MouseEvent) => openPopover("config", event),
+      openSettings,
     },
     deviceList: {
       openAddDeviceDialog: () => openAddDeviceDialog(),
@@ -1262,6 +1670,7 @@
     setGeneratorMinimumSymbols,
     setAllowedSymbols,
     setExcludedCharacters,
+    persistGeneratorDefaults,
     updateGeneratorLengthFromSlider,
     handleGeneratorLengthInput,
     commitGeneratorLengthInput,
@@ -1284,6 +1693,22 @@
     bulkUsernameSuggestions,
     bulkPasswordMatches,
     bulkPasswordSelectedMatches,
+  };
+
+  $: settingsView = {
+    activeSection: settingsActiveSection,
+    tooltipEnabled,
+    theme: appSettings.interface.theme,
+    density: appSettings.interface.density,
+    fontSize: appSettings.interface.fontSize,
+    reduceMotion: appSettings.interface.reduceMotion,
+    rememberLayout: appSettings.workspace.rememberLayout,
+    rememberLastView: appSettings.workspace.rememberLastView,
+    rememberWindowBounds: appSettings.workspace.rememberWindowBounds,
+    deviceSortMode: appSettings.workspace.deviceSortMode,
+    deviceTypeSortMode: appSettings.workspace.deviceTypeSortMode,
+    generator: appSettings.passwordGenerator,
+    version: appVersion,
   };
 
   $: actionPopoverModel = {
@@ -1422,6 +1847,8 @@
     {dismissStatus}
     {statusActionLabel}
     {runStatusAction}
-    tooltipEnabled={vaultStorageState === "ready"}
+    settingsView={settingsView}
+    settingsActions={settingsActions}
+    tooltipEnabled={vaultStorageState === "ready" && tooltipEnabled}
   />
 </main>

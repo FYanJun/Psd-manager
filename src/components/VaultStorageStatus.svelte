@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AlertTriangle, KeyRound, LoaderCircle, RefreshCw, RotateCcw } from "@lucide/svelte";
+  import { AlertTriangle, DatabaseBackup, LoaderCircle, RefreshCw, RotateCcw } from "@lucide/svelte";
 
   export let state: "loading" | "load-error" | "save-error" = "loading";
   export let error = "";
@@ -62,7 +62,7 @@
         {#if state === "load-error" && canRecoverBackup}
           <button class="primary-button" on:click={() => (pendingCriticalAction = "recover-backup")}><RotateCcw size={17} /><span>恢复安全备份</span></button>
         {:else if state === "load-error" && canMigrateLegacyKey}
-          <button class="primary-button" on:click={() => (pendingCriticalAction = "migrate-legacy")}><KeyRound size={17} /><span>迁移旧版资产库</span></button>
+          <button class="primary-button" on:click={() => (pendingCriticalAction = "migrate-legacy")}><DatabaseBackup size={17} /><span>迁移旧版资产库</span></button>
         {:else}
           <button class="secondary-button" on:click={() => retry()}><RefreshCw size={17} /><span>{state === "save-error" ? "重试保存" : "重新读取"}</span></button>
         {/if}
@@ -79,7 +79,7 @@
     display: grid;
     place-items: center;
     padding: 24px;
-    background: rgba(243, 245, 247, 0.96);
+    background: color-mix(in srgb, var(--app-background) 96%, transparent);
   }
 
   .vault-storage-status {
@@ -89,10 +89,11 @@
     gap: 16px;
     width: min(560px, 100%);
     padding: 20px;
-    border: 1px solid #d9dce0;
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 18px 50px rgba(24, 28, 32, 0.16);
+    color: var(--app-text);
+    background: var(--surface);
+    box-shadow: var(--modal-shadow);
   }
 
   .vault-storage-actions {
@@ -116,7 +117,7 @@
   }
 
   .vault-storage-confirmation > strong {
-    font-size: 15px;
+    font-size: var(--font-size-15);
   }
 
   .vault-storage-confirmation .vault-storage-actions {
@@ -125,12 +126,12 @@
 
   .vault-storage-status h1 {
     margin: 0 0 4px;
-    font-size: 18px;
+    font-size: var(--font-size-18);
   }
 
   .vault-storage-status p {
     margin: 0;
-    color: #646b73;
+    color: var(--text-secondary);
     line-height: 1.5;
     overflow-wrap: anywhere;
   }

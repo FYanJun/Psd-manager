@@ -122,7 +122,7 @@
     z-index: 40;
     display: grid;
     place-items: center;
-    background: rgba(36, 38, 40, 0.24);
+    background: var(--overlay);
   }
 
   .modal {
@@ -132,10 +132,10 @@
     width: min(var(--dialog-width), calc(100vw - 48px));
     max-height: calc(100vh - 48px);
     overflow: hidden;
-    border: 1px solid #d8dce0;
+    border: 1px solid var(--border);
     border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 24px 70px rgba(24, 28, 32, 0.22);
+    background: var(--surface);
+    box-shadow: var(--modal-shadow);
   }
 
   .modal:global(.type-modal) {
@@ -148,17 +148,21 @@
     --dialog-width: 920px;
   }
 
+  .modal:global(.settings-modal) {
+    --dialog-width: 860px;
+  }
+
   .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     padding: 16px 18px;
-    border-bottom: 1px solid #eceef0;
+    border-bottom: 1px solid var(--border);
   }
 
   .modal-header h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--font-size-20);
   }
 </style>

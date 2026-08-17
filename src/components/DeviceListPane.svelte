@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, Folder, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "@lucide/svelte";
+  import { ArrowDownUp, MoreHorizontal, Pencil, Plus, Search, SearchX, Server, Trash2 } from "@lucide/svelte";
   import type { VaultItem } from "../lib/types";
   import { getAccounts } from "../lib/vault";
 
@@ -51,11 +51,16 @@
 
   <div class="list-scroll" role="group" aria-label="设备列表右键菜单区域" on:contextmenu={openDeviceListBlankContextMenu}>
     {#if filteredItems.length === 0}
+      {@const hasActiveSearch = Boolean(searchQuery.trim())}
       <div class="empty-list" class:onboarding-empty={!hasDevices}>
-        <Folder size={24} />
+        {#if hasActiveSearch}
+          <SearchX size={24} />
+        {:else}
+          <Server size={24} />
+        {/if}
         <div>
-          <strong>{hasDevices ? "没有匹配的设备资产" : "资产库还是空的"}</strong>
-          <span>{hasDevices ? "换个设备名或连接地址搜索，或新增一台设备。" : "新增第一台设备资产后，这里会保存账号、当前密码和历史密码。"}</span>
+          <strong>{hasActiveSearch ? "没有匹配的设备资产" : hasDevices ? "当前类型暂无设备" : "资产库还是空的"}</strong>
+          <span>{hasActiveSearch ? "换个设备名或连接地址搜索，或新增一台设备。" : hasDevices ? "可以在当前类型下新增设备，或切换到其他设备类型。" : "新增第一台设备资产后，这里会保存账号、当前密码和历史密码。"}</span>
         </div>
       </div>
     {:else}

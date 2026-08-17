@@ -39,7 +39,7 @@
   color: #25282b;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 17px;
+  font-size: var(--font-size-17);
   line-height: 1.2;
 }
 
@@ -49,7 +49,7 @@
   min-width: 0;
   gap: 8px;
   color: #33363a;
-  font-size: 17px;
+  font-size: var(--font-size-17);
 }
 
 .breadcrumb span {
@@ -69,11 +69,11 @@
 
 .update-password-action {
   color: #fff;
-  background: var(--blue);
+  background: var(--primary-fill);
 }
 
 .update-password-action:hover {
-  background: var(--blue-hover);
+  background: var(--primary-fill-hover);
 }
 
 .detail-actions .icon-button {
@@ -114,7 +114,7 @@
 .detail-empty-state h1 {
   margin: 20px 0 0;
   color: #24282c;
-  font-size: 28px;
+  font-size: var(--font-size-28);
   line-height: 1.18;
 }
 
@@ -122,7 +122,7 @@
   max-width: 84%;
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 16px;
+  font-size: var(--font-size-16);
   line-height: 1.55;
 }
 
@@ -140,7 +140,7 @@
   margin: 3px 0 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-12);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -157,19 +157,24 @@
 
 .device-info-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   width: 100%;
-  gap: 18px 28px;
+  gap: 18px;
   margin: 0 0 24px;
   border-bottom: 1px solid #eceef0;
   padding: 4px 0 22px;
 }
 
-.device-info-card:has(.device-info-item:nth-child(2):last-child) {
+.device-info-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px 28px;
+}
+
+.device-info-grid:has(.device-info-item:nth-child(2):last-child) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.device-info-card:has(.device-info-item:nth-child(3)) {
+.device-info-grid:has(.device-info-item:nth-child(3)) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -192,8 +197,23 @@
   color: #25282b;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 18px;
+  font-size: var(--font-size-18);
   line-height: 1.25;
+}
+
+.device-info-notes {
+  padding-top: 16px;
+  border-top: 1px solid #eceef0;
+}
+
+.device-info-notes p {
+  overflow: visible;
+  color: var(--text-secondary);
+  text-overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-14);
+  line-height: 1.6;
 }
 
 .device-info-card + .account-section {
@@ -253,7 +273,7 @@
   padding: 4px 8px;
   background: #edf4ff;
   color: var(--blue);
-  font-size: 12px;
+  font-size: var(--font-size-12);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -269,7 +289,7 @@
 .account-heading-action {
   height: 30px;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: var(--font-size-13);
 }
 
 .account-heading-action svg {
@@ -314,12 +334,12 @@
 
 .account-empty-state strong {
   color: #2b2f33;
-  font-size: 14px;
+  font-size: var(--font-size-14);
 }
 
 .account-empty-state span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-13);
 }
 
 .account-select-box {
@@ -356,8 +376,8 @@
 }
 
 .account-checkbox.checked {
-  border-color: var(--blue);
-  background: var(--blue);
+  border-color: var(--primary-fill);
+  background: var(--primary-fill);
   box-shadow: 0 0 0 3px rgba(17, 112, 226, 0.14);
 }
 
@@ -397,12 +417,12 @@
 
 .account-list strong {
   color: #25282b;
-  font-size: 14px;
+  font-size: var(--font-size-14);
 }
 
 .account-list span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-13);
 }
 
 .field-group {
@@ -440,7 +460,7 @@
 .field-label {
   display: block;
   color: #6b737b;
-  font-size: 13px;
+  font-size: var(--font-size-13);
   font-weight: 700;
 }
 
@@ -450,7 +470,7 @@
   color: #25282b;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 18px;
+  font-size: var(--font-size-18);
   line-height: 1.25;
   text-decoration: none;
 }
@@ -470,7 +490,7 @@
 
 .strength {
   color: #7b7e83;
-  font-size: 14px;
+  font-size: var(--font-size-14);
   white-space: nowrap;
 }
 
@@ -491,7 +511,7 @@
   padding: 8px 0;
   color: #292c30;
   text-align: left;
-  font-size: 17px;
+  font-size: var(--font-size-17);
   font-weight: 700;
 }
 
@@ -518,7 +538,7 @@
 
 .panel-heading h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--font-size-17);
 }
 
 .history-row {
@@ -545,14 +565,14 @@
 
 .history-password-pair span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-12);
 }
 
 .history-row strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
+  font-size: var(--font-size-15);
 }
 
 .history-row strong.masked {
@@ -574,5 +594,5 @@
 .history-row span,
 .history-row time {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-13);
 }

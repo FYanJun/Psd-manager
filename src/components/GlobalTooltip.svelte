@@ -196,7 +196,7 @@
     color: #fff;
     background: rgba(34, 38, 42, 0.96);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    font-size: 12px;
+    font-size: var(--font-size-12);
     font-weight: 800;
     line-height: 1.3;
     overflow-wrap: anywhere;

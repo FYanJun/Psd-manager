@@ -46,7 +46,7 @@
     updateSearchValue={actions.topbar.updateSearchValue}
     openBulkPasswordDialog={actions.topbar.openBulkPasswordDialog}
     openGeneratorPanel={actions.topbar.openGeneratorPanel}
-    openConfigPopover={actions.topbar.openConfigPopover}
+    openSettings={actions.topbar.openSettings}
   />
 
   <div class="content-grid">

@@ -1,7 +1,13 @@
 import { defaultDeviceTypeMeta } from "../constants";
 import { sortDeviceTypeOptions } from "../layout";
 import type { DeviceType, DeviceTypeMeta, DeviceTypeSortMode, SortMode, VaultItem } from "../types";
-import { getVaultItemUpdatedTimestamp, matchesVaultItemSearch } from "../vault";
+import { getVaultItemSearchScore, getVaultItemUpdatedTimestamp } from "../vault";
+
+function compareVaultItems(left: VaultItem, right: VaultItem, sortMode: SortMode) {
+  if (sortMode === "nameAsc") return left.deviceName.localeCompare(right.deviceName, "zh-Hans-CN");
+  if (sortMode === "typeAsc") return left.deviceType.localeCompare(right.deviceType, "zh-Hans-CN");
+  return getVaultItemUpdatedTimestamp(right) - getVaultItemUpdatedTimestamp(left) || right.id - left.id;
+}
 
 export function getFilteredVaultItems(
   items: VaultItem[],
@@ -11,16 +17,20 @@ export function getFilteredVaultItems(
 ) {
   const query = searchQuery.trim().toLowerCase();
   return items
-    .filter((item) => {
-      const matchesQuery = !query || matchesVaultItemSearch(item, query);
+    .map((item) => ({
+      item,
+      searchScore: query ? getVaultItemSearchScore(item, query) : 0,
+    }))
+    .filter(({ item, searchScore }) => {
+      const matchesQuery = !query || searchScore > 0;
       const matchesType = selectedDeviceType === "全部设备" || item.deviceType === selectedDeviceType;
       return matchesQuery && matchesType;
     })
     .sort((left, right) => {
-      if (sortMode === "nameAsc") return left.deviceName.localeCompare(right.deviceName, "zh-Hans-CN");
-      if (sortMode === "typeAsc") return left.deviceType.localeCompare(right.deviceType, "zh-Hans-CN");
-      return getVaultItemUpdatedTimestamp(right) - getVaultItemUpdatedTimestamp(left) || right.id - left.id;
-    });
+      if (query && left.searchScore !== right.searchScore) return right.searchScore - left.searchScore;
+      return compareVaultItems(left.item, right.item, sortMode);
+    })
+    .map(({ item }) => item);
 }
 
 export function getVisibleDeviceTypeOptions(

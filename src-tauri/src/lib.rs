@@ -19,14 +19,18 @@ use tauri::Emitter;
 
 #[cfg(desktop)]
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
 };
+
+#[cfg(target_os = "windows")]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 
 const VAULT_FILE_NAME: &str = "vault.enc.json";
 const VAULT_BACKUP_FILE_NAME: &str = "vault.enc.backup.json";
 const VAULT_LOCK_FILE_NAME: &str = "vault.lock";
 const VAULT_KEY_FILE_NAME: &str = "vault.key";
+const APP_SETTINGS_FILE_NAME: &str = "settings.json";
 const KEYRING_SERVICE: &str = "com.fan.psd-manager";
 const KEYRING_ACCOUNT: &str = "vault-key-v1";
 const VAULT_AAD: &[u8] = b"com.fan.psd-manager:vault:1";
@@ -34,6 +38,7 @@ const VAULT_SCHEMA_VERSION: u64 = 2;
 const LEGACY_KEY_MIGRATION_REQUIRED: &str = "LEGACY_KEY_MIGRATION_REQUIRED";
 const BACKUP_RECOVERY_REQUIRED: &str = "BACKUP_RECOVERY_REQUIRED";
 static VAULT_IO_LOCK: Mutex<()> = Mutex::new(());
+static APP_SETTINGS_IO_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize, Deserialize)]
 struct EncryptedVaultFile {
@@ -96,6 +101,94 @@ fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
             .map_err(|error| format!("无法限制资产库目录权限：{error}"))?;
     }
     Ok(directory)
+}
+
+fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(ensure_vault_directory(app)?.join(APP_SETTINGS_FILE_NAME))
+}
+
+fn validate_app_settings_content(content: &str) -> Result<serde_json::Value, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(content).map_err(|error| format!("应用设置不是合法 JSON：{error}"))?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| "应用设置必须是对象".to_string())?;
+    let schema_version = object
+        .get("schemaVersion")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "应用设置缺少 schemaVersion".to_string())?;
+    if schema_version != 1 && schema_version != 2 {
+        return Err("不支持的应用设置版本，当前支持 1 和 2".to_string());
+    }
+    Ok(value)
+}
+
+fn load_app_settings_sync(app: &AppHandle) -> Result<Option<String>, String> {
+    let _guard = APP_SETTINGS_IO_LOCK
+        .lock()
+        .map_err(|_| "应用设置文件锁已损坏".to_string())?;
+    let path = app_settings_path(app)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    restrict_private_file(&path, "应用设置")?;
+    let content =
+        fs::read_to_string(&path).map_err(|error| format!("无法读取应用设置：{error}"))?;
+    validate_app_settings_content(&content)?;
+    Ok(Some(content))
+}
+
+fn save_app_settings_sync(app: &AppHandle, content: String) -> Result<String, String> {
+    let _guard = APP_SETTINGS_IO_LOCK
+        .lock()
+        .map_err(|_| "应用设置文件锁已损坏".to_string())?;
+    let path = app_settings_path(app)?;
+    validate_app_settings_content(&content)?;
+    let normalized = serde_json::to_string(&validate_app_settings_content(&content)?)
+        .map_err(|error| format!("无法编码应用设置：{error}"))?;
+    let temporary_path = path.with_extension("json.tmp");
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary_path)
+        .map_err(|error| format!("无法创建临时应用设置：{error}"))?;
+    restrict_private_file(&temporary_path, "临时应用设置")?;
+    file.write_all(normalized.as_bytes())
+        .map_err(|error| format!("无法写入应用设置：{error}"))?;
+    file.sync_all()
+        .map_err(|error| format!("无法同步应用设置：{error}"))?;
+    drop(file);
+    if let Err(rename_error) = fs::rename(&temporary_path, &path) {
+        if path.exists() {
+            fs::remove_file(&path).map_err(|error| {
+                format!("无法替换应用设置：{rename_error}；无法移除旧设置：{error}")
+            })?;
+            fs::rename(&temporary_path, &path)
+                .map_err(|error| format!("无法替换应用设置：{error}"))?;
+        } else {
+            return Err(format!("无法替换应用设置：{rename_error}"));
+        }
+    }
+    restrict_private_file(&path, "应用设置")?;
+    sync_parent_directory(&path)?;
+    Ok(normalized)
+}
+
+fn reset_app_settings_sync(app: &AppHandle) -> Result<(), String> {
+    let _guard = APP_SETTINGS_IO_LOCK
+        .lock()
+        .map_err(|_| "应用设置文件锁已损坏".to_string())?;
+    let path = app_settings_path(app)?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(|error| format!("无法删除应用设置：{error}"))?;
+        sync_parent_directory(&path)?;
+    }
+    Ok(())
 }
 
 fn lock_vault_file(app: &AppHandle) -> Result<File, String> {
@@ -247,9 +340,6 @@ fn validate_vault_payload(content: &str, allow_legacy: bool) -> Result<Value, St
     if !allow_legacy || object.contains_key("schemaVersion") {
         if !object.get("snapshots").is_some_and(Value::is_array) {
             return Err("资产库字段 snapshots 必须是数组".to_string());
-        }
-        if !object.get("paneLayout").is_some_and(Value::is_object) {
-            return Err("资产库字段 paneLayout 必须是对象".to_string());
         }
         if object.get("revision").and_then(Value::as_u64).is_none() {
             return Err("资产库字段 revision 必须是非负整数".to_string());
@@ -580,6 +670,32 @@ async fn recover_vault_backup(app: AppHandle) -> Result<(), String> {
         .map_err(|error| format!("资产库安全备份恢复任务失败：{error}"))?
 }
 
+#[tauri::command]
+async fn load_app_settings(app: AppHandle) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || load_app_settings_sync(&app))
+        .await
+        .map_err(|error| format!("应用设置读取任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn save_app_settings(app: AppHandle, content: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || save_app_settings_sync(&app, content))
+        .await
+        .map_err(|error| format!("应用设置保存任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn reset_app_settings(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || reset_app_settings_sync(&app))
+        .await
+        .map_err(|error| format!("应用设置重置任务失败：{error}"))?
+}
+
+#[tauri::command]
+fn exit_application(app: AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -621,12 +737,12 @@ pub fn run() {
             {
                 let show_item =
                     MenuItem::with_id(app, "show", "打开密码管理器", true, None::<&str>)?;
+                let separator = PredefinedMenuItem::separator(app)?;
                 let exit_item = MenuItem::with_id(app, "exit", "关闭程序", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show_item, &exit_item])?;
+                let menu = Menu::with_items(app, &[&show_item, &separator, &exit_item])?;
                 let mut tray = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .tooltip("密码管理器")
-                    .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| {
                         if event.id() == "show" {
                             restore_main_window(app);
@@ -634,6 +750,29 @@ pub fn run() {
                             let _ = app.emit("tray-exit-requested", ());
                         }
                     });
+                #[cfg(target_os = "windows")]
+                {
+                    tray = tray
+                        .show_menu_on_left_click(false)
+                        .on_tray_icon_event(|tray, event| match event {
+                            TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                button_state: MouseButtonState::Up,
+                                ..
+                            }
+                            | TrayIconEvent::DoubleClick {
+                                button: MouseButton::Left,
+                                ..
+                            } => {
+                                restore_main_window(&tray.app_handle());
+                            }
+                            _ => {}
+                        });
+                }
+                #[cfg(any(target_os = "macos", target_os = "linux"))]
+                {
+                    tray = tray.show_menu_on_left_click(true);
+                }
                 if let Some(icon) = app.default_window_icon().cloned() {
                     tray = tray.icon(icon);
                 }
@@ -646,7 +785,11 @@ pub fn run() {
             load_secure_vault,
             save_secure_vault,
             migrate_legacy_vault_key,
-            recover_vault_backup
+            recover_vault_backup,
+            exit_application,
+            load_app_settings,
+            save_app_settings,
+            reset_app_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

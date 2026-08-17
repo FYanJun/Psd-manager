@@ -212,14 +212,16 @@ function validateVersionedState(value: unknown, expectedVersion: number): Persis
   const requireIdentity = expectedVersion >= 2;
   const customDeviceTypes = validateDeviceTypes(record.customDeviceTypes, "customDeviceTypes", requireIdentity);
   const deviceTypes = new Map(customDeviceTypes.map((type) => [type.label, type]));
-  return {
+  const paneLayout = isRecord(record.paneLayout) ? validatePaneLayout(record.paneLayout) : undefined;
+  const state: PersistedVaultState = {
     schemaVersion,
     revision: requireInteger(record, "revision", "资产库"),
     items: validateItems(record.items, "items", requireIdentity, deviceTypes),
     customDeviceTypes,
-    paneLayout: validatePaneLayout(record.paneLayout),
     snapshots: validateSnapshots(record.snapshots, "snapshots", requireIdentity).slice(0, 10),
   };
+  if (paneLayout) state.paneLayout = paneLayout;
+  return state;
 }
 
 type LegacyIdentityRegistry = {

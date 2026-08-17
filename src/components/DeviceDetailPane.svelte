@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Copy, Folder, KeyRound, Pencil, ShieldCheck } from "@lucide/svelte";
+  import { Copy, KeyRound, Pencil, SearchX, Server, ServerCog } from "@lucide/svelte";
   import AccountDetail from "./device-detail/AccountDetail.svelte";
   import AccountList from "./device-detail/AccountList.svelte";
   import DeviceInfoCard from "./device-detail/DeviceInfoCard.svelte";
@@ -124,15 +124,21 @@
   {:else}
     <div class="detail-topline">
       <div class="breadcrumb" aria-label="当前详情设备类型">
-        <span class="device-type-badge"><ShieldCheck size={16} /></span>
+        <span class="device-type-badge"><ServerCog size={16} /></span>
         <span>设备账号</span>
       </div>
     </div>
 
     <div class="detail-empty-state">
-      <span class="empty-state-icon"><Folder size={34} /></span>
-      <h1>{hasDevices ? "没有匹配的设备资产" : "资产库还是空的"}</h1>
-      <p>{hasDevices ? "当前搜索会匹配设备名和连接地址。清空搜索后可以回到全部设备。" : "新增第一台设备资产后，账号、当前密码和旧密码记录会在这里集中管理。"}</p>
+      <span class="empty-state-icon">
+        {#if searchQuery.trim()}
+          <SearchX size={34} />
+        {:else}
+          <Server size={34} />
+        {/if}
+      </span>
+      <h1>{searchQuery.trim() ? "没有匹配的设备资产" : hasDevices ? "当前类型暂无设备" : "资产库还是空的"}</h1>
+      <p>{searchQuery.trim() ? "当前搜索会匹配设备名、连接地址、资产编号和位置。清空搜索后可以回到全部设备。" : hasDevices ? "可以在当前类型下新增设备，或切换到其他设备类型。" : "新增第一台设备资产后，账号、当前密码和旧密码记录会在这里集中管理。"}</p>
       <div class="empty-state-actions">
         {#if searchQuery.trim()}
           <button class="secondary-button" on:click={() => clearSearch()}>清空搜索</button>
