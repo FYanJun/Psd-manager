@@ -191,11 +191,12 @@
     max-width: min(320px, calc(100vw - 16px));
     padding: 7px 10px;
     border-radius: 8px;
+    border: 1px solid var(--tooltip-border, rgba(255, 255, 255, 0.14));
     pointer-events: none;
     opacity: 0;
     color: #fff;
-    background: rgba(34, 38, 42, 0.96);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    background: var(--tooltip-background, rgba(34, 38, 42, 0.96));
+    box-shadow: var(--tooltip-shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
     font-size: var(--font-size-12);
     font-weight: 800;
     line-height: 1.3;
@@ -218,11 +219,13 @@
 
   .global-tooltip[data-placement="top"]::after {
     top: 100%;
-    border-top-color: rgba(34, 38, 42, 0.96);
+    border-top-color: var(--tooltip-background, rgba(34, 38, 42, 0.96));
+    filter: drop-shadow(0 1px 0 var(--tooltip-border, rgba(255, 255, 255, 0.14)));
   }
 
   .global-tooltip[data-placement="bottom"]::after {
     bottom: 100%;
-    border-bottom-color: rgba(34, 38, 42, 0.96);
+    border-bottom-color: var(--tooltip-background, rgba(34, 38, 42, 0.96));
+    filter: drop-shadow(0 -1px 0 var(--tooltip-border, rgba(255, 255, 255, 0.14)));
   }
 </style>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
-  import { isTauri } from "@tauri-apps/api/core";
+  import { invoke, isTauri } from "@tauri-apps/api/core";
   import OverlayLayer from "./components/OverlayLayer.svelte";
   import VaultStorageStatus from "./components/VaultStorageStatus.svelte";
   import WorkspaceContent from "./components/WorkspaceContent.svelte";
@@ -163,6 +163,8 @@
   let tooltipEnabled = true;
   let appVersion = "0.1.14";
   let dataDialogReturnToSettings = false;
+  let installationPath = "";
+  let dataPath = "";
 
   const windowSettingsController = createWindowSettingsController({
     read: () => appSettings,
@@ -684,6 +686,25 @@
       } catch {
         // Keep the package version fallback in browser preview or older runtimes.
       }
+      try {
+        const storageInfo = await invoke<{ installationPath: string; dataPath: string }>("get_storage_info");
+        installationPath = storageInfo.installationPath;
+        dataPath = storageInfo.dataPath;
+      } catch (error) {
+        showStatus(`存储路径读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      }
+    }
+  }
+
+  async function openStoragePath(kind: "installation" | "data") {
+    if (!isTauri()) {
+      showStatus("浏览器预览模式不支持打开本地目录");
+      return;
+    }
+    try {
+      await invoke("open_storage_path", { kind });
+    } catch (error) {
+      showStatus(`打开目录失败：${error instanceof Error ? error.message : String(error)}`, 6000);
     }
   }
 
@@ -695,7 +716,6 @@
     document.documentElement.dataset.themePreference = settings.interface.theme;
     document.documentElement.dataset.density = settings.interface.density;
     document.documentElement.dataset.fontSize = settings.interface.fontSize;
-    document.documentElement.classList.toggle("reduce-motion", settings.interface.reduceMotion);
     void windowSettingsController.applyTheme(settings.interface.theme);
   }
 
@@ -999,13 +1019,6 @@
     });
   }
 
-  function setReduceMotionSetting(value: boolean) {
-    updateAppSettings({
-      ...appSettings,
-      interface: { ...appSettings.interface, reduceMotion: value },
-    });
-  }
-
   function setRememberLayout(value: boolean) {
     updateAppSettings({
       ...appSettings,
@@ -1109,6 +1122,7 @@
   }
 
   function openGeneratorPanel(target: GeneratorTarget = null) {
+    applyGeneratorSettings(appSettings.passwordGenerator);
     passwordGeneratorController.open(target);
   }
 
@@ -1118,49 +1132,22 @@
 
   function setGeneratorLength(length: number, syncInput = true) {
     passwordGeneratorController.setLength(length, syncInput);
-    persistGeneratorDefaults();
   }
 
   function setGeneratorMinimumNumbers(value: number | string) {
     passwordGeneratorController.setMinimumNumbers(value);
-    persistGeneratorDefaults();
   }
 
   function setGeneratorMinimumSymbols(value: number | string) {
     passwordGeneratorController.setMinimumSymbols(value);
-    persistGeneratorDefaults();
   }
 
   function setAllowedSymbols(value: string) {
     passwordGeneratorController.setAllowedSymbols(value);
-    persistGeneratorDefaults();
   }
 
   function setExcludedCharacters(value: string) {
     passwordGeneratorController.setExcludedCharacters(value);
-    persistGeneratorDefaults();
-  }
-
-  function persistGeneratorDefaults() {
-    if (!settingsLoaded) return;
-    appSettings = {
-      ...appSettings,
-      passwordGenerator: {
-        ...appSettings.passwordGenerator,
-        length: generatorLength,
-        useUpper,
-        useLower,
-        useNumbers,
-        useSymbols,
-        excludeSimilar,
-        preventRepeats,
-        minimumNumbers,
-        minimumSymbols,
-        allowedSymbols,
-        excludedCharacters,
-      },
-    };
-    scheduleAppSettingsSave();
   }
 
   function updateGeneratorLengthFromSlider(event: Event) {
@@ -1372,6 +1359,10 @@
     deviceController.save();
   }
 
+  function executeSaveDevice(confirmation?: PendingConfirmation) {
+    deviceController.executeSaveDevice(confirmation);
+  }
+
   function openAddAccountDialog() {
     accountPasswordController.openAddAccountDialog();
   }
@@ -1470,7 +1461,8 @@
       if (!importedConfig) throw new Error("待导入配置已失效，请重新选择文件");
       await applyImportedConfig(importedConfig, configFormat, importMode);
     },
-    "rename-device-type": ({ confirmation }) => executeSaveDeviceType(confirmation),
+    "save-device": ({ confirmation }) => executeSaveDevice(confirmation),
+    "save-device-type": ({ confirmation }) => executeSaveDeviceType(confirmation),
     "restore-snapshot": async ({ confirmation }) => {
       if (!confirmation.snapshotId) throw new Error("数据快照目标信息不完整，请重新选择快照");
       await restoreSnapshot(confirmation.snapshotId, true);
@@ -1573,13 +1565,13 @@
     setTheme: setThemeSetting,
     setDensity: setDensitySetting,
     setFontSize: setFontSizeSetting,
-    setReduceMotion: setReduceMotionSetting,
     setRememberLayout,
     setRememberLastView,
     setRememberWindowBounds,
     setDeviceSortMode: setDeviceSortSetting,
     setDeviceTypeSortMode: setDeviceTypeSortSetting,
     setGeneratorValue: setGeneratorSetting,
+    openStoragePath,
     openSnapshotsDialog,
     openExportConfigDialog,
     chooseConfigFile,
@@ -1670,7 +1662,6 @@
     setGeneratorMinimumSymbols,
     setAllowedSymbols,
     setExcludedCharacters,
-    persistGeneratorDefaults,
     updateGeneratorLengthFromSlider,
     handleGeneratorLengthInput,
     commitGeneratorLengthInput,
@@ -1701,13 +1692,14 @@
     theme: appSettings.interface.theme,
     density: appSettings.interface.density,
     fontSize: appSettings.interface.fontSize,
-    reduceMotion: appSettings.interface.reduceMotion,
     rememberLayout: appSettings.workspace.rememberLayout,
     rememberLastView: appSettings.workspace.rememberLastView,
     rememberWindowBounds: appSettings.workspace.rememberWindowBounds,
     deviceSortMode: appSettings.workspace.deviceSortMode,
     deviceTypeSortMode: appSettings.workspace.deviceTypeSortMode,
     generator: appSettings.passwordGenerator,
+    installationPath: installationPath || "当前环境不可用",
+    dataPath: dataPath || "当前环境不可用",
     version: appVersion,
   };
 

@@ -173,6 +173,25 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     return true;
   }
 
+  function getAccountChanges(account: DeviceAccount, form: AccountForm) {
+    const values: Array<[string, string, string]> = [
+      ["用户名", account.username, form.username.trim()],
+      ["账号标签", account.tag, form.tag.trim()],
+      ["备注", account.notes, form.notes.trim()],
+    ];
+    const changes = values
+      .filter(([, from, to]) => from !== to)
+      .map(([label, from, to]) => ({ label, from, to }));
+    if (account.password !== form.password) {
+      changes.push({
+        label: "密码",
+        from: account.password ? "已设置" : "未设置",
+        to: form.password ? "已修改（内容已隐藏）" : "已清除（内容已隐藏）",
+      });
+    }
+    return changes;
+  }
+
   function saveAccount() {
     const state = port.read();
     const { selectedAccounts } = deriveAccountState(state);
@@ -185,18 +204,29 @@ export function createAccountController(port: AccountPasswordControllerPort) {
       state.accountForm,
       currentAccount?.uuid ?? null,
     )) return;
-    if (currentAccount && currentAccount.password !== state.accountForm.password) {
+    if (currentAccount) {
+      const changes = getAccountChanges(currentAccount, state.accountForm);
+      if (changes.length === 0) {
+        port.showStatus("没有可保存的修改");
+        return;
+      }
+      const passwordChanged = currentAccount.password !== state.accountForm.password;
       port.setActivePopover(null);
       port.setPendingConfirmation({
-        action: "save-account-password",
-        title: "保存账号密码变更",
-        message: `确认直接修改“${currentAccount.username || currentAccount.title || "当前账号"}”的密码？`,
-        detail: "这会更新账号资料，并把当前密码写入密码历史。",
-        confirmLabel: "仍然保存",
+        action: passwordChanged ? "save-account-password" : "save-account",
+        title: passwordChanged ? "保存账号密码变更" : "保存账号修改",
+        message: `确认保存“${currentAccount.username || currentAccount.title || "当前账号"}”的修改？`,
+        detail: passwordChanged
+          ? currentAccount.password
+            ? "确认后会更新账号资料，并把当前密码写入密码历史。新密码内容不会显示。"
+            : "确认后会更新账号资料并设置新密码，密码内容不会显示。"
+          : "确认后会更新账号资料，密码不会改变。",
+        confirmLabel: passwordChanged ? "仍然保存" : "保存修改",
         summaryItems: [
           { label: "所属设备", value: state.selectedItem.deviceName },
           { label: "账号", value: currentAccount.username || currentAccount.title || "未填写用户名" },
         ],
+        changes,
         itemUuid: state.selectedItem.uuid,
         accountUuid: currentAccount.uuid,
         accountDraft: { ...state.accountForm },
@@ -205,7 +235,6 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     }
     executeSaveAccount({
       itemUuid: state.selectedItem.uuid,
-      accountUuid: currentAccount?.uuid,
       accountDraft: { ...state.accountForm },
     });
   }
@@ -228,6 +257,10 @@ export function createAccountController(port: AccountPasswordControllerPort) {
       return;
     }
     if (!validateAccountForSave(item, selectedAccounts, form, currentAccount?.uuid ?? null)) return;
+    if (currentAccount && getAccountChanges(currentAccount, form).length === 0) {
+      port.showStatus("没有可保存的修改");
+      return;
+    }
     const now = formatDateTime(new Date());
     const nextId = currentAccount?.id ?? Math.max(0, ...selectedAccounts.map((account) => account.id)) + 1;
     const nextAccount = createAccountFromForm(form, nextId, now);
@@ -358,7 +391,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     if (confirmation.action === "delete-account") {
       return deleteSelectedAccount(confirmation).then(() => true);
     }
-    if (confirmation.action === "save-account-password") {
+    if (confirmation.action === "save-account" || confirmation.action === "save-account-password") {
       executeSaveAccount(confirmation);
       return true;
     }

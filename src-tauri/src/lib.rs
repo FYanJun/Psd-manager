@@ -10,6 +10,7 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    process::Command,
     sync::Mutex,
 };
 use tauri::{AppHandle, Manager};
@@ -26,11 +27,17 @@ use tauri::{
 #[cfg(target_os = "windows")]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 
-const VAULT_FILE_NAME: &str = "vault.enc.json";
-const VAULT_BACKUP_FILE_NAME: &str = "vault.enc.backup.json";
+const VAULT_FILE_NAME: &str = "vault.enc";
+const VAULT_BACKUP_FILE_NAME: &str = "vault.enc.bak";
+const LEGACY_DATA_FILE_NAME: &str = "data.enc.json";
+const LEGACY_DATA_BACKUP_FILE_NAME: &str = "data.enc.backup.json";
+const LEGACY_VAULT_FILE_NAME: &str = "vault.enc.json";
+const LEGACY_VAULT_BACKUP_FILE_NAME: &str = "vault.enc.backup.json";
 const VAULT_LOCK_FILE_NAME: &str = "vault.lock";
 const VAULT_KEY_FILE_NAME: &str = "vault.key";
 const APP_SETTINGS_FILE_NAME: &str = "settings.json";
+const DATA_CONTAINER_NAME: &str = "Psd Manager";
+const DATA_DIRECTORY_NAME: &str = "data";
 const KEYRING_SERVICE: &str = "com.fan.psd-manager";
 const KEYRING_ACCOUNT: &str = "vault-key-v1";
 const VAULT_AAD: &[u8] = b"com.fan.psd-manager:vault:1";
@@ -53,11 +60,62 @@ enum VaultSource {
     Backup,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageInfo {
+    installation_path: String,
+    data_path: String,
+}
+
+fn installation_directory() -> Result<PathBuf, String> {
+    let executable =
+        std::env::current_exe().map_err(|error| format!("无法获取应用程序路径：{error}"))?;
+    let executable_directory = executable
+        .parent()
+        .ok_or_else(|| "应用程序路径缺少父目录".to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(bundle_directory) = executable_directory
+            .ancestors()
+            .find(|path| path.extension().is_some_and(|extension| extension == "app"))
+        {
+            return Ok(bundle_directory.to_path_buf());
+        }
+    }
+
+    Ok(executable_directory.to_path_buf())
+}
+
+fn storage_info(app: &AppHandle) -> Result<StorageInfo, String> {
+    let data_directory = data_directory(app)?;
+    Ok(StorageInfo {
+        installation_path: installation_directory()?.to_string_lossy().into_owned(),
+        data_path: data_directory.to_string_lossy().into_owned(),
+    })
+}
+
+fn open_directory(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let result = Command::new("explorer.exe").arg(path).spawn();
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(path).spawn();
+    #[cfg(target_os = "linux")]
+    let result = Command::new("xdg-open").arg(path).spawn();
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    let result: Result<std::process::Child, std::io::Error> = Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "当前平台不支持打开目录",
+    ));
+
+    result
+        .map(|_| ())
+        .map_err(|error| format!("无法打开目录 {}：{error}", path.display()))
+}
+
 fn vault_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
-    let directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
+    let directory = ensure_vault_directory(app)?;
+    migrate_legacy_vault_file_names(&directory)?;
     Ok((
         directory.join(VAULT_FILE_NAME),
         directory.join(VAULT_BACKUP_FILE_NAME),
@@ -72,27 +130,48 @@ fn legacy_vault_aad() -> Vec<u8> {
     format!("{}:vault:1", legacy_app_identifier()).into_bytes()
 }
 
-fn migrate_legacy_data_directory(current: &Path) -> Result<(), String> {
+fn data_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法获取应用数据目录：{error}"))?;
+    let parent = app_data_directory
+        .parent()
+        .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
+    Ok(parent.join(DATA_CONTAINER_NAME).join(DATA_DIRECTORY_NAME))
+}
+
+fn migrate_legacy_data_directory(app: &AppHandle, current: &Path) -> Result<(), String> {
     if current.exists() {
         return Ok(());
     }
-    let parent = current
+    let app_data_directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法获取旧版应用数据目录：{error}"))?;
+    let parent = app_data_directory
         .parent()
         .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
-    let legacy = parent.join(legacy_app_identifier());
-    if legacy.exists() {
-        fs::rename(&legacy, current)
-            .map_err(|error| format!("无法迁移旧版应用数据目录：{error}"))?;
-    }
+    let legacy_directories = [
+        app_data_directory.clone(),
+        parent.join(legacy_app_identifier()),
+    ];
+    let Some(legacy_directory) = legacy_directories.iter().find(|path| path.exists()) else {
+        return Ok(());
+    };
+    let current_parent = current
+        .parent()
+        .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
+    fs::create_dir_all(current_parent)
+        .map_err(|error| format!("无法创建新的应用数据目录：{error}"))?;
+    fs::rename(legacy_directory, current)
+        .map_err(|error| format!("无法迁移旧版应用数据目录：{error}"))?;
     Ok(())
 }
 
 fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
-    let directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
-    migrate_legacy_data_directory(&directory)?;
+    let directory = data_directory(app)?;
+    migrate_legacy_data_directory(app, &directory)?;
     fs::create_dir_all(&directory).map_err(|error| format!("无法创建资产库目录：{error}"))?;
     #[cfg(unix)]
     {
@@ -101,6 +180,25 @@ fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
             .map_err(|error| format!("无法限制资产库目录权限：{error}"))?;
     }
     Ok(directory)
+}
+
+fn migrate_legacy_vault_file_names(directory: &Path) -> Result<(), String> {
+    for (legacy_name, current_name) in [
+        (LEGACY_DATA_FILE_NAME, VAULT_FILE_NAME),
+        (LEGACY_DATA_BACKUP_FILE_NAME, VAULT_BACKUP_FILE_NAME),
+        (LEGACY_VAULT_FILE_NAME, VAULT_FILE_NAME),
+        (LEGACY_VAULT_BACKUP_FILE_NAME, VAULT_BACKUP_FILE_NAME),
+    ] {
+        let legacy_path = directory.join(legacy_name);
+        let current_path = directory.join(current_name);
+        if current_path.exists() || !legacy_path.exists() {
+            continue;
+        }
+        fs::rename(&legacy_path, &current_path).map_err(|error| {
+            format!("无法迁移旧版数据文件 {legacy_name} 到 {current_name}：{error}")
+        })?;
+    }
+    Ok(())
 }
 
 fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -543,7 +641,7 @@ fn save_secure_vault_sync(
     };
     let encoded =
         serde_json::to_vec(&envelope).map_err(|error| format!("无法编码加密资产库：{error}"))?;
-    let temporary_path = vault_path.with_extension("json.tmp");
+    let temporary_path = vault_path.with_file_name(format!("{VAULT_FILE_NAME}.tmp"));
 
     let mut temporary_options = OpenOptions::new();
     temporary_options.create(true).truncate(true).write(true);
@@ -692,6 +790,21 @@ async fn reset_app_settings(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_storage_info(app: AppHandle) -> Result<StorageInfo, String> {
+    storage_info(&app)
+}
+
+#[tauri::command]
+fn open_storage_path(app: AppHandle, kind: String) -> Result<(), String> {
+    let path = match kind.as_str() {
+        "installation" => installation_directory()?,
+        "data" => ensure_vault_directory(&app)?,
+        _ => return Err("不支持的目录类型".to_string()),
+    };
+    open_directory(&path)
+}
+
+#[tauri::command]
 fn exit_application(app: AppHandle) {
     app.exit(0);
 }
@@ -789,7 +902,9 @@ pub fn run() {
             exit_application,
             load_app_settings,
             save_app_settings,
-            reset_app_settings
+            reset_app_settings,
+            get_storage_info,
+            open_storage_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

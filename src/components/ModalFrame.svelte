@@ -143,9 +143,12 @@
     border-radius: 14px;
   }
 
-  .modal:global(.bulk-modal),
-  .modal:global(.confirm-modal) {
+  .modal:global(.bulk-modal) {
     --dialog-width: 920px;
+  }
+
+  .modal:global(.confirm-modal) {
+    --dialog-width: 760px;
   }
 
   .modal:global(.settings-modal) {

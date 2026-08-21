@@ -9,6 +9,10 @@
   export let setImportConfigMode: (mode: ConfigImportMode) => void;
 
   $: importModeError = pendingConfirmation?.importModeErrors?.[importConfigMode] ?? "";
+
+  function displayChangeValue(value: string) {
+    return value.trim() ? value : "未设置";
+  }
 </script>
 
 {#if pendingConfirmation}
@@ -44,16 +48,35 @@
           </div>
         {/if}
         {#if (pendingConfirmation.importModeSummaries?.[importConfigMode] ?? pendingConfirmation.summaryItems)}
-          <div class="confirmation-summary" aria-label="配置摘要">
+          <div class="confirmation-summary" aria-label="操作摘要">
             {#each (pendingConfirmation.importModeSummaries?.[importConfigMode] ?? pendingConfirmation.summaryItems ?? []) as item}
-              <span>
+              <span class:summary-emphasis={item.label === "影响账号" || item.label === "影响设备"}>
                 <small>{item.label}</small>
                 <strong>{item.value}</strong>
               </span>
             {/each}
           </div>
         {/if}
-        <p>{pendingConfirmation.importModeDetails?.[importConfigMode] ?? pendingConfirmation.detail}</p>
+        {#if pendingConfirmation.changes?.length}
+          <div class="confirmation-changes" aria-label="变更内容">
+            {#each pendingConfirmation.changes as change}
+              <div class="confirmation-change">
+                <small>{change.label}</small>
+                <div class="confirmation-change-values">
+                  <span class="confirmation-change-value">
+                    <em>旧值</em>
+                    <strong title={displayChangeValue(change.from)}>{displayChangeValue(change.from)}</strong>
+                  </span>
+                  <span class="confirmation-change-value">
+                    <em>新值</em>
+                    <strong title={displayChangeValue(change.to)}>{displayChangeValue(change.to)}</strong>
+                  </span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        <p class="confirmation-detail">{pendingConfirmation.importModeDetails?.[importConfigMode] ?? pendingConfirmation.detail}</p>
         {#if importModeError}
           <p class="confirmation-error" role="alert">{importModeError}</p>
         {/if}

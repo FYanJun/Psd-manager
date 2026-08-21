@@ -9,7 +9,6 @@
   export let excludedCharacters = "";
   export let generatePassword: PasswordGeneratorActions["generatePassword"];
   export let setExcludedCharacters: PasswordGeneratorActions["setExcludedCharacters"];
-  export let persistGeneratorDefaults: PasswordGeneratorActions["persistGeneratorDefaults"];
 </script>
 
 <section class="drawer-section">
@@ -19,8 +18,8 @@
   </div>
 
   <div class="switch-list">
-    <label><input type="checkbox" bind:checked={excludeSimilar} on:change={() => { generatePassword(); persistGeneratorDefaults(); }} /> 排除易混字符 0 O 1 I l</label>
-    <label><input type="checkbox" bind:checked={preventRepeats} on:change={() => { generatePassword(); persistGeneratorDefaults(); }} /> 避免相邻重复字符</label>
+    <label><input type="checkbox" bind:checked={excludeSimilar} on:change={generatePassword} /> 排除易混字符 0 O 1 I l</label>
+    <label><input type="checkbox" bind:checked={preventRepeats} on:change={generatePassword} /> 避免相邻重复字符</label>
   </div>
 
   <label class="text-control">

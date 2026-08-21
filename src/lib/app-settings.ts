@@ -88,7 +88,6 @@ export function normalizeAppSettings(value: unknown): AppSettings {
       theme: theme(interfaceValue.theme, defaults.interface.theme),
       density: density(interfaceValue.density, defaults.interface.density),
       fontSize: fontSize(interfaceValue.fontSize, defaults.interface.fontSize),
-      reduceMotion: bool(interfaceValue.reduceMotion, defaults.interface.reduceMotion),
     },
     workspace: {
       rememberLayout: bool(workspaceValue.rememberLayout, defaults.workspace.rememberLayout),
@@ -142,7 +141,9 @@ export async function loadAppSettings() {
     return {
       settings: normalizeAppSettings(parsed),
       hasStoredSettings: true,
-      needsMigration: isRecord(parsed) && parsed.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION,
+      needsMigration: isRecord(parsed)
+        && (parsed.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION
+          || (isRecord(parsed.interface) && "reduceMotion" in parsed.interface)),
     };
   } catch (error) {
     throw error instanceof Error ? error : new Error(`应用设置不是合法 JSON：${String(error)}`);

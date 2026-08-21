@@ -296,7 +296,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
 
   function savePasswordUpdate() {
     const state = port.read();
-    const { selectedAccount, selectedAccountTargets } = getAccountSelectionState(state);
+    const { selectedAccountTargets } = getAccountSelectionState(state);
     if (!state.hasSelectedDevice || selectedAccountTargets.length === 0) {
       port.showStatus("请先选择账号");
       port.setActiveDialog(null);
@@ -304,27 +304,41 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     }
     if (!validateNewPassword(state.passwordForm.password)) return;
     if (!validatePasswordReason(state.passwordForm.reason)) return;
-    const updatesMultipleAccounts = selectedAccountTargets.length > 1;
+    const changedAccountTargets = selectedAccountTargets.filter((account) => account.password !== state.passwordForm.password);
+    if (changedAccountTargets.length === 0) {
+      port.showStatus("新密码与当前密码相同，没有可保存的修改");
+      return;
+    }
+    const updatesMultipleAccounts = changedAccountTargets.length > 1;
+    const historyCount = changedAccountTargets.filter((account) => Boolean(account.password)).length;
+    const skippedAccountCount = selectedAccountTargets.length - changedAccountTargets.length;
+    const targetAccount = changedAccountTargets[0];
     port.setPendingConfirmation({
       action: "update-password",
       title: updatesMultipleAccounts ? "批量更新所选账号密码" : "确认更新密码",
       message: updatesMultipleAccounts
-        ? `确认更新 ${selectedAccountTargets.length} 个账号的密码？`
-        : `确认更新“${selectedAccount.username || selectedAccount.title || "当前账号"}”的密码？`,
+        ? `确认更新 ${changedAccountTargets.length} 个账号的密码？`
+        : `确认更新“${targetAccount.username || targetAccount.title || "当前账号"}”的密码？`,
       detail: updatesMultipleAccounts
-        ? "确认后会替换这些账号的当前密码，并把旧密码分别写入密码历史。"
-        : "当前密码会被替换，旧密码会自动保存在密码历史中。",
+        ? historyCount > 0
+          ? "确认后会替换这些账号的当前密码，并为已有旧密码的账号写入密码历史。"
+          : "确认后会替换这些账号的当前密码，不会新增密码历史。"
+        : historyCount > 0
+          ? "当前密码会被替换，旧密码会自动保存在密码历史中。"
+          : "确认后会设置当前密码，原账号尚未设置密码，不会新增密码历史。",
       confirmLabel: updatesMultipleAccounts ? "确认更新" : "更新密码",
       itemUuid: state.selectedItem.uuid,
-      accountUuids: selectedAccountTargets.map((account) => account.uuid),
+      accountUuids: changedAccountTargets.map((account) => account.uuid),
       passwordValue: state.passwordForm.password,
       reasonValue: state.passwordForm.reason,
-      summaryItems: updatesMultipleAccounts
-        ? [
-            { label: "所属设备", value: state.selectedItem.deviceName },
-            { label: "影响账号", value: `${selectedAccountTargets.length} 个` },
-          ]
-        : undefined,
+      summaryItems: [
+        { label: "所属设备", value: state.selectedItem.deviceName },
+        { label: "影响账号", value: `${changedAccountTargets.length} 个` },
+        ...(skippedAccountCount > 0 ? [{ label: "跳过账号", value: `${skippedAccountCount} 个（密码相同）` }] : []),
+        { label: "密码", value: "已修改（内容已隐藏）" },
+        { label: "密码历史", value: historyCount > 0 ? `新增 ${historyCount} 条` : "不新增（原密码未设置）" },
+        { label: "更新原因", value: state.passwordForm.reason.trim() || "未填写" },
+      ],
     });
   }
 
@@ -345,10 +359,19 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       port.showStatus("更新失败：部分账号已不存在，请重新选择", 5000);
       return;
     }
+    const changedAccountUuids = new Set(
+      selectedAccountTargets
+        .filter((account) => account.password !== password)
+        .map((account) => account.uuid),
+    );
+    if (changedAccountUuids.size === 0) {
+      port.showStatus("新密码与当前密码相同，没有可保存的修改");
+      return;
+    }
     const changedAt = formatDateTime(new Date());
     const reason = (confirmation.reasonValue ?? "").trim();
     const nextAccounts = selectedAccounts.map((account) =>
-      accountUuids.includes(account.uuid)
+      changedAccountUuids.has(account.uuid)
         ? updateAccountPassword(account, password, changedAt, reason)
         : account
     );
@@ -364,8 +387,8 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     });
     const selectedAccount = selectedAccountTargets[0];
     port.showStatus(
-      accountUuids.length > 1
-        ? `${accountUuids.length} 个账号密码已更新`
+      changedAccountUuids.size > 1
+        ? `${changedAccountUuids.size} 个账号密码已更新`
         : `${selectedAccount.username || selectedAccount.title || "当前账号"}密码已更新`,
     );
   }
@@ -389,13 +412,30 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const state = port.read();
     const matches = validateBulkPasswordUpdate(state);
     if (!matches) return;
+    const changedMatches = matches.filter((match) => {
+      const item = state.items.find((candidate) => candidate.uuid === match.itemUuid);
+      if (!item) return false;
+      return getAccounts(item).find((account) => account.uuid === match.accountUuid)?.password
+        !== state.bulkPasswordForm.password;
+    });
+    if (changedMatches.length === 0) {
+      port.showStatus("新密码与所选账号的当前密码相同，没有可保存的修改");
+      return;
+    }
+    const historyCount = changedMatches.filter((match) => {
+      const item = state.items.find((candidate) => candidate.uuid === match.itemUuid);
+      return Boolean(item && getAccounts(item).find((account) => account.uuid === match.accountUuid)?.password);
+    }).length;
+    const skippedMatchCount = matches.length - changedMatches.length;
     port.setPendingConfirmation({
       action: "bulk-update-password",
       title: "批量更新密码",
-      message: `确认更新 ${matches.length} 个账号的密码？`,
-      detail: "确认后会批量替换当前密码，并为每个账号写入旧密码历史。",
+      message: `确认更新 ${changedMatches.length} 个账号的密码？`,
+      detail: historyCount > 0
+        ? "确认后会批量替换当前密码，并为已有旧密码的账号写入密码历史。"
+        : "确认后会批量设置当前密码，不会新增密码历史。",
       confirmLabel: "确认批量更新",
-      accountTargets: matches.map((match) => ({
+      accountTargets: changedMatches.map((match) => ({
         itemUuid: match.itemUuid,
         accountUuid: match.accountUuid,
       })),
@@ -404,7 +444,11 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       summaryItems: [
         { label: "设备范围", value: state.bulkPasswordForm.deviceType },
         { label: "匹配用户名", value: state.bulkPasswordForm.username },
-        { label: "影响账号", value: `${matches.length} 个` },
+        { label: "影响账号", value: `${changedMatches.length} 个` },
+        ...(skippedMatchCount > 0 ? [{ label: "跳过账号", value: `${skippedMatchCount} 个（密码相同）` }] : []),
+        { label: "密码", value: "已修改（内容已隐藏）" },
+        { label: "密码历史", value: historyCount > 0 ? `新增 ${historyCount} 条` : "不新增（原密码未设置）" },
+        { label: "更新原因", value: state.bulkPasswordForm.reason.trim() || "未填写" },
       ],
     });
   }
@@ -436,21 +480,25 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     }
     const reason = (confirmation.reasonValue ?? "").trim();
     const changedAt = formatDateTime(new Date());
-    port.write({
-      items: state.items.map((item) => {
-        const accountUuids = targetAccountUuidsByItem.get(item.uuid);
-        if (!accountUuids) return item;
-        const nextAccounts = getAccounts(item).map((account) =>
-          accountUuids.has(account.uuid)
-            ? updateAccountPassword(account, password, changedAt, reason)
-            : account
-        );
-        return syncItemWithAccounts(item, nextAccounts);
-      }),
+    let changedCount = 0;
+    const nextItems = state.items.map((item) => {
+      const accountUuids = targetAccountUuidsByItem.get(item.uuid);
+      if (!accountUuids) return item;
+      const nextAccounts = getAccounts(item).map((account) => {
+        if (!accountUuids.has(account.uuid) || account.password === password) return account;
+        changedCount += 1;
+        return updateAccountPassword(account, password, changedAt, reason);
+      });
+      return syncItemWithAccounts(item, nextAccounts);
     });
+    if (changedCount === 0) {
+      port.showStatus("新密码与所选账号的当前密码相同，没有可保存的修改");
+      return;
+    }
+    port.write({ items: nextItems });
     port.setActiveDialog(null);
     port.write({ passwordVisible: false, visibleHistoryIds: [] });
-    port.showStatus(`已更新 ${targets.length} 个账号`);
+    port.showStatus(`已更新 ${changedCount} 个账号`);
   }
 
   function executePasswordConfirmation(confirmation: PendingConfirmation) {

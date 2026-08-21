@@ -38,7 +38,6 @@
   let setGeneratorMinimumSymbols: PasswordGeneratorActions["setGeneratorMinimumSymbols"];
   let setAllowedSymbols: PasswordGeneratorActions["setAllowedSymbols"];
   let setExcludedCharacters: PasswordGeneratorActions["setExcludedCharacters"];
-  let persistGeneratorDefaults: PasswordGeneratorActions["persistGeneratorDefaults"];
   let updateGeneratorLengthFromSlider: PasswordGeneratorActions["updateGeneratorLengthFromSlider"];
   let handleGeneratorLengthInput: PasswordGeneratorActions["handleGeneratorLengthInput"];
   let commitGeneratorLengthInput: PasswordGeneratorActions["commitGeneratorLengthInput"];
@@ -49,7 +48,7 @@
   $: ({ canUseGeneratorForCurrentAccount, canUseGeneratorForBulkUpdate, selectedItem, selectedAccount, itemCount } = view);
   $: ({ closeGeneratorPanel, startGeneratorResize, generatePassword, copyGeneratedPassword,
     setGeneratorLength, setGeneratorMinimumNumbers, setGeneratorMinimumSymbols, setAllowedSymbols,
-    setExcludedCharacters, persistGeneratorDefaults, updateGeneratorLengthFromSlider, handleGeneratorLengthInput,
+    setExcludedCharacters, updateGeneratorLengthFromSlider, handleGeneratorLengthInput,
     commitGeneratorLengthInput, handleGeneratorLengthKeydown, useGeneratedPasswordForCurrentDevice,
     useGeneratedPasswordForBulkUpdate } = actions);
 </script>
@@ -82,7 +81,6 @@
       {useSymbols}
       {minimumNumbers}
       {minimumSymbols}
-      {persistGeneratorDefaults}
       {setGeneratorLength}
       {setGeneratorMinimumNumbers}
       {setGeneratorMinimumSymbols}
@@ -96,7 +94,6 @@
       bind:useLower
       bind:useNumbers
       bind:useSymbols
-      {persistGeneratorDefaults}
       {allowedSymbols}
       {generatePassword}
       {setAllowedSymbols}
@@ -104,7 +101,6 @@
     <ExclusionRulesSection
       bind:excludeSimilar
       bind:preventRepeats
-      {persistGeneratorDefaults}
       {excludedCharacters}
       {generatePassword}
       {setExcludedCharacters}

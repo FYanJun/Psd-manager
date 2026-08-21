@@ -80,6 +80,15 @@
     grid-template-columns: 1fr;
   }
 
+  .confirmation-change-values {
+    grid-template-columns: 1fr;
+  }
+
+  .confirmation-change {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
   .snapshot-row {
     grid-template-columns: 1fr;
   }

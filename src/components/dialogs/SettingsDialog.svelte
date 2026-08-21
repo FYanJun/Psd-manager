@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArchiveRestore, BadgeInfo, Columns3Cog, Cpu, DatabaseBackup, Download, Palette, RotateCcw, Upload, Vault, WandSparkles } from "@lucide/svelte";
+  import { ArchiveRestore, BadgeInfo, Columns3Cog, Cpu, DatabaseBackup, Download, FolderOpen, Palette, RotateCcw, Upload, Vault, WandSparkles } from "@lucide/svelte";
   import { isTauri } from "@tauri-apps/api/core";
   import AppSelect from "../AppSelect.svelte";
   import type { SettingsActions, SettingsView } from "../../lib/view-models";
@@ -90,10 +90,6 @@
         <span><strong>显示 Tooltip</strong><small>鼠标悬停在按钮上时显示操作说明。</small></span>
         <span class="settings-switch"><input type="checkbox" checked={view.tooltipEnabled} aria-label="显示 Tooltip" on:change={(event) => actions.setTooltipEnabled((event.currentTarget as HTMLInputElement).checked)} /><span class="settings-switch-track" aria-hidden="true"><span></span></span></span>
       </label>
-      <label class="settings-switch-row">
-        <span><strong>减少动画</strong><small>减少弹窗、提示和交互过渡效果。</small></span>
-        <span class="settings-switch"><input type="checkbox" checked={view.reduceMotion} aria-label="减少动画" on:change={(event) => actions.setReduceMotion((event.currentTarget as HTMLInputElement).checked)} /><span class="settings-switch-track" aria-hidden="true"><span></span></span></span>
-      </label>
     {:else if view.activeSection === "workspace"}
       <div class="settings-heading"><h3>工作区</h3><p>保存设备列表和三栏布局偏好。</p></div>
       <label class="settings-switch-row">
@@ -163,6 +159,24 @@
           <div><dt>应用标识</dt><dd>com.fan.psd-manager</dd></div>
           <div><dt>运行模式</dt><dd>{runtimeLabel}</dd></div>
           <div><dt>当前平台</dt><dd>{platformLabel}</dd></div>
+          <div>
+            <dt>安装路径</dt>
+            <dd class="settings-path-value">
+              <span>{view.installationPath}</span>
+              <button class="settings-path-button" type="button" aria-label="打开安装路径" data-tooltip="打开安装路径" disabled={!isTauri() || view.installationPath === "当前环境不可用"} on:click={() => actions.openStoragePath("installation")}>
+                <FolderOpen size={15} />
+              </button>
+            </dd>
+          </div>
+          <div>
+            <dt>数据存储路径</dt>
+            <dd class="settings-path-value">
+              <span>{view.dataPath}</span>
+              <button class="settings-path-button" type="button" aria-label="打开数据存储路径" data-tooltip="打开数据存储路径" disabled={!isTauri() || view.dataPath === "当前环境不可用"} on:click={() => actions.openStoragePath("data")}>
+                <FolderOpen size={15} />
+              </button>
+            </dd>
+          </div>
         </dl>
       </section>
     {/if}
@@ -192,9 +206,9 @@
   .settings-field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
   .settings-field input[type="range"] { padding: 0; accent-color: var(--blue); }
   .settings-segmented { display: flex; flex-wrap: wrap; width: 100%; min-height: 40px; padding: 3px; border: 1px solid var(--field-border); border-radius: 9px; background: var(--surface-subtle); }
-  .settings-segmented button { flex: 1 1 0; min-width: 0; min-height: 34px; border-radius: 6px; padding: 0 12px; color: var(--text-secondary); font-size: var(--font-size-13); font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+  .settings-segmented button { flex: 1 1 0; min-width: 0; min-height: 34px; border: 1px solid transparent; border-radius: 6px; padding: 0 12px; color: var(--text-secondary); font-size: var(--font-size-13); font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
   .settings-segmented button:hover { color: var(--text-strong); background: var(--control-hover); }
-  .settings-segmented button.active { color: var(--blue); background: var(--field); box-shadow: 0 1px 3px rgba(24, 28, 32, .12); }
+  .settings-segmented button.active { color: var(--selection-text); background: var(--selection-fill); border: 1px solid var(--selection-border); box-shadow: var(--selection-shadow); }
   .settings-segmented button:focus-visible, .settings-reset:focus-visible, .settings-check-option:has(input:focus-visible), .settings-switch:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
   .settings-switch { position: relative; display: inline-flex !important; flex: 0 0 auto; width: 42px; height: 24px; }
   .settings-switch input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
@@ -231,7 +245,13 @@
   .settings-about-list div { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; min-width: 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .settings-about-list dt { color: var(--muted); font-size: var(--font-size-13); }
   .settings-about-list dd { min-width: 0; margin: 0; color: var(--text-strong); font-size: var(--font-size-13); font-weight: 800; text-align: right; overflow-wrap: anywhere; }
+  .settings-path-value { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .settings-path-value > span { min-width: 0; overflow-wrap: anywhere; }
+  .settings-path-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; border: 1px solid var(--field-border); border-radius: 7px; color: var(--blue); background: var(--field); }
+  .settings-path-button:hover:not(:disabled) { background: var(--control-hover); border-color: color-mix(in srgb, var(--blue) 40%, var(--field-border)); }
+  .settings-path-button:disabled { cursor: not-allowed; opacity: .45; }
+  .settings-path-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
   .settings-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-size-12); }
   @media (max-width: 680px) { .settings-layout { grid-template-columns: 1fr; } .settings-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); border-right: 0; border-bottom: 1px solid var(--border); } .settings-nav button { justify-content: center; padding: 0 4px; } .settings-nav button span { display: none; } .settings-content { padding: 18px; } .settings-content > * { width: 100%; } .settings-segmented { width: 100%; } }
-  @media (max-width: 430px) { .settings-check-grid, .settings-number-grid { grid-template-columns: 1fr; } .settings-segmented button { padding: 0 7px; font-size: var(--font-size-12); } .settings-switch-row { gap: 10px; } .settings-about-hero { grid-template-columns: 42px minmax(0, 1fr); } .settings-about-logo { width: 42px; height: 42px; } .settings-about-version { grid-column: 2; justify-self: start; } .settings-about-list div { display: grid; gap: 4px; } .settings-about-list dd { text-align: left; } }
+  @media (max-width: 430px) { .settings-check-grid, .settings-number-grid { grid-template-columns: 1fr; } .settings-segmented button { padding: 0 7px; font-size: var(--font-size-12); } .settings-switch-row { gap: 10px; } .settings-about-hero { grid-template-columns: 42px minmax(0, 1fr); } .settings-about-logo { width: 42px; height: 42px; } .settings-about-version { grid-column: 2; justify-self: start; } .settings-about-list div { display: grid; gap: 4px; } .settings-about-list dd { text-align: left; } .settings-path-value { justify-content: flex-start; } }
 </style>

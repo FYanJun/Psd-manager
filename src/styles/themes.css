@@ -57,8 +57,15 @@ html[data-theme="dark"] {
   --text-quiet: #929da8;
   --control-hover: rgba(255, 255, 255, 0.08);
   --accent-subtle: rgba(90, 162, 255, 0.16);
+  --selection-fill: rgba(90, 162, 255, 0.26);
+  --selection-border: #79b8ff;
+  --selection-text: #f4f8ff;
+  --selection-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.28);
   --overlay: rgba(0, 0, 0, 0.58);
   --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  --tooltip-background: #10171f;
+  --tooltip-border: #6e8194;
+  --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
   background: var(--app-background);
   color: var(--app-text);
 }
@@ -89,8 +96,15 @@ html[data-theme="dark"] {
     --text-quiet: #929da8;
     --control-hover: rgba(255, 255, 255, 0.08);
     --accent-subtle: rgba(90, 162, 255, 0.16);
+    --selection-fill: rgba(90, 162, 255, 0.26);
+    --selection-border: #79b8ff;
+    --selection-text: #f4f8ff;
+    --selection-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.28);
     --overlay: rgba(0, 0, 0, 0.58);
     --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+    --tooltip-background: #10171f;
+    --tooltip-border: #6e8194;
+    --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 }
 
@@ -525,12 +539,24 @@ html[data-theme="dark"] .password-target-card,
 html[data-theme="system"] .password-target-card,
 html[data-theme="dark"] .bulk-preview,
 html[data-theme="system"] .bulk-preview,
-html[data-theme="dark"] .confirmation-summary span,
-html[data-theme="system"] .confirmation-summary span,
 html[data-theme="dark"] .import-mode-control,
 html[data-theme="system"] .import-mode-control {
   border-color: var(--border);
   color: var(--app-text);
+  background: var(--surface-muted);
+}
+
+html[data-theme="dark"] .confirmation-summary,
+html[data-theme="system"] .confirmation-summary,
+html[data-theme="dark"] .confirmation-summary span,
+html[data-theme="system"] .confirmation-summary span {
+  border-color: var(--border);
+  color: var(--app-text);
+  background: transparent;
+}
+
+html[data-theme="dark"] .confirmation-summary,
+html[data-theme="system"] .confirmation-summary {
   background: var(--surface-muted);
 }
 
@@ -825,21 +851,47 @@ html[data-theme="system"] select option {
   background: var(--field);
 }
 
+/* Keep selected controls distinct from their dark surfaces. The same
+   variables fall back to the light-theme values when system mode is light. */
+html[data-theme="dark"] .settings-segmented button.active,
+html[data-theme="system"] .settings-segmented button.active,
+html[data-theme="dark"] .type-combo-list button.selected,
+html[data-theme="system"] .type-combo-list button.selected,
+html[data-theme="dark"] .color-swatch-button.selected,
+html[data-theme="system"] .color-swatch-button.selected,
+html[data-theme="dark"] .format-choice-list button.selected,
+html[data-theme="system"] .format-choice-list button.selected,
+html[data-theme="dark"] .import-mode-control button.selected,
+html[data-theme="system"] .import-mode-control button.selected,
+html[data-theme="dark"] .quick-lengths button.selected,
+html[data-theme="system"] .quick-lengths button.selected {
+  color: var(--selection-text);
+  background: var(--selection-fill);
+  border-color: var(--selection-border);
+  box-shadow: var(--selection-shadow);
+}
+
+html[data-theme="dark"] .app-select-option.selected,
+html[data-theme="system"] .app-select-option.selected,
+html[data-theme="dark"] .action-popover button.selected,
+html[data-theme="system"] .action-popover button.selected {
+  color: var(--selection-text);
+  background: var(--selection-fill);
+  box-shadow: inset 3px 0 0 var(--selection-border);
+}
+
+html[data-theme="dark"] .global-tooltip,
+html[data-theme="system"] .global-tooltip {
+  border-color: var(--tooltip-border);
+  box-shadow: var(--tooltip-shadow);
+}
+
 html[data-theme="dark"] input::placeholder,
 html[data-theme="system"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder,
 html[data-theme="system"] textarea::placeholder {
   color: var(--text-quiet);
   opacity: 1;
-}
-
-html.reduce-motion *,
-html.reduce-motion *::before,
-html.reduce-motion *::after {
-  animation-duration: 0.001ms !important;
-  animation-iteration-count: 1 !important;
-  scroll-behavior: auto !important;
-  transition-duration: 0.001ms !important;
 }
 
 html[data-density="compact"] .topbar {

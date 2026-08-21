@@ -16,7 +16,6 @@
   export let handleGeneratorLengthInput: PasswordGeneratorActions["handleGeneratorLengthInput"];
   export let commitGeneratorLengthInput: PasswordGeneratorActions["commitGeneratorLengthInput"];
   export let handleGeneratorLengthKeydown: PasswordGeneratorActions["handleGeneratorLengthKeydown"];
-  export let persistGeneratorDefaults: PasswordGeneratorActions["persistGeneratorDefaults"];
 </script>
 
 <section class="drawer-section">
@@ -26,7 +25,7 @@
   </div>
 
   <div class="quick-lengths" role="group" aria-label="常用密码长度">
-    {#each [3, 8, 16, 24] as length}
+    {#each [8, 12, 16, 24] as length}
       <button class:selected={generatorLength === length} on:click={() => setGeneratorLength(length)}>{length}</button>
     {/each}
   </div>
@@ -39,7 +38,7 @@
       max="24"
       value={generatorLength}
       aria-label="拖动调整密码长度"
-      on:input={(event) => { updateGeneratorLengthFromSlider(event); persistGeneratorDefaults(); }}
+      on:input={updateGeneratorLengthFromSlider}
     />
     <ClearableInput
       className="length-input-shell"
@@ -51,8 +50,8 @@
       fallbackValue={generatorLength}
       value={generatorLengthInput}
       ariaLabel="密码长度"
-      onValueChange={(value) => { handleGeneratorLengthInput(value); persistGeneratorDefaults(); }}
-      onBlur={() => { commitGeneratorLengthInput(); persistGeneratorDefaults(); }}
+      onValueChange={handleGeneratorLengthInput}
+      onBlur={commitGeneratorLengthInput}
       onKeydown={handleGeneratorLengthKeydown}
     />
   </label>
@@ -68,7 +67,7 @@
         fallbackValue={minimumNumbers}
         value={minimumNumbers}
         disabled={!useNumbers}
-        onValueChange={(value) => { setGeneratorMinimumNumbers(value); persistGeneratorDefaults(); }}
+        onValueChange={setGeneratorMinimumNumbers}
       />
     </label>
     <label class="number-control">
@@ -81,7 +80,7 @@
         fallbackValue={minimumSymbols}
         value={minimumSymbols}
         disabled={!useSymbols}
-        onValueChange={(value) => { setGeneratorMinimumSymbols(value); persistGeneratorDefaults(); }}
+        onValueChange={setGeneratorMinimumSymbols}
       />
     </label>
   </div>

@@ -76,7 +76,6 @@ export type SettingsView = {
   theme: ThemePreference;
   density: DensityPreference;
   fontSize: FontSizePreference;
-  reduceMotion: boolean;
   rememberLayout: boolean;
   rememberLastView: boolean;
   rememberWindowBounds: boolean;
@@ -95,6 +94,8 @@ export type SettingsView = {
     allowedSymbols: string;
     excludedCharacters: string;
   };
+  installationPath: string;
+  dataPath: string;
   version: string;
 };
 
@@ -104,13 +105,13 @@ export type SettingsActions = {
   setTheme(value: ThemePreference): void;
   setDensity(value: DensityPreference): void;
   setFontSize(value: FontSizePreference): void;
-  setReduceMotion(value: boolean): void;
   setRememberLayout(value: boolean): void;
   setRememberLastView(value: boolean): void;
   setRememberWindowBounds(value: boolean): void;
   setDeviceSortMode(value: SortMode): void;
   setDeviceTypeSortMode(value: DeviceTypeSortMode): void;
   setGeneratorValue<K extends keyof SettingsView["generator"]>(key: K, value: SettingsView["generator"][K]): void;
+  openStoragePath(kind: "installation" | "data"): void;
   openSnapshotsDialog(): void;
   openExportConfigDialog(): void;
   chooseConfigFile(): void;
@@ -287,7 +288,6 @@ export type PasswordGeneratorActions = {
   generatePassword(): void;
   copyGeneratedPassword(): void;
   setGeneratorLength(length: number, syncInput?: boolean): void;
-  persistGeneratorDefaults(): void;
   setGeneratorMinimumNumbers(value: number | string): void;
   setGeneratorMinimumSymbols(value: number | string): void;
   setAllowedSymbols(value: string): void;

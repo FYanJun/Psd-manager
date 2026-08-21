@@ -1,6 +1,7 @@
 export type DeviceType = string;
 export type ConfigImportMode = "replace" | "add-missing";
 export type ConfirmationSummaryItem = { label: string; value: string };
+export type ConfirmationChange = { label: string; from: string; to: string };
 export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
@@ -27,8 +28,10 @@ export type ConfirmationAction =
   | "bulk-update-password"
   | "restore-history"
   | "restore-snapshot"
-  | "save-account-password"
-  | "rename-device-type";
+  | "save-device"
+  | "save-device-type"
+  | "save-account"
+  | "save-account-password";
 
 export type PopoverPosition = {
   top: number;
@@ -42,6 +45,7 @@ export type PendingConfirmation = {
   detail: string;
   confirmLabel: string;
   summaryItems?: ConfirmationSummaryItem[];
+  changes?: ConfirmationChange[];
   importModeSummaries?: Record<ConfigImportMode, ConfirmationSummaryItem[]>;
   importModeDetails?: Record<ConfigImportMode, string>;
   importModeErrors?: Partial<Record<ConfigImportMode, string>>;
@@ -56,6 +60,7 @@ export type PendingConfirmation = {
   passwordValue?: string;
   reasonValue?: string;
   accountDraft?: AccountForm;
+  deviceDraft?: DeviceForm;
   typeDraft?: TypeForm;
 };
 
@@ -198,7 +203,6 @@ export type AppSettings = {
     theme: ThemePreference;
     density: DensityPreference;
     fontSize: FontSizePreference;
-    reduceMotion: boolean;
   };
   workspace: {
     rememberLayout: boolean;

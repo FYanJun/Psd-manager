@@ -112,17 +112,15 @@ export function createDeviceController(port: DeviceControllerPort) {
     );
   }
 
-  function save() {
-    const state = port.read();
-    const form = state.deviceForm;
+  function validateDeviceForSave(form: DeviceForm) {
     const name = form.deviceName.trim();
     if (!name) {
       port.showStatus("请输入设备名称");
-      return;
+      return null;
     }
     if (!form.deviceType.trim()) {
       port.showStatus("请先新增设备类型");
-      return;
+      return null;
     }
     const textFields: Array<[string, string, number, boolean]> = [
       ["设备名称", form.deviceName, INPUT_LIMITS.deviceName, false],
@@ -135,43 +133,115 @@ export function createDeviceController(port: DeviceControllerPort) {
       const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
       if (error) {
         port.showStatus(`${label}${error}`, 5000);
-        return;
+        return null;
       }
     }
     if (!isValidConnectionAddress(form.ipAddress)) {
       port.showStatus(CONNECTION_ADDRESS_ERROR, 5000);
-      return;
+      return null;
     }
     if (hasDuplicateName(name, form.deviceType, form.id)) {
       port.showStatus("同一设备类型下已存在同名设备");
+      return null;
+    }
+
+    return port.getTypeMeta(form.deviceType);
+  }
+
+  function getDeviceChanges(item: VaultItem, form: DeviceForm) {
+    const values: Array<[string, string, string]> = [
+      ["设备名称", item.deviceName, form.deviceName.trim()],
+      ["设备类型", item.deviceType, form.deviceType.trim()],
+      ["连接地址", item.ipAddress, form.ipAddress.trim()],
+      ["资产编号", item.assetCode, form.assetCode.trim()],
+      ["设备位置", item.location, form.location.trim()],
+      ["备注", item.notes, form.notes.trim()],
+    ];
+    return values
+      .filter(([, from, to]) => from !== to)
+      .map(([label, from, to]) => ({ label, from, to }));
+  }
+
+  function save() {
+    const state = port.read();
+    const form = { ...state.deviceForm };
+    const typeMeta = validateDeviceForSave(form);
+    if (!typeMeta) return;
+
+    if (form.id) {
+      const currentItem = state.items.find((item) => item.id === form.id);
+      if (!currentItem) {
+        port.showStatus("保存失败：待修改的设备已不存在", 5000);
+        return;
+      }
+      const changes = getDeviceChanges(currentItem, form);
+      if (changes.length === 0) {
+        port.showStatus("没有可保存的修改");
+        return;
+      }
+      port.write({ activePopover: null });
+      port.setPendingConfirmation({
+        action: "save-device",
+        title: "保存设备修改",
+        message: `确认保存“${currentItem.deviceName}”的修改？`,
+        detail: "确认后会更新设备信息，设备下的账号和密码不会改变。",
+        confirmLabel: "保存修改",
+        summaryItems: [{ label: "设备", value: currentItem.deviceName }],
+        changes,
+        itemUuid: currentItem.uuid,
+        deviceDraft: form,
+      });
       return;
     }
 
-    const typeMeta = port.getTypeMeta(form.deviceType);
-    if (form.id) {
+    executeSaveDevice({ deviceDraft: form });
+  }
+
+  function executeSaveDevice(
+    target?: Pick<PendingConfirmation, "itemUuid" | "deviceDraft">,
+  ) {
+    const state = port.read();
+    const form = target?.deviceDraft ? { ...target.deviceDraft } : { ...state.deviceForm };
+    const typeMeta = validateDeviceForSave(form);
+    if (!typeMeta) return;
+    const currentItem = form.id
+      ? target?.itemUuid
+        ? state.items.find((item) => item.uuid === target.itemUuid)
+        : state.items.find((item) => item.id === form.id)
+      : undefined;
+    if (form.id && !currentItem) {
+      port.showStatus("保存失败：待修改的设备已不存在", 5000);
+      return;
+    }
+
+    if (currentItem) {
+      if (getDeviceChanges(currentItem, form).length === 0) {
+        port.showStatus("没有可保存的修改");
+        return;
+      }
       const updatedAt = formatDateTime(new Date());
-      const nextItems = state.items.map((item) => item.id === form.id
+      const nextItems = state.items.map((item) => item.uuid === currentItem.uuid
         ? syncItemWithAccounts({
             ...item,
-            deviceName: name,
-            deviceType: form.deviceType,
+            deviceName: form.deviceName.trim(),
+            deviceType: form.deviceType.trim(),
             deviceTypeUuid: typeMeta.uuid,
             assetCode: form.assetCode.trim(),
             location: form.location.trim(),
             ipAddress: form.ipAddress.trim(),
             iconText: typeMeta.iconText,
-            iconClass: port.iconClassForType(form.deviceType),
+            iconClass: port.iconClassForType(form.deviceType.trim()),
             notes: form.notes.trim(),
             updatedAt,
           }, getAccounts(item))
         : item);
-      const nextSelectedDeviceType = form.deviceType;
-      if (nextSelectedDeviceType !== state.selectedDeviceType || form.id !== state.selectedId || state.searchQuery.trim()) {
+      const nextSelectedDeviceType = form.deviceType.trim();
+      if (nextSelectedDeviceType !== state.selectedDeviceType || currentItem.id !== state.selectedId || state.searchQuery.trim()) {
         port.pushNavigationState();
       }
       port.write({
         items: nextItems,
-        selectedId: form.id,
+        selectedId: currentItem.id,
         selectedDeviceType: nextSelectedDeviceType,
         searchQuery: "",
         selectedAccountIds: [],
@@ -183,18 +253,18 @@ export function createDeviceController(port: DeviceControllerPort) {
     const nextItem: VaultItem = {
       uuid: createUuid(),
       id: Math.max(0, ...state.items.map((item) => item.id)) + 1,
-      title: name,
-      deviceName: name,
-      deviceType: form.deviceType,
+      title: form.deviceName.trim(),
+      deviceName: form.deviceName.trim(),
+      deviceType: form.deviceType.trim(),
       deviceTypeUuid: typeMeta.uuid,
       assetCode: form.assetCode.trim(),
       location: form.location.trim(),
       username: "",
       password: "",
       ipAddress: form.ipAddress.trim(),
-      tag: form.deviceType,
+      tag: form.deviceType.trim(),
       iconText: typeMeta.iconText,
-      iconClass: port.iconClassForType(form.deviceType),
+      iconClass: port.iconClassForType(form.deviceType.trim()),
       updatedAt: formatDateTime(new Date()),
       notes: form.notes.trim(),
       history: [],
@@ -279,5 +349,5 @@ export function createDeviceController(port: DeviceControllerPort) {
     });
   }
 
-  return { openAddDialog, openEditDialog, save, setFormType, deleteSelected, requestDeleteSelected };
+  return { openAddDialog, openEditDialog, save, executeSaveDevice, setFormType, deleteSelected, requestDeleteSelected };
 }

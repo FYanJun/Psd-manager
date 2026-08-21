@@ -28,7 +28,6 @@ export const DEFAULT_APP_SETTINGS = {
     theme: "system" as const,
     density: "standard" as const,
     fontSize: "standard" as const,
-    reduceMotion: false,
   },
   workspace: {
     rememberLayout: true,

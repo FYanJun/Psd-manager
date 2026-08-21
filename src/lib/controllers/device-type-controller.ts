@@ -1,4 +1,4 @@
-import { fallbackDeviceTypeMeta } from "../constants";
+import { fallbackDeviceTypeMeta, typeColorOptions } from "../constants";
 import {
   getTextInputValidationError,
   INPUT_LIMITS,
@@ -46,6 +46,10 @@ export type DeviceTypeControllerPort = {
 
 function getVisibleTypes(state: DeviceTypeControllerState) {
   return getVisibleDeviceTypeOptions(state.customDeviceTypes);
+}
+
+function formatTypeColor(color: string) {
+  return typeColorOptions.find((option) => option.value === color)?.label ?? color;
 }
 
 export function createDeviceTypeController(port: DeviceTypeControllerPort) {
@@ -183,10 +187,10 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
   }
 
   function saveDeviceType() {
-    const { typeForm } = port.read();
+    const state = port.read();
+    const { typeForm } = state;
     const label = typeForm.label.trim();
     const originalUuid = typeForm.originalUuid;
-    const originalLabel = typeForm.originalLabel;
     if (!label) {
       port.showStatus("请输入设备类型名称");
       return;
@@ -210,24 +214,38 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       return;
     }
 
-    const affectedDeviceCount = originalLabel && originalLabel !== label
-      ? port.read().items.filter((item) => item.deviceTypeUuid === originalUuid).length
-      : 0;
-    if (affectedDeviceCount > 0) {
+    if (originalUuid) {
+      const originalMeta = getTypeMetaByUuid(originalUuid);
+      if (!originalMeta) {
+        port.showStatus("保存失败：待修改的设备类型已不存在", 5000);
+        return;
+      }
+      const nextIconText = typeForm.iconText.trim() || label.slice(0, 1);
+      const changes = [
+        { label: "类型名称", from: originalMeta.label, to: label },
+        { label: "图标", from: originalMeta.iconText, to: nextIconText },
+        { label: "颜色", from: formatTypeColor(originalMeta.color), to: formatTypeColor(typeForm.color) },
+      ].filter((change) => change.from !== change.to);
+      if (changes.length === 0) {
+        port.showStatus("没有可保存的修改");
+        return;
+      }
+
+      const affectedDeviceCount = state.items.filter((item) => item.deviceTypeUuid === originalUuid).length;
       port.setActivePopover(null);
       port.setPendingConfirmation({
-        action: "rename-device-type",
-        deviceType: originalLabel ?? "",
-        deviceTypeUuid: originalUuid ?? undefined,
+        action: "save-device-type",
+        deviceType: originalMeta.label,
+        deviceTypeUuid: originalUuid,
         typeDraft: { ...typeForm },
-        title: "重命名设备类型",
-        message: `确认将“${originalLabel}”改为“${label}”？`,
-        detail: "该类型下的设备会一起改到新类型名，设备本身和账号密码不会删除。",
-        confirmLabel: "确认重命名",
-        summaryItems: [
-          { label: "影响设备", value: `${affectedDeviceCount} 台` },
-          { label: "新类型", value: label },
-        ],
+        title: "保存设备类型修改",
+        message: `确认保存“${originalMeta.label}”的修改？`,
+        detail: affectedDeviceCount > 0 && originalMeta.label !== label
+          ? `该类型下的 ${affectedDeviceCount} 台设备会一起更新类型名称，设备本身和账号密码不会删除。`
+          : "确认后会更新设备类型显示，不会删除设备和账号密码。",
+        confirmLabel: "保存修改",
+        summaryItems: affectedDeviceCount > 0 ? [{ label: "影响设备", value: `${affectedDeviceCount} 台` }] : undefined,
+        changes,
       });
       return;
     }
@@ -277,6 +295,13 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       iconText: form.iconText.trim() || label.slice(0, 1),
       color: form.color,
     };
+    if (originalMeta
+      && originalMeta.label === nextMeta.label
+      && originalMeta.iconText === nextMeta.iconText
+      && originalMeta.color === nextMeta.color) {
+      port.showStatus("没有可保存的修改");
+      return;
+    }
     let customDeviceTypes = state.customDeviceTypes;
     let items = state.items;
     const updatedAt = originalLabel ? formatDateTime(new Date()) : "";
