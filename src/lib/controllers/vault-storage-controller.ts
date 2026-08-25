@@ -1,7 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { LEGACY_STORAGE_KEY, STORAGE_KEY } from "../constants";
 import { parsePersistedVaultContent, validatePersistedVaultState } from "../persisted-vault";
 import type { PersistedVaultState } from "../types";
 
@@ -10,7 +9,6 @@ export type VaultStorageState = "loading" | "ready" | "load-error" | "save-error
 export type VaultStorageViewState = {
   state: VaultStorageState;
   error: string;
-  canMigrateLegacyKey: boolean;
   canRecoverBackup: boolean;
   hydrated: boolean;
 };
@@ -28,10 +26,11 @@ type VaultStoragePort = {
   clampLayout(): void;
   showStatus(message: string, duration?: number): void;
   persistAppSettings(): Promise<void>;
+  isLockEnabled(): boolean;
+  lock(): Promise<void>;
   writeViewState(state: VaultStorageViewState): void;
 };
 
-const LEGACY_KEY_MIGRATION_REQUIRED = "LEGACY_KEY_MIGRATION_REQUIRED:";
 const BACKUP_RECOVERY_REQUIRED = "BACKUP_RECOVERY_REQUIRED:";
 
 // Browser preview is intentionally session-only. Plaintext localStorage is not a
@@ -42,7 +41,6 @@ export function createVaultStorageController(port: VaultStoragePort) {
   let revision = 0;
   let storageState: VaultStorageState = "loading";
   let storageError = "";
-  let legacyKeyMigrationRequired = false;
   let backupRecoveryRequired = false;
   let hydrated = false;
   let pendingSave: PendingVaultSave | null = null;
@@ -52,6 +50,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
   let saveInFlight = false;
   let activeSave: PendingVaultSave | null = null;
   let saveTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let dirtyScheduled = false;
   let saveWaiters: VaultSaveWaiter[] = [];
   let closeInProgress = false;
   let exitInProgress = false;
@@ -63,7 +62,6 @@ export function createVaultStorageController(port: VaultStoragePort) {
     port.writeViewState({
       state: storageState,
       error: storageError,
-      canMigrateLegacyKey: legacyKeyMigrationRequired,
       canRecoverBackup: backupRecoveryRequired,
       hydrated,
     });
@@ -76,7 +74,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
   function getDataSignature(content: string) {
     try {
       const parsed = parsePersistedVaultContent(content);
-      return JSON.stringify({ ...parsed.state, revision: 0 });
+      return JSON.stringify({ ...parsed, revision: 0 });
     } catch {
       return content;
     }
@@ -89,9 +87,8 @@ export function createVaultStorageController(port: VaultStoragePort) {
   async function writeContent(content: string) {
     const expectedRevision = revision;
     const parsed = parsePersistedVaultContent(content);
-    if (parsed.migrated) throw new Error("拒绝直接保存未迁移的旧版资产库");
-    parsed.state.revision = expectedRevision;
-    const normalizedContent = JSON.stringify(validatePersistedVaultState(parsed.state));
+    parsed.revision = expectedRevision;
+    const normalizedContent = JSON.stringify(validatePersistedVaultState(parsed));
     let persistedContent = normalizedContent;
 
     if (isTauri()) {
@@ -101,20 +98,20 @@ export function createVaultStorageController(port: VaultStoragePort) {
       });
     } else {
       const currentContent = browserPreviewContent;
-      const currentRevision = currentContent ? parsePersistedVaultContent(currentContent).state.revision : 0;
+      const currentRevision = currentContent ? parsePersistedVaultContent(currentContent).revision : 0;
       if (currentRevision !== expectedRevision) {
         throw new Error(`资产库版本冲突：本地版本为 ${currentRevision}，当前操作基于版本 ${expectedRevision}`);
       }
-      parsed.state.revision = expectedRevision + 1;
-      persistedContent = JSON.stringify(validatePersistedVaultState(parsed.state));
+      parsed.revision = expectedRevision + 1;
+      persistedContent = JSON.stringify(validatePersistedVaultState(parsed));
       browserPreviewContent = persistedContent;
     }
 
     const persisted = parsePersistedVaultContent(persistedContent);
-    if (persisted.migrated || persisted.state.revision !== expectedRevision + 1) {
+    if (persisted.revision !== expectedRevision + 1) {
       throw new Error("资产库保存后返回了无效版本号");
     }
-    revision = persisted.state.revision;
+    revision = persisted.revision;
     return persistedContent;
   }
 
@@ -189,6 +186,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
     if (storageState !== "ready") throw new Error(storageError || "资产库当前不可写");
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = null;
+    dirtyScheduled = false;
     const content = captureContent();
     const contentSignature = getDataSignature(content);
     const queuedSave = pendingSave;
@@ -205,17 +203,12 @@ export function createVaultStorageController(port: VaultStoragePort) {
 
   function schedule() {
     if (!hydrated || storageState !== "ready") return;
-    const content = captureContent();
-    if (!pendingSave && !saveInFlight && getDataSignature(content) === persistedDataSignature) {
-      if (saveTimer) window.clearTimeout(saveTimer);
-      saveTimer = null;
-      dirtyContent = "";
-      return;
-    }
+    dirtyScheduled = true;
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = null;
-      enqueue(content);
+      dirtyScheduled = false;
+      enqueue(captureContent());
     }, 250);
   }
 
@@ -226,7 +219,6 @@ export function createVaultStorageController(port: VaultStoragePort) {
   async function initialize() {
     storageState = "loading";
     storageError = "";
-    legacyKeyMigrationRequired = false;
     backupRecoveryRequired = false;
     hydrated = false;
     persistedDataSignature = "";
@@ -236,34 +228,14 @@ export function createVaultStorageController(port: VaultStoragePort) {
       let successfulContent = "";
       if (storedContent) {
         const parsed = parsePersistedVaultContent(storedContent);
-        revision = parsed.state.revision;
-        port.applyLoaded(parsed.state);
-        if (parsed.migrated) {
-          const migrationContent = captureContent();
-          const persistedContent = await writeContent(migrationContent);
-          successfulContent = persistedContent;
-          const verifiedContent = await readContent();
-          if (verifiedContent !== persistedContent) throw new Error("旧版资产库迁移校验失败，原文件仍保留");
-        } else {
-          successfulContent = storedContent;
-        }
-        window.localStorage.removeItem(STORAGE_KEY);
-        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+        revision = parsed.revision;
+        port.applyLoaded(parsed);
+        successfulContent = storedContent;
       } else {
-        const legacyContent = window.localStorage.getItem(STORAGE_KEY)
-          ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
-        if (legacyContent) {
-          const parsed = parsePersistedVaultContent(legacyContent);
-          revision = parsed.state.revision;
-          port.applyLoaded(parsed.state);
-        }
-        const migrationContent = captureContent();
-        const persistedContent = await writeContent(migrationContent);
+        const persistedContent = await writeContent(captureContent());
         successfulContent = persistedContent;
         const verifiedContent = await readContent();
-        if (verifiedContent !== persistedContent) throw new Error("加密资产库迁移校验失败，旧数据仍保留");
-        window.localStorage.removeItem(STORAGE_KEY);
-        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+        if (verifiedContent !== persistedContent) throw new Error("新建资产库落盘校验失败");
       }
       port.clampLayout();
       pendingSave = null;
@@ -274,26 +246,9 @@ export function createVaultStorageController(port: VaultStoragePort) {
       publish();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? "未知错误");
-      legacyKeyMigrationRequired = message.includes(LEGACY_KEY_MIGRATION_REQUIRED);
       backupRecoveryRequired = message.includes(BACKUP_RECOVERY_REQUIRED);
       storageError = message
-        .replace(LEGACY_KEY_MIGRATION_REQUIRED, "")
         .replace(BACKUP_RECOVERY_REQUIRED, "");
-      storageState = "load-error";
-      publish();
-    }
-  }
-
-  async function migrateLegacyKey() {
-    if (!isTauri() || !legacyKeyMigrationRequired) return;
-    storageState = "loading";
-    storageError = "";
-    publish();
-    try {
-      await invoke("migrate_legacy_vault_key");
-      await initialize();
-    } catch (error) {
-      storageError = error instanceof Error ? error.message : String(error ?? "未知错误");
       storageState = "load-error";
       publish();
     }
@@ -333,7 +288,21 @@ export function createVaultStorageController(port: VaultStoragePort) {
   }
 
   function hasUnsavedChanges() {
-    return Boolean(saveTimer || pendingSave || saveInFlight || dirtyContent);
+    return Boolean(dirtyScheduled || saveTimer || pendingSave || saveInFlight || dirtyContent);
+  }
+
+  function suspend() {
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = null;
+    pendingSave = null;
+    dirtyContent = "";
+    dirtyScheduled = false;
+    persistedDataSignature = "";
+    hydrated = false;
+    storageState = "loading";
+    storageError = "";
+    backupRecoveryRequired = false;
+    publish();
   }
 
   function mountCloseProtection() {
@@ -348,6 +317,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
             throw new Error("资产库尚未安全保存，请先重试保存");
           }
           if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+          if (port.isLockEnabled()) await port.lock();
           await port.persistAppSettings();
           // The Rust command exits the application, rather than destroying only
           // the main window. A rejected invoke can happen when the process exits
@@ -373,14 +343,19 @@ export function createVaultStorageController(port: VaultStoragePort) {
       closeInProgress = true;
       try {
         if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+        if (port.isLockEnabled()) await port.lock();
         await appWindow.hide();
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error ?? "");
-        port.showStatus(reason ? `保存失败，窗口已隐藏：${reason}` : "窗口已隐藏，资产库尚未安全保存", 7000);
-        try {
-          await appWindow.hide();
-        } catch {
-          // The close request remains prevented; keep the process alive if hiding fails.
+        if (port.isLockEnabled()) {
+          port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000);
+        } else {
+          port.showStatus(reason ? `保存失败，窗口已隐藏：${reason}` : "窗口已隐藏，资产库尚未安全保存", 7000);
+          try {
+            await appWindow.hide();
+          } catch {
+            // The close request remains prevented; keep the process alive if hiding fails.
+          }
         }
       } finally {
         closeInProgress = false;
@@ -408,9 +383,9 @@ export function createVaultStorageController(port: VaultStoragePort) {
     persistImmediately,
     refreshDirtyState,
     retry,
-    migrateLegacyKey,
     recoverBackup,
     hasUnsavedChanges,
+    suspend,
     mountCloseProtection,
     destroy,
   };

@@ -1,26 +1,19 @@
 <script lang="ts">
-  import { AlertTriangle, DatabaseBackup, LoaderCircle, RefreshCw, RotateCcw } from "@lucide/svelte";
+  import { AlertTriangle, LoaderCircle, RefreshCw, RotateCcw } from "@lucide/svelte";
 
   export let state: "loading" | "load-error" | "save-error" = "loading";
   export let error = "";
   export let retry: () => void | Promise<void>;
-  export let canMigrateLegacyKey = false;
-  export let migrateLegacyKey: () => void | Promise<void>;
   export let canRecoverBackup = false;
   export let recoverBackup: () => void | Promise<void>;
 
-  type CriticalStorageAction = "recover-backup" | "migrate-legacy";
+  type CriticalStorageAction = "recover-backup";
 
   const criticalActionCopy: Record<CriticalStorageAction, { title: string; detail: string; confirmLabel: string }> = {
     "recover-backup": {
       title: "确认恢复安全备份？",
       detail: "当前主资产库会被安全备份替换；请确认这是你要恢复的数据版本。",
       confirmLabel: "确认恢复",
-    },
-    "migrate-legacy": {
-      title: "确认迁移旧版资产库？",
-      detail: "迁移会主动读取旧版密钥并写入当前资产库，只应在确认旧数据来源可信时执行。",
-      confirmLabel: "确认迁移",
     },
   };
 
@@ -30,7 +23,6 @@
     const action = pendingCriticalAction;
     pendingCriticalAction = null;
     if (action === "recover-backup") await recoverBackup();
-    if (action === "migrate-legacy") await migrateLegacyKey();
   }
 </script>
 
@@ -61,8 +53,6 @@
       <div class="vault-storage-actions">
         {#if state === "load-error" && canRecoverBackup}
           <button class="primary-button" on:click={() => (pendingCriticalAction = "recover-backup")}><RotateCcw size={17} /><span>恢复安全备份</span></button>
-        {:else if state === "load-error" && canMigrateLegacyKey}
-          <button class="primary-button" on:click={() => (pendingCriticalAction = "migrate-legacy")}><DatabaseBackup size={17} /><span>迁移旧版资产库</span></button>
         {:else}
           <button class="secondary-button" on:click={() => retry()}><RefreshCw size={17} /><span>{state === "save-error" ? "重试保存" : "重新读取"}</span></button>
         {/if}

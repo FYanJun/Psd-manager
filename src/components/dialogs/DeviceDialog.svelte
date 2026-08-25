@@ -9,6 +9,7 @@
     sanitizeSingleLineTextInput,
   } from "../../lib/input-validation";
   import type { DeviceForm, DeviceType, DeviceTypeMeta, TypePickerScope } from "../../lib/types";
+  import { typeColorClass, typeColorStyle } from "../../lib/color";
 
   export let deviceForm: DeviceForm;
   export let selectedDeviceFormTypeMeta: DeviceTypeMeta;
@@ -29,7 +30,14 @@
   </label>
   <div class="form-control type-combo-field">
     <span>设备类型</span>
-    {#if deviceTypeOptionsLength === 0}
+    {#if deviceForm.id}
+      <strong class="type-readonly-value" aria-readonly="true">
+        {#if selectedDeviceFormTypeMeta}
+          <span class={`type-combo-icon ${typeColorClass(selectedDeviceFormTypeMeta.color)}`} style={typeColorStyle(selectedDeviceFormTypeMeta.color)}>{selectedDeviceFormTypeMeta.iconText}</span>
+        {/if}
+        <span>{selectedDeviceFormTypeMeta?.label || deviceForm.deviceType || "未设置"}</span>
+      </strong>
+    {:else if deviceTypeOptionsLength === 0}
       <div class="type-combo-empty-state">请先新增设备类型</div>
     {:else}
       <div class="type-combo">
@@ -41,7 +49,7 @@
             aria-controls="device-type-options"
             on:click={() => toggleTypePicker("device")}
           >
-            <span class={`type-combo-icon type-${selectedDeviceFormTypeMeta.color}`}>{selectedDeviceFormTypeMeta.iconText}</span>
+            <span class={`type-combo-icon ${typeColorClass(selectedDeviceFormTypeMeta.color)}`} style={typeColorStyle(selectedDeviceFormTypeMeta.color)}>{selectedDeviceFormTypeMeta.iconText}</span>
             <span class="type-combo-copy"><strong>{selectedDeviceFormTypeMeta.label || "选择设备类型"}</strong></span>
             <ChevronDown size={18} />
           </button>
@@ -64,7 +72,7 @@
                     aria-selected={deviceForm.deviceType === type.label}
                     on:click={() => setDeviceFormType(type.label)}
                   >
-                    <span class={`type-combo-icon type-${type.color}`}>{type.iconText}</span>
+                    <span class={`type-combo-icon ${typeColorClass(type.color)}`} style={typeColorStyle(type.color)}>{type.iconText}</span>
                     <span class="type-combo-copy"><strong>{type.label}</strong></span>
                   </button>
                 {/each}

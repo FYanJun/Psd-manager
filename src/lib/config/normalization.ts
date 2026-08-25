@@ -21,8 +21,8 @@ export function normalizeDeviceTypeMetaList(value: unknown) {
       if (!label || label === "全部设备" || usedLabels.has(label)) return types;
       usedLabels.add(label);
       const explicitUuid = readString(record.uuid).trim();
-      const legacyUuid = readString(record["设备类型UUID"]).trim();
-      const rawUuid = isUuid(explicitUuid) ? explicitUuid : legacyUuid;
+      const importedTypeUuid = readString(record["设备类型UUID"]).trim();
+      const rawUuid = isUuid(explicitUuid) ? explicitUuid : importedTypeUuid;
       types.push({
         uuid: takeUniqueTypeUuid(rawUuid, usedUuids),
         label,

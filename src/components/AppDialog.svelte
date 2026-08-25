@@ -7,7 +7,8 @@
   import ExportConfigDialog from "./dialogs/ExportConfigDialog.svelte";
   import PasswordDialog from "./dialogs/PasswordDialog.svelte";
   import SettingsDialog from "./dialogs/SettingsDialog.svelte";
-  import type { ActiveDialog, AccountForm, BulkPasswordForm, ConfigFormat, DeviceForm, TypeForm, TypePickerScope } from "../lib/types";
+  import VaultPasswordDialog from "./dialogs/VaultPasswordDialog.svelte";
+  import type { ActiveDialog, AccountForm, BulkPasswordForm, ConfigFormat, DeviceForm, TypeForm, TypePickerScope, VaultPasswordDialogMode } from "../lib/types";
   import type { AppDialogActions, AppDialogView } from "../lib/view-models";
 
   export let activeDialog: ActiveDialog = null;
@@ -25,6 +26,19 @@
   export let actions: AppDialogActions;
   export let settingsView: import("../lib/view-models").SettingsView;
   export let settingsActions: import("../lib/view-models").SettingsActions;
+  export let vaultPasswordDialogMode: VaultPasswordDialogMode = "set";
+  export let vaultPasswordForm: { currentPassword: string; newPassword: string; confirmPassword: string };
+  export let vaultPasswordError = "";
+  export let vaultPasswordBusy = false;
+  export let recoveryKey = "";
+  export let recoveryAcknowledged = false;
+  export let recoveryFileName = "";
+  export let recoveryFileSaved = false;
+  export let recoveryFileBusy = false;
+  export let recoveryFileError = "";
+  export let saveRecoveryFile: () => void;
+  export let finishRecoverySetup: () => void;
+  export let saveVaultPassword: () => void;
 
   $: dialogTitle = activeDialog === "type"
     ? (typeForm.originalLabel ? "编辑设备类型" : "新增设备类型")
@@ -36,8 +50,10 @@
           ? (accountForm.id ? "编辑账号" : "新增账号")
           : activeDialog === "export-config"
             ? "导出配置"
-            : activeDialog === "settings"
+          : activeDialog === "settings"
               ? "设置"
+            : activeDialog === "security-password"
+              ? vaultPasswordDialogMode === "set" ? "设置启动密码" : vaultPasswordDialogMode === "change" ? "修改启动密码" : "关闭启动密码"
             : deviceForm.id
               ? "编辑设备信息"
               : "新增设备";
@@ -71,7 +87,6 @@
   <ModalFrame
     title={dialogTitle}
     titleId="business-dialog-title"
-    modalClass={activeDialog === "type" ? "type-modal" : activeDialog === "bulk-password" ? "bulk-modal" : activeDialog === "settings" ? "settings-modal" : ""}
     close={actions.closeOverlays}
   >
 
@@ -102,6 +117,25 @@
         <ExportConfigDialog bind:exportConfigFormat closeOverlays={actions.closeOverlays} exportConfig={actions.exportConfig} />
       {:else if activeDialog === "settings"}
         <SettingsDialog view={settingsView} actions={settingsActions} close={actions.closeOverlays} />
+      {:else if activeDialog === "security-password"}
+        <VaultPasswordDialog
+          mode={vaultPasswordDialogMode}
+          bind:currentPassword={vaultPasswordForm.currentPassword}
+          bind:newPassword={vaultPasswordForm.newPassword}
+          bind:confirmPassword={vaultPasswordForm.confirmPassword}
+          error={vaultPasswordError}
+          busy={vaultPasswordBusy}
+          {recoveryKey}
+          bind:recoveryAcknowledged
+          {recoveryFileName}
+          {recoveryFileSaved}
+          {recoveryFileBusy}
+          {recoveryFileError}
+          {saveRecoveryFile}
+          {finishRecoverySetup}
+          close={actions.closeOverlays}
+          save={saveVaultPassword}
+        />
       {:else if activeDialog === "account"}
         <AccountDialog bind:accountForm selectedItem={view.selectedItem} revealResetToken={view.revealResetToken} closeOverlays={actions.closeOverlays} saveAccount={actions.saveAccount} />
       {:else}

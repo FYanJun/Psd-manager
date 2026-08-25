@@ -5,6 +5,7 @@
   import DeviceInfoCard from "./device-detail/DeviceInfoCard.svelte";
   import type { DeviceAccount, PasswordHistory, VaultItem } from "../lib/types";
   import type { DeviceDetailActions, DeviceDetailModel } from "../lib/view-models";
+  import { iconColorStyle } from "../lib/color";
 
   export let passwordVisible = false;
   export let historyOpen = false;
@@ -60,7 +61,7 @@
   {#if hasSelectedDevice}
     <div class="detail-topline">
       <div class="detail-header-identity">
-        <span class={`detail-icon ${selectedItem.iconClass}`}>
+        <span class={`detail-icon ${selectedItem.iconClass}`} style={iconColorStyle(selectedItem.iconClass)}>
           {selectedItem.iconText}
         </span>
         <div class="detail-header-copy">

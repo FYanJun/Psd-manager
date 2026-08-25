@@ -2,6 +2,7 @@
   import { ArrowDownUp, MoreHorizontal, Pencil, Plus, Search, SearchX, Server, Trash2 } from "@lucide/svelte";
   import type { VaultItem } from "../lib/types";
   import { getAccounts } from "../lib/vault";
+  import { iconColorStyle } from "../lib/color";
 
   export let filteredItems: VaultItem[];
   export let selectedId = 0;
@@ -74,7 +75,7 @@
           on:click={() => selectDevice(item.id)}
           on:contextmenu={(event) => openDeviceContextMenu(item.id, event)}
         >
-          <span class={`item-icon ${item.iconClass}`}>
+          <span class={`item-icon ${item.iconClass}`} style={iconColorStyle(item.iconClass)}>
             {item.iconText}
           </span>
           <span class="item-copy">

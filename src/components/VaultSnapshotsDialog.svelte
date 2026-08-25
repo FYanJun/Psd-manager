@@ -20,7 +20,7 @@
 </script>
 
 {#if open}
-  <ModalFrame title="数据快照" titleId="snapshots-title" modalClass="snapshots-modal" dialogWidth="760px" {close}>
+  <ModalFrame title="数据快照" titleId="snapshots-title" {close}>
       <div class="snapshot-list">
         {#if snapshots.length === 0}
           <div class="snapshot-empty"><ArchiveRestore size={26} /><strong>暂无安全快照</strong><span>删除或配置导入前会自动保存。</span></div>

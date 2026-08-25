@@ -1,8 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getVersion } from "@tauri-apps/api/app";
-  import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
+import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   import OverlayLayer from "./components/OverlayLayer.svelte";
+  import VaultLockScreen from "./components/VaultLockScreen.svelte";
   import VaultStorageStatus from "./components/VaultStorageStatus.svelte";
   import WorkspaceContent from "./components/WorkspaceContent.svelte";
 
@@ -13,7 +18,7 @@
     VAULT_SCHEMA_VERSION,
     initialItems,
   } from "./lib/constants";
-  import { createDefaultAppSettings, loadAppSettings, mergeLegacyPaneLayout, normalizeAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
+  import { createDefaultAppSettings, loadAppSettings, normalizeAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
   import {
     formatDeviceInfo,
   } from "./lib/device-commands";
@@ -63,6 +68,7 @@
     VaultItem,
     VaultSnapshot,
     ViewState,
+    VaultPasswordDialogMode,
   } from "./lib/types";
   import { filterDeviceTypeChoices } from "./lib/utils";
   import {
@@ -84,10 +90,11 @@
   let vaultSnapshots: VaultSnapshot[] = [];
   let vaultStorageState: VaultStorageState = "loading";
   let vaultStorageError = "";
-  let legacyVaultKeyMigrationRequired = false;
   let vaultBackupRecoveryRequired = false;
   let hydrated = false;
   let searchQuery = "";
+  let searchDraft = "";
+  let searchApplyTimer: ReturnType<typeof window.setTimeout> | null = null;
   let selectedDeviceType: "全部设备" | DeviceType = "全部设备";
   let selectedId = 0;
   let sortMode: SortMode = "updatedDesc";
@@ -151,20 +158,47 @@
   let selectedTypeDeviceCount = 0;
   let passwordStrength = "";
   let passwordStrengthRequestId = 0;
+  let passwordStrengthTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let passwordStrengthCacheKey = "";
+  let passwordStrengthCacheValue = "";
   let canUseGeneratorForCurrentAccount = true;
   let canUseGeneratorForBulkUpdate = true;
   let appSettings: AppSettings = createDefaultAppSettings();
-  let settingsActiveSection: "interface" | "workspace" | "generator" | "data" | "about" = "interface";
+  let settingsActiveSection: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment" = "interface";
   let settingsLoaded = false;
-  let settingsHasStoredSettings = false;
   let settingsSaveTimer: ReturnType<typeof window.setTimeout> | null = null;
   let settingsSaveQueue = Promise.resolve();
   let systemThemeMediaQuery: MediaQueryList | null = null;
   let tooltipEnabled = true;
+  let autostartAvailable = false;
+  let autostartUpdating = false;
   let appVersion = "0.1.14";
   let dataDialogReturnToSettings = false;
   let installationPath = "";
   let dataPath = "";
+  let vaultLockEnabled = false;
+  let vaultLocked = false;
+  let vaultUnlockBusy = false;
+  let vaultUnlockError = "";
+  let vaultUnlockPassword = "";
+  let vaultPasswordDialogMode: VaultPasswordDialogMode = "set";
+  let vaultPasswordForm = { currentPassword: "", newPassword: "", confirmPassword: "" };
+  let vaultPasswordError = "";
+  let vaultPasswordBusy = false;
+  let autoLockTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let removeTrayLockListener: (() => void) | null = null;
+  let trayLockListenerPromise: Promise<() => void> | null = null;
+  let recoveryKey = "";
+  let recoveryAcknowledged = false;
+  let recoveryBusy = false;
+  let recoveryError = "";
+  let recoveryFileContent = "";
+  let recoveryFileName = "";
+  let recoveryFileSaved = false;
+  let recoveryFileBusy = false;
+  let recoveryFileError = "";
+
+  const recoveryFileNameDefault = "PsdManager-Recovery.psdm-recovery";
 
   const windowSettingsController = createWindowSettingsController({
     read: () => appSettings,
@@ -203,6 +237,7 @@
     if (restoreLastView && settings.workspace.rememberLastView) {
       selectedDeviceType = settings.workspace.lastView.deviceType;
       searchQuery = settings.workspace.lastView.searchQuery;
+      searchDraft = searchQuery;
       sortMode = settings.workspace.lastView.sortMode;
     }
   }
@@ -563,10 +598,11 @@
     clampLayout: () => layoutController.clamp(),
     showStatus,
     persistAppSettings,
+    isLockEnabled: () => vaultLockEnabled,
+    lock: lockVaultSession,
     writeViewState: (state) => {
       vaultStorageState = state.state;
       vaultStorageError = state.error;
-      legacyVaultKeyMigrationRequired = state.canMigrateLegacyKey;
       vaultBackupRecoveryRequired = state.canRecoverBackup;
       hydrated = state.hydrated;
     },
@@ -612,9 +648,8 @@
   });
 
   function applyPersistedVaultState(parsed: PersistedVaultState) {
-    const normalized = normalizeVaultIdentityData(parsed.items, parsed.customDeviceTypes);
-    items = normalized.items;
-    customDeviceTypes = normalized.customDeviceTypes;
+    items = parsed.items;
+    customDeviceTypes = parsed.customDeviceTypes;
     ensureDeviceTypeMetaForItems(items);
     vaultSnapshots = Array.isArray(parsed.snapshots) ? parsed.snapshots.slice(0, 10) : [];
     if (appSettings.workspace.rememberLastView) {
@@ -624,11 +659,6 @@
         : "全部设备";
       searchQuery = appSettings.workspace.lastView.searchQuery;
       sortMode = appSettings.workspace.lastView.sortMode;
-    }
-    if (!settingsHasStoredSettings && parsed.paneLayout) {
-      appSettings = mergeLegacyPaneLayout(appSettings, parsed.paneLayout as AppSettings["workspace"]["paneLayout"]);
-      applyAppSettings(appSettings, false);
-      void persistAppSettings();
     }
     if (appSettings.workspace.rememberLastView) {
       selectedId = items.find((item) => item.uuid === appSettings.workspace.lastView.selectedDeviceUuid)?.id ?? items[0]?.id ?? 0;
@@ -657,7 +687,10 @@
   }
 
   function resetWorkspaceForDataset(nextItems: VaultItem[]) {
+    if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+    searchApplyTimer = null;
     navigationController.resetWorkspace(nextItems);
+    searchDraft = "";
     historyOpen = false;
     historyContextKey = "";
   }
@@ -665,15 +698,12 @@
   async function initializeAppSettings() {
     try {
       const loaded = await loadAppSettings();
-      settingsHasStoredSettings = loaded.hasStoredSettings;
-      appSettings = loaded.settings;
+      appSettings = loaded;
       applyAppSettings(appSettings, true);
       settingsLoaded = true;
       await windowSettingsController.restore();
       await windowSettingsController.mount();
-      if (loaded.needsMigration) scheduleAppSettingsSave();
     } catch (error) {
-      settingsHasStoredSettings = false;
       appSettings = createDefaultAppSettings();
       applyAppSettings(appSettings, true);
       settingsLoaded = true;
@@ -681,6 +711,19 @@
       showStatus(`应用设置读取失败，已使用默认设置：${error instanceof Error ? error.message : String(error)}`, 6000);
     }
     if (isTauri()) {
+      try {
+        const enabled = await isAutostartEnabled();
+        autostartAvailable = true;
+        if (appSettings.interface.startOnBoot !== enabled) {
+          appSettings = normalizeAppSettings({
+            ...appSettings,
+            interface: { ...appSettings.interface, startOnBoot: enabled },
+          });
+          await persistAppSettings();
+        }
+      } catch (error) {
+        showStatus(`开机自启状态读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      }
       try {
         appVersion = await getVersion();
       } catch {
@@ -741,10 +784,6 @@
     snapshotController.requestRestore(snapshot);
   }
 
-  async function migrateLegacyVaultKey() {
-    await vaultStorageController.migrateLegacyKey();
-  }
-
   async function recoverVaultBackup() {
     await vaultStorageController.recoverBackup();
   }
@@ -758,16 +797,30 @@
     systemThemeMediaQuery.addEventListener("change", handleSystemThemeChange);
     void (async () => {
       await initializeAppSettings();
-      await vaultStorageController.initialize();
+      await initializeVaultLock();
     })();
     vaultStorageController.mountCloseProtection();
     overlayController.mount();
+    if (isTauri()) {
+      const listenerPromise = listen("tray-lock-requested", () => {
+        void lockVaultNow();
+      });
+      trayLockListenerPromise = listenerPromise;
+      void listenerPromise.then((removeListener) => {
+        if (trayLockListenerPromise === listenerPromise) removeTrayLockListener = removeListener;
+        else removeListener();
+      });
+    }
     window.addEventListener("keydown", handleGlobalKeydown);
+    window.addEventListener("keydown", handleUserActivity);
+    window.addEventListener("pointerdown", handleUserActivity);
     window.addEventListener("resize", clampPaneLayout);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
       overlayController.destroy();
       window.removeEventListener("keydown", handleGlobalKeydown);
+      window.removeEventListener("keydown", handleUserActivity);
+      window.removeEventListener("pointerdown", handleUserActivity);
       window.removeEventListener("resize", clampPaneLayout);
       window.removeEventListener("blur", handleWindowBlur);
       vaultStorageController.destroy();
@@ -776,6 +829,20 @@
       systemThemeMediaQuery = null;
       statusController.destroy();
       stopPaneResize();
+      if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+      searchApplyTimer = null;
+      if (passwordStrengthTimer) window.clearTimeout(passwordStrengthTimer);
+      passwordStrengthTimer = null;
+      passwordStrengthCacheKey = "";
+      passwordStrengthCacheValue = "";
+      clearAutoLockTimer();
+      if (removeTrayLockListener) {
+        removeTrayLockListener();
+        removeTrayLockListener = null;
+        trayLockListenerPromise = null;
+      } else if (trayLockListenerPromise) {
+        trayLockListenerPromise = null;
+      }
       if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
     };
   });
@@ -885,19 +952,39 @@
   }
 
   function goBack() {
+    if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+    searchApplyTimer = null;
     navigationController.back();
+    searchDraft = searchQuery;
   }
 
   function goForward() {
+    if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+    searchApplyTimer = null;
     navigationController.forward();
+    searchDraft = searchQuery;
   }
 
   function updateSearchValue(value: string) {
-    navigationController.updateSearch(value);
-    persistLastView();
+    searchDraft = value;
+    if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+    if (!value.trim()) {
+      searchApplyTimer = null;
+      navigationController.updateSearch(value);
+      persistLastView();
+      return;
+    }
+    searchApplyTimer = window.setTimeout(() => {
+      searchApplyTimer = null;
+      navigationController.updateSearch(searchDraft);
+      persistLastView();
+    }, 140);
   }
 
   function clearSearch() {
+    if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+    searchApplyTimer = null;
+    searchDraft = "";
     navigationController.clearSearch();
     persistLastView();
   }
@@ -907,7 +994,10 @@
   }
 
   function selectDeviceType(deviceType: "全部设备" | DeviceType) {
+    if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
+    searchApplyTimer = null;
     navigationController.selectDeviceType(deviceType);
+    searchDraft = searchQuery;
     persistLastView();
   }
 
@@ -947,24 +1037,45 @@
     }
   }
 
-  async function refreshPasswordStrength(password: string, userInputs: string[]) {
+  function refreshPasswordStrength(password: string, userInputs: string[]) {
     const requestId = ++passwordStrengthRequestId;
+    if (passwordStrengthTimer) window.clearTimeout(passwordStrengthTimer);
+    passwordStrengthTimer = null;
     if (!password) {
       passwordStrength = "";
       return;
     }
-    passwordStrength = "计算中";
-    try {
-      const { getPasswordStrengthLabel } = await import("./lib/password-strength");
-      if (requestId !== passwordStrengthRequestId) return;
-      passwordStrength = getPasswordStrengthLabel(password, userInputs);
-    } catch {
-      if (requestId === passwordStrengthRequestId) passwordStrength = "暂不可用";
+    const cacheKey = `${password}\u0000${userInputs.join("\u0000")}`;
+    if (cacheKey === passwordStrengthCacheKey) {
+      passwordStrength = passwordStrengthCacheValue;
+      return;
     }
+    passwordStrength = "计算中";
+    passwordStrengthTimer = window.setTimeout(() => {
+      passwordStrengthTimer = null;
+      void (async () => {
+        try {
+          const { getPasswordStrengthLabel } = await import("./lib/password-strength");
+          if (requestId !== passwordStrengthRequestId) return;
+          const label = getPasswordStrengthLabel(password, userInputs);
+          passwordStrengthCacheKey = cacheKey;
+          passwordStrengthCacheValue = label;
+          passwordStrength = label;
+        } catch {
+          if (requestId === passwordStrengthRequestId) passwordStrength = "暂不可用";
+        }
+      })();
+    }, 180);
   }
 
   function handleWindowBlur() {
+    if (passwordStrengthTimer) window.clearTimeout(passwordStrengthTimer);
+    passwordStrengthTimer = null;
+    passwordStrengthCacheKey = "";
+    passwordStrengthCacheValue = "";
     passwordVisible = false;
+    passwordStrength = "";
+    passwordStrengthRequestId += 1;
     visibleHistoryIds = [];
     revealResetToken += 1;
     if (generatorPanelOpen) {
@@ -972,6 +1083,25 @@
       generatorPanelOpen = false;
       generatorTarget = null;
     }
+  }
+
+  function clearAutoLockTimer() {
+    if (autoLockTimer) window.clearTimeout(autoLockTimer);
+    autoLockTimer = null;
+  }
+
+  function scheduleAutoLock() {
+    clearAutoLockTimer();
+    const minutes = appSettings.interface.autoLockMinutes;
+    if (!settingsLoaded || vaultStorageState !== "ready" || !vaultLockEnabled || vaultLocked || recoveryKey || minutes <= 0) return;
+    autoLockTimer = window.setTimeout(() => {
+      autoLockTimer = null;
+      void lockVaultNow();
+    }, minutes * 60 * 1000);
+  }
+
+  function handleUserActivity() {
+    if (!vaultLocked) scheduleAutoLock();
   }
 
   function openSnapshotsDialog() {
@@ -987,8 +1117,340 @@
     activeDialog = "settings";
   }
 
-  function setSettingsSection(section: "interface" | "workspace" | "generator" | "data" | "about") {
+  function setSettingsSection(section: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment") {
     settingsActiveSection = section;
+  }
+
+  function clearSensitiveVaultState() {
+    if (passwordStrengthTimer) window.clearTimeout(passwordStrengthTimer);
+    passwordStrengthTimer = null;
+    passwordStrengthCacheKey = "";
+    passwordStrengthCacheValue = "";
+    items = initialItems;
+    customDeviceTypes = [];
+    vaultSnapshots = [];
+    selectedId = 0;
+    selectedAccountId = 0;
+    selectedAccountIds = [];
+    historyOpen = false;
+    historyContextKey = "";
+    visibleHistoryIds = [];
+    generatedPassword = "";
+    generatorPanelOpen = false;
+    generatorTarget = null;
+    activeDialog = null;
+    activePopover = null;
+    pendingConfirmation = null;
+    pendingImportedConfig = null;
+    passwordVisible = false;
+    accountForm = createEmptyAccountForm();
+    passwordForm = { password: "", reason: "" };
+    bulkPasswordForm = { deviceType: "全部设备", username: "", password: "", reason: "" };
+    deviceForm = createEmptyDeviceForm();
+    revealResetToken += 1;
+  }
+
+  async function lockVaultSession() {
+    clearAutoLockTimer();
+    if (!vaultLockEnabled || vaultLocked) return;
+    await invoke("lock_vault");
+    clearSensitiveVaultState();
+    vaultStorageController.suspend();
+    vaultLocked = true;
+    vaultUnlockPassword = "";
+    vaultUnlockError = "";
+  }
+
+  async function lockVaultNow() {
+    if (!vaultLockEnabled || vaultLocked) return;
+    try {
+      if (vaultStorageState === "save-error") {
+        throw new Error("资产库尚未安全保存，请先重试保存");
+      }
+      if (vaultStorageState === "ready" && vaultStorageController.hasUnsavedChanges()) {
+        await vaultStorageController.persistImmediately();
+      }
+      await lockVaultSession();
+    } catch (error) {
+      showStatus(`锁定资产库失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      scheduleAutoLock();
+    }
+  }
+
+  async function unlockVault() {
+    if (!vaultLocked || vaultUnlockBusy || !vaultUnlockPassword) return;
+    vaultUnlockBusy = true;
+    vaultUnlockError = "";
+    try {
+      if (!isTauri()) throw new Error("浏览器预览模式不支持启动密码");
+      await invoke("unlock_vault", { password: vaultUnlockPassword });
+      vaultUnlockPassword = "";
+      await vaultStorageController.initialize();
+      if (vaultStorageState !== "ready") {
+        throw new Error(vaultStorageError || "资产库读取失败");
+      }
+      vaultLocked = false;
+      scheduleAutoLock();
+    } catch (error) {
+      vaultUnlockError = error instanceof Error ? error.message : String(error ?? "解锁失败");
+      vaultUnlockPassword = "";
+      await invoke("lock_vault").catch(() => undefined);
+    } finally {
+      vaultUnlockBusy = false;
+    }
+  }
+
+  async function initializeVaultLock() {
+    if (!isTauri()) {
+      vaultLockEnabled = false;
+      await vaultStorageController.initialize();
+      return;
+    }
+    try {
+      vaultLockEnabled = await invoke<boolean>("get_vault_lock_status");
+      if (appSettings.interface.startupLock !== vaultLockEnabled) {
+        appSettings = normalizeAppSettings({
+          ...appSettings,
+          interface: { ...appSettings.interface, startupLock: vaultLockEnabled },
+        });
+        await persistAppSettings();
+      }
+      if (vaultLockEnabled) {
+        vaultLocked = true;
+        vaultStorageController.suspend();
+      } else {
+        await vaultStorageController.initialize();
+        scheduleAutoLock();
+      }
+    } catch (error) {
+      vaultLockEnabled = true;
+      vaultLocked = true;
+      vaultUnlockError = `无法读取启动密码状态：${error instanceof Error ? error.message : String(error)}`;
+      vaultStorageController.suspend();
+    }
+  }
+
+  function openVaultPasswordDialog(mode: VaultPasswordDialogMode) {
+    vaultPasswordDialogMode = mode;
+    vaultPasswordForm = { currentPassword: "", newPassword: "", confirmPassword: "" };
+    vaultPasswordError = "";
+    activeDialog = "security-password";
+  }
+
+  async function saveVaultPassword() {
+    if (vaultPasswordBusy) return;
+    if (vaultPasswordDialogMode !== "disable" && vaultPasswordForm.newPassword !== vaultPasswordForm.confirmPassword) {
+      vaultPasswordError = "两次输入的新主密码不一致";
+      return;
+    }
+    vaultPasswordBusy = true;
+    vaultPasswordError = "";
+    try {
+      if (!isTauri()) throw new Error("浏览器预览模式不支持启动密码");
+      if (vaultPasswordDialogMode === "set") {
+        recoveryKey = await invoke<string>("setup_vault_password", { password: vaultPasswordForm.newPassword });
+        vaultLockEnabled = true;
+      } else if (vaultPasswordDialogMode === "change") {
+        recoveryKey = await invoke<string>("change_vault_password", {
+          currentPassword: vaultPasswordForm.currentPassword,
+          newPassword: vaultPasswordForm.newPassword,
+        });
+      } else {
+        await invoke("disable_vault_password", { password: vaultPasswordForm.currentPassword });
+        vaultLockEnabled = false;
+      }
+      appSettings = normalizeAppSettings({
+        ...appSettings,
+        interface: {
+          ...appSettings.interface,
+          startupLock: vaultLockEnabled,
+          autoLockMinutes: vaultLockEnabled ? appSettings.interface.autoLockMinutes : 0,
+        },
+      });
+      await persistAppSettings();
+      scheduleAutoLock();
+      vaultPasswordForm = { currentPassword: "", newPassword: "", confirmPassword: "" };
+      if (recoveryKey) {
+        recoveryAcknowledged = false;
+        recoveryFileSaved = false;
+        recoveryFileName = "";
+        recoveryFileError = "";
+        return;
+      }
+      activeDialog = "settings";
+      settingsActiveSection = "security";
+      showStatus("启动密码已关闭");
+    } catch (error) {
+      vaultPasswordError = error instanceof Error ? error.message : String(error ?? "启动密码操作失败");
+    } finally {
+      vaultPasswordBusy = false;
+    }
+  }
+
+  function fileNameFromPath(path: string) {
+    return path.split(/[\\/]/).filter(Boolean).pop() || recoveryFileNameDefault;
+  }
+
+  async function saveRecoveryFile() {
+    if (!recoveryKey || recoveryFileBusy) return;
+    recoveryFileBusy = true;
+    recoveryFileError = "";
+    try {
+      const content = recoveryKey;
+      if (isTauri()) {
+        const path = await saveFileDialog({
+          title: "保存恢复文件",
+          defaultPath: recoveryFileNameDefault,
+          filters: [{ name: "Psd Manager 恢复文件", extensions: ["psdm-recovery"] }],
+        });
+        if (!path) {
+          recoveryFileError = "已取消保存恢复文件";
+          return;
+        }
+        await writeTextFile(path, content);
+        recoveryFileName = fileNameFromPath(path);
+      } else {
+        const blob = new Blob([content], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = recoveryFileNameDefault;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        recoveryFileName = recoveryFileNameDefault;
+      }
+      recoveryFileSaved = true;
+      recoveryAcknowledged = false;
+      showStatus("恢复文件已保存");
+    } catch (error) {
+      recoveryFileSaved = false;
+      recoveryFileError = error instanceof Error ? error.message : String(error ?? "恢复文件保存失败");
+    } finally {
+      recoveryFileBusy = false;
+    }
+  }
+
+  async function chooseRecoveryFile() {
+    recoveryError = "";
+    try {
+      if (isTauri()) {
+        const path = await openFileDialog({
+          title: "选择恢复文件",
+          multiple: false,
+          filters: [{ name: "Psd Manager 恢复文件", extensions: ["psdm-recovery"] }],
+        });
+        if (!path || Array.isArray(path)) return;
+        recoveryFileContent = await readTextFile(path);
+        recoveryFileName = fileNameFromPath(path);
+        recoveryFileSaved = false;
+      } else {
+        const content = await new Promise<{ content: string; name: string } | null>((resolve) => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = ".psdm-recovery,application/json";
+          input.onchange = async () => {
+            const file = input.files?.[0];
+            resolve(file ? { content: await file.text(), name: file.name } : null);
+          };
+          input.click();
+        });
+        if (!content) return;
+        recoveryFileContent = content.content;
+        recoveryFileName = content.name;
+        recoveryFileSaved = false;
+      }
+      showStatus(`已选择恢复文件：${recoveryFileName}`);
+    } catch (error) {
+      recoveryFileContent = "";
+      recoveryFileName = "";
+      recoveryError = error instanceof Error ? error.message : String(error ?? "恢复文件读取失败");
+    }
+  }
+
+  function finishRecoveryKeyDisplay() {
+    if (!recoveryKey || !recoveryFileSaved || !recoveryAcknowledged) return;
+    const wasLocked = vaultLocked;
+    const passwordMode = vaultPasswordDialogMode;
+    recoveryKey = "";
+    recoveryAcknowledged = false;
+    recoveryError = "";
+    recoveryFileContent = "";
+    recoveryFileName = "";
+    recoveryFileSaved = false;
+    recoveryFileError = "";
+    if (wasLocked) {
+      vaultLocked = false;
+      vaultUnlockError = "";
+      vaultUnlockPassword = "";
+      scheduleAutoLock();
+      showStatus("资产库已恢复");
+      return;
+    }
+    activeDialog = "settings";
+    settingsActiveSection = "security";
+    scheduleAutoLock();
+    showStatus(passwordMode === "set" ? "启动密码已开启" : "启动密码已修改");
+  }
+
+  async function recoverVaultPassword(newPassword: string, manualRecoveryKey = "") {
+    const recoveryInput = manualRecoveryKey || recoveryFileContent;
+    if (recoveryBusy || !recoveryInput) return;
+    recoveryBusy = true;
+    recoveryError = "";
+    try {
+      if (!isTauri()) throw new Error("浏览器预览模式不支持恢复文件");
+      recoveryKey = await invoke<string>("recover_vault_password", {
+        recoveryFile: recoveryInput,
+        newPassword,
+      });
+      await vaultStorageController.initialize();
+      if (vaultStorageState !== "ready") {
+        throw new Error(vaultStorageError || "资产库读取失败");
+      }
+      recoveryFileContent = "";
+      recoveryFileName = "";
+      recoveryFileSaved = false;
+      recoveryFileError = "";
+      recoveryAcknowledged = false;
+    } catch (error) {
+      recoveryKey = "";
+      recoveryFileSaved = false;
+      recoveryError = error instanceof Error ? error.message : String(error ?? "恢复失败");
+      await invoke("lock_vault").catch(() => undefined);
+    } finally {
+      recoveryBusy = false;
+    }
+  }
+
+  function setStartupLock(value: boolean) {
+    openVaultPasswordDialog(value ? "set" : "disable");
+  }
+
+  function setAutoLockEnabled(value: boolean) {
+    if (!vaultLockEnabled) {
+      showStatus("请先开启启动密码");
+      return;
+    }
+    updateAppSettings({
+      ...appSettings,
+      interface: {
+        ...appSettings.interface,
+        autoLockMinutes: value ? Math.max(15, appSettings.interface.autoLockMinutes) : 0,
+      },
+    });
+    scheduleAutoLock();
+  }
+
+  function setAutoLockMinutes(value: number) {
+    if (!vaultLockEnabled || !Number.isFinite(value)) return;
+    updateAppSettings({
+      ...appSettings,
+      interface: {
+        ...appSettings.interface,
+        autoLockMinutes: Math.min(10080, Math.max(1, Math.round(value))),
+      },
+    });
+    scheduleAutoLock();
   }
 
   function setTooltipSetting(value: boolean) {
@@ -996,6 +1458,32 @@
       ...appSettings,
       interface: { ...appSettings.interface, tooltipEnabled: value },
     });
+  }
+
+  async function setStartOnBootSetting(value: boolean) {
+    if (!isTauri()) {
+      showStatus("浏览器预览模式不支持开机自启");
+      return;
+    }
+    if (autostartUpdating) return;
+    autostartUpdating = true;
+    try {
+      if (value) await enableAutostart();
+      else await disableAutostart();
+      const enabled = await isAutostartEnabled();
+      appSettings = normalizeAppSettings({
+        ...appSettings,
+        interface: { ...appSettings.interface, startOnBoot: enabled },
+      });
+      applyAppSettings(appSettings);
+      await persistAppSettings();
+      autostartAvailable = true;
+      showStatus(enabled ? "已开启开机自启" : "已关闭开机自启");
+    } catch (error) {
+      showStatus(`开机自启设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+    } finally {
+      autostartUpdating = false;
+    }
   }
 
   function setThemeSetting(value: AppSettings["interface"]["theme"]) {
@@ -1087,10 +1575,16 @@
       if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
       settingsSaveTimer = null;
       await settingsSaveQueue;
+      if (isTauri() && autostartAvailable) await disableAutostart();
       await resetAppSettings();
-      appSettings = createDefaultAppSettings();
+      const defaults = createDefaultAppSettings();
+      appSettings = normalizeAppSettings({
+        ...defaults,
+        interface: { ...defaults.interface, startupLock: vaultLockEnabled },
+      });
       applyAppSettings(appSettings);
       await persistAppSettings();
+      scheduleAutoLock();
       showStatus("应用设置已恢复默认值");
     } catch (error) {
       showStatus(`恢复设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
@@ -1292,10 +1786,28 @@
   function closeOverlays() {
     const returnToSettings = dataDialogReturnToSettings
       && (activeDialog === "export-config" || activeDialog === "snapshots");
+    const returnToSecuritySettings = activeDialog === "security-password";
+    if (returnToSecuritySettings && recoveryKey && (!recoveryFileSaved || !recoveryAcknowledged)) {
+      showStatus("请先保存恢复文件");
+      return;
+    }
+    if (returnToSecuritySettings) {
+      vaultPasswordForm = { currentPassword: "", newPassword: "", confirmPassword: "" };
+      vaultPasswordError = "";
+      recoveryKey = "";
+      recoveryAcknowledged = false;
+      recoveryFileContent = "";
+      recoveryFileName = "";
+      recoveryFileSaved = false;
+      recoveryFileError = "";
+    }
     overlayController.closeOverlays();
     dataDialogReturnToSettings = false;
     if (returnToSettings) {
       settingsActiveSection = "data";
+      activeDialog = "settings";
+    } else if (returnToSecuritySettings) {
+      settingsActiveSection = "security";
       activeDialog = "settings";
     }
   }
@@ -1562,6 +2074,12 @@
   const settingsActions = {
     setSection: setSettingsSection,
     setTooltipEnabled: setTooltipSetting,
+    setStartOnBoot: setStartOnBootSetting,
+    setStartupLock,
+    setAutoLockEnabled,
+    setAutoLockMinutes,
+    openVaultPasswordDialog,
+    lockNow: lockVaultNow,
     setTheme: setThemeSetting,
     setDensity: setDensitySetting,
     setFontSize: setFontSizeSetting,
@@ -1689,6 +2207,11 @@
   $: settingsView = {
     activeSection: settingsActiveSection,
     tooltipEnabled,
+    startOnBoot: appSettings.interface.startOnBoot,
+    startupLock: vaultLockEnabled,
+    autoLockMinutes: appSettings.interface.autoLockMinutes,
+    autostartAvailable,
+    autostartUpdating,
     theme: appSettings.interface.theme,
     density: appSettings.interface.density,
     fontSize: appSettings.interface.fontSize,
@@ -1746,7 +2269,7 @@
     topbar: {
       backDisabled: backStack.length === 0,
       forwardDisabled: forwardStack.length === 0,
-      searchQuery,
+      searchQuery: searchDraft,
       searchPlaceholder,
     },
     deviceList: {
@@ -1776,8 +2299,6 @@
     state={vaultStorageState === "loading" ? "loading" : vaultStorageState === "save-error" ? "save-error" : "load-error"}
     error={vaultStorageError}
     retry={retryVaultStorage}
-    canMigrateLegacyKey={legacyVaultKeyMigrationRequired}
-    migrateLegacyKey={migrateLegacyVaultKey}
     canRecoverBackup={vaultBackupRecoveryRequired}
     recoverBackup={recoverVaultBackup}
   />
@@ -1841,6 +2362,39 @@
     {runStatusAction}
     settingsView={settingsView}
     settingsActions={settingsActions}
+    {vaultPasswordDialogMode}
+    {vaultPasswordForm}
+    {vaultPasswordError}
+    {vaultPasswordBusy}
+    bind:recoveryAcknowledged
+    {recoveryKey}
+    {recoveryFileName}
+    {recoveryFileSaved}
+    {recoveryFileBusy}
+    {recoveryFileError}
+    {saveRecoveryFile}
+    finishRecoverySetup={finishRecoveryKeyDisplay}
+    saveVaultPassword={saveVaultPassword}
     tooltipEnabled={vaultStorageState === "ready" && tooltipEnabled}
   />
 </main>
+
+{#if vaultLocked}
+  <VaultLockScreen
+    bind:password={vaultUnlockPassword}
+    error={vaultUnlockError}
+    busy={vaultUnlockBusy}
+    unlock={unlockVault}
+    recover={recoverVaultPassword}
+    recoveryBusy={recoveryBusy}
+    recoveryError={recoveryError}
+    recoveryResultFile={recoveryKey}
+    bind:recoveryResultAcknowledged={recoveryAcknowledged}
+    {recoveryFileName}
+    {recoveryFileSaved}
+    {recoveryFileBusy}
+    {recoveryFileError}
+    {saveRecoveryFile}
+    finishRecovery={finishRecoveryKeyDisplay}
+  />
+{/if}

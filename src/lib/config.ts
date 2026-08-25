@@ -56,11 +56,8 @@ export function parseConfigContent(content: string, format: ConfigFormat): Confi
     : format === "yaml"
       ? parseYamlConfigContent(content)
       : parseJsonConfigContent(content);
-  if (!Number.isSafeInteger(config.meta.formatVersion) || config.meta.formatVersion < 1) {
-    throw new ConfigImportError("配置格式版本无效");
-  }
-  if (config.meta.formatVersion > CONFIG_FORMAT_VERSION) {
-    throw new ConfigImportError(`不支持配置格式 v${config.meta.formatVersion}，当前最高支持 v${CONFIG_FORMAT_VERSION}`);
+  if (config.meta.formatVersion !== CONFIG_FORMAT_VERSION) {
+    throw new ConfigImportError(`不支持配置格式 v${config.meta.formatVersion}，当前仅支持 v${CONFIG_FORMAT_VERSION}`);
   }
   assertValidConfigNames(config.items);
   assertValidConfigFields(config);

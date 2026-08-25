@@ -7,6 +7,7 @@
     sanitizeSingleLineTextInput,
   } from "../../lib/input-validation";
   import type { ActiveDialog, DeviceAccount, VaultItem } from "../../lib/types";
+  import { iconColorStyle } from "../../lib/color";
 
   export let passwordForm: { password: string; reason: string };
   export let selectedItem: VaultItem;
@@ -21,7 +22,7 @@
 
 <div class="form-grid">
   <section class="password-target-card wide-field" aria-label="当前更新账号">
-    <span class={`type-icon ${selectedItem.iconClass}`}>{selectedItem.iconText}</span>
+    <span class={`type-icon ${selectedItem.iconClass}`} style={iconColorStyle(selectedItem.iconClass)}>{selectedItem.iconText}</span>
     <div>
       <strong>{selectedAccountTargets.length > 1 ? `已选择 ${selectedAccountTargets.length} 个账号` : selectedAccount.username || selectedAccount.title || "未填写用户名"}</strong>
       <span>{selectedItem.deviceName} · {selectedAccountTargets.length > 1 ? "批量更新密码" : formatAccountTag(selectedAccount, selectedItem.deviceType, selectedItem.tag)}</span>

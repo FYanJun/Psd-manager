@@ -49,7 +49,7 @@ function getVisibleTypes(state: DeviceTypeControllerState) {
 }
 
 function formatTypeColor(color: string) {
-  return typeColorOptions.find((option) => option.value === color)?.label ?? color;
+  return typeColorOptions.find((option) => option.value === color)?.label ?? `自定义 ${color}`;
 }
 
 export function createDeviceTypeController(port: DeviceTypeControllerPort) {

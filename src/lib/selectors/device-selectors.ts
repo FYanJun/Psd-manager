@@ -1,7 +1,14 @@
 import { defaultDeviceTypeMeta } from "../constants";
-import { sortDeviceTypeOptions } from "../layout";
 import type { DeviceType, DeviceTypeMeta, DeviceTypeSortMode, SortMode, VaultItem } from "../types";
 import { getVaultItemSearchScore, getVaultItemUpdatedTimestamp } from "../vault";
+
+let filteredItemsCache: {
+  items: VaultItem[];
+  searchQuery: string;
+  selectedDeviceType: "全部设备" | DeviceType;
+  sortMode: SortMode;
+  result: VaultItem[];
+} | null = null;
 
 function compareVaultItems(left: VaultItem, right: VaultItem, sortMode: SortMode) {
   if (sortMode === "nameAsc") return left.deviceName.localeCompare(right.deviceName, "zh-Hans-CN");
@@ -15,8 +22,17 @@ export function getFilteredVaultItems(
   selectedDeviceType: "全部设备" | DeviceType,
   sortMode: SortMode,
 ) {
+  if (
+    filteredItemsCache
+    && filteredItemsCache.items === items
+    && filteredItemsCache.searchQuery === searchQuery
+    && filteredItemsCache.selectedDeviceType === selectedDeviceType
+    && filteredItemsCache.sortMode === sortMode
+  ) {
+    return filteredItemsCache.result;
+  }
   const query = searchQuery.trim().toLowerCase();
-  return items
+  const result = items
     .map((item) => ({
       item,
       searchScore: query ? getVaultItemSearchScore(item, query) : 0,
@@ -31,6 +47,8 @@ export function getFilteredVaultItems(
       return compareVaultItems(left.item, right.item, sortMode);
     })
     .map(({ item }) => item);
+  filteredItemsCache = { items, searchQuery, selectedDeviceType, sortMode, result };
+  return result;
 }
 
 export function getVisibleDeviceTypeOptions(
@@ -51,12 +69,21 @@ export function getDeviceTypeRows(
   sortMode: DeviceTypeSortMode,
   items: VaultItem[],
 ) {
-  const sorted = sortDeviceTypeOptions(options, sortMode, items);
+  const counts = new Map<string, number>();
+  items.forEach((item) => counts.set(item.deviceType, (counts.get(item.deviceType) ?? 0) + 1));
+  const sorted = [...options].sort((left, right) => {
+    if (sortMode === "nameAsc") return left.label.localeCompare(right.label, "zh-Hans-CN");
+    if (sortMode === "countDesc") {
+      return (counts.get(right.label) ?? 0) - (counts.get(left.label) ?? 0)
+        || left.label.localeCompare(right.label, "zh-Hans-CN");
+    }
+    return options.indexOf(left) - options.indexOf(right);
+  });
   const rows: Array<DeviceTypeMeta & { count: number }> = [
     { ...defaultDeviceTypeMeta[0], count: items.length },
     ...sorted.map((type) => ({
       ...type,
-      count: items.filter((item) => item.deviceType === type.label).length,
+      count: counts.get(type.label) ?? 0,
     })),
   ];
   return rows;

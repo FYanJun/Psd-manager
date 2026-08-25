@@ -1,35 +1,41 @@
 /* User-selectable application appearance. Component styles keep their local
    structure; these selectors provide a consistent surface/text treatment. */
 html[data-font-size="small"] {
+  font-size: 14px;
   --font-size-11: 10px;
-  --font-size-12: 11px;
-  --font-size-13: 12px;
-  --font-size-14: 13px;
-  --font-size-15: 14px;
-  --font-size-16: 15px;
-  --font-size-17: 16px;
-  --font-size-18: 17px;
-  --font-size-19: 18px;
-  --font-size-20: 19px;
-  --font-size-21: 20px;
-  --font-size-22: 21px;
-  --font-size-28: 26px;
+  --font-size-12: 10px;
+  --font-size-13: 11px;
+  --font-size-14: 12px;
+  --font-size-15: 13px;
+  --font-size-16: 14px;
+  --font-size-17: 15px;
+  --font-size-18: 16px;
+  --font-size-19: 17px;
+  --font-size-20: 18px;
+  --font-size-21: 19px;
+  --font-size-22: 20px;
+  --font-size-28: 24px;
 }
 
 html[data-font-size="large"] {
-  --font-size-11: 12px;
-  --font-size-12: 13px;
-  --font-size-13: 14px;
-  --font-size-14: 15px;
-  --font-size-15: 16px;
-  --font-size-16: 17px;
-  --font-size-17: 18px;
-  --font-size-18: 19px;
-  --font-size-19: 20px;
-  --font-size-20: 22px;
-  --font-size-21: 23px;
-  --font-size-22: 24px;
-  --font-size-28: 30px;
+  font-size: 18px;
+  --font-size-11: 13px;
+  --font-size-12: 14px;
+  --font-size-13: 15px;
+  --font-size-14: 16px;
+  --font-size-15: 17px;
+  --font-size-16: 18px;
+  --font-size-17: 19px;
+  --font-size-18: 21px;
+  --font-size-19: 22px;
+  --font-size-20: 24px;
+  --font-size-21: 25px;
+  --font-size-22: 26px;
+  --font-size-28: 34px;
+}
+
+html[data-font-size="standard"] {
+  font-size: 16px;
 }
 
 html[data-theme="dark"] {
@@ -318,8 +324,8 @@ html[data-theme="dark"] .settings-nav button:hover,
 html[data-theme="system"] .settings-nav button:hover,
 html[data-theme="dark"] .settings-nav button.active,
 html[data-theme="system"] .settings-nav button.active {
-  background: rgba(90, 162, 255, 0.16);
-  color: var(--blue);
+  background: var(--selected);
+  color: var(--text-strong);
 }
 
 html[data-theme="dark"] .settings-heading,
@@ -356,6 +362,17 @@ html[data-theme="system"] .secondary-button {
   border-color: var(--field-border);
   color: var(--app-text);
   background: var(--field);
+}
+
+html[data-theme="dark"] .danger-outline,
+html[data-theme="system"] .danger-outline {
+  border-color: rgba(255, 170, 165, 0.55);
+  color: #ffaaa5;
+}
+
+html[data-theme="dark"] .danger-outline:hover,
+html[data-theme="system"] .danger-outline:hover {
+  background: rgba(196, 56, 43, 0.18);
 }
 
 html[data-theme="dark"] .drawer-scrim,
@@ -474,7 +491,9 @@ html[data-theme="system"] .type-preview-card {
 }
 
 html[data-theme="dark"] .color-swatch-button,
-html[data-theme="system"] .color-swatch-button {
+html[data-theme="system"] .color-swatch-button,
+html[data-theme="dark"] .color-picker-swatch,
+html[data-theme="system"] .color-picker-swatch {
   border-color: var(--field-border);
   background: var(--surface-subtle);
 }
@@ -482,7 +501,11 @@ html[data-theme="system"] .color-swatch-button {
 html[data-theme="dark"] .color-swatch-button:hover,
 html[data-theme="system"] .color-swatch-button:hover,
 html[data-theme="dark"] .color-swatch-button.selected,
-html[data-theme="system"] .color-swatch-button.selected {
+html[data-theme="system"] .color-swatch-button.selected,
+html[data-theme="dark"] .color-picker-swatch:hover,
+html[data-theme="system"] .color-picker-swatch:hover,
+html[data-theme="dark"] .color-picker-swatch.active,
+html[data-theme="system"] .color-picker-swatch.active {
   border-color: var(--blue);
   background: var(--accent-subtle);
 }
@@ -516,6 +539,13 @@ html[data-theme="system"] .export-config-note {
 html[data-theme="dark"] .confirmation-error,
 html[data-theme="system"] .confirmation-error {
   color: #ffaaa5 !important;
+}
+
+html[data-theme="dark"] .vault-lock-error,
+html[data-theme="system"] .vault-lock-error,
+html[data-theme="dark"] .vault-password-error,
+html[data-theme="system"] .vault-password-error {
+  color: #ffaaa5;
 }
 
 html[data-theme="dark"] .import-mode-control,
@@ -859,6 +889,8 @@ html[data-theme="dark"] .type-combo-list button.selected,
 html[data-theme="system"] .type-combo-list button.selected,
 html[data-theme="dark"] .color-swatch-button.selected,
 html[data-theme="system"] .color-swatch-button.selected,
+html[data-theme="dark"] .color-picker-swatch.active,
+html[data-theme="system"] .color-picker-swatch.active,
 html[data-theme="dark"] .format-choice-list button.selected,
 html[data-theme="system"] .format-choice-list button.selected,
 html[data-theme="dark"] .import-mode-control button.selected,

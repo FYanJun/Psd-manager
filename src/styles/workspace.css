@@ -160,33 +160,38 @@
 }
 
 .type-cyan {
-  color: #316b74;
-  background: #a5dce5;
+  color: #256044;
+  background: #c9ecd5;
 }
 
 .type-rose {
-  color: #844849;
-  background: #eab8b9;
+  color: #913b35;
+  background: #f2c5c1;
 }
 
 .type-indigo {
-  color: #46518b;
-  background: #b9c2ea;
+  color: #59428d;
+  background: #d8cdf0;
 }
 
 .type-sand {
-  color: #845f20;
-  background: #f2d5a7;
+  color: #8e4e22;
+  background: #f5d0ae;
 }
 
 .type-gold {
-  color: #705427;
-  background: #efd2a4;
+  color: #755a18;
+  background: #f2dfad;
 }
 
 .type-dark {
   color: #fff;
-  background: #1f242b;
+  background: #4b5563;
+}
+
+.type-custom {
+  color: var(--custom-type-text, #26313b);
+  background: var(--custom-type-color, #cde5ff);
 }
 
 .type-copy {
@@ -288,6 +293,7 @@
 .primary-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   height: 40px;
   padding: 0 16px;
@@ -296,6 +302,8 @@
   background: var(--primary-fill);
   font-size: var(--font-size-17);
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -307,6 +315,10 @@
 .secondary-button:disabled {
   cursor: default;
   opacity: 0.48;
+}
+
+.primary-button:disabled {
+  opacity: 0.78;
 }
 
 .primary-button:disabled:hover {
@@ -462,43 +474,48 @@
 }
 
 .icon-router {
-  background: linear-gradient(180deg, #f0f1f3, #dcdfe3);
-  color: #686b70;
+  background: #c9ecd5;
+  color: #256044;
 }
 
 .icon-sand {
-  background: #f2d5a7;
-  color: #845f20;
+  background: #f5d0ae;
+  color: #8e4e22;
 }
 
 .icon-rose {
-  background: #eab8b9;
-  color: #844849;
+  background: #f2c5c1;
+  color: #913b35;
 }
 
 .icon-cyan {
-  background: #a5dce5;
-  color: #326b74;
+  background: #cde5ff;
+  color: #0f5da8;
 }
 
 .icon-indigo {
-  background: #b9c2ea;
-  color: #46518b;
+  background: #d8cdf0;
+  color: #59428d;
 }
 
 .icon-gold {
-  background: #efd2a4;
-  color: #705427;
+  background: #f2dfad;
+  color: #755a18;
 }
 
 .icon-dark {
-  background: #1f242b;
+  background: #4b5563;
   color: #fff;
 }
 
 .icon-terminal {
-  background: #7e8792;
+  background: #4b5563;
   color: #fff;
+}
+
+.icon-custom {
+  color: var(--custom-type-text, #26313b);
+  background: var(--custom-type-color, #cde5ff);
 }
 
 .item-copy {

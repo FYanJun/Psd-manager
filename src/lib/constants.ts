@@ -4,8 +4,6 @@ export const APP_TITLE = "密码管理器";
 export const CONFIG_FORMAT_VERSION = 3;
 export const VAULT_SCHEMA_VERSION = 2;
 export const APP_SETTINGS_SCHEMA_VERSION = 2;
-export const STORAGE_KEY = "psd-manager-state-v1";
-export const LEGACY_STORAGE_KEY = ["device", "password-manager", "state-v1"].join("-");
 export const DEFAULT_ACCOUNT_TAG = "";
 
 export const SIDEBAR_DEFAULT_RATIO = 0.14;
@@ -28,6 +26,9 @@ export const DEFAULT_APP_SETTINGS = {
     theme: "system" as const,
     density: "standard" as const,
     fontSize: "standard" as const,
+    startOnBoot: false,
+    startupLock: false,
+    autoLockMinutes: 0,
   },
   workspace: {
     rememberLayout: true,
@@ -71,10 +72,10 @@ export const fallbackDeviceTypeMeta: DeviceTypeMeta = { uuid: "", label: "", ico
 
 export const typeColorOptions = [
   { value: "blue", label: "蓝色" },
-  { value: "cyan", label: "青色" },
+  { value: "cyan", label: "绿色" },
   { value: "rose", label: "红色" },
-  { value: "indigo", label: "靛蓝" },
-  { value: "sand", label: "沙色" },
-  { value: "gold", label: "金色" },
-  { value: "dark", label: "深色" },
+  { value: "indigo", label: "紫色" },
+  { value: "sand", label: "橙色" },
+  { value: "gold", label: "黄色" },
+  { value: "dark", label: "灰色" },
 ];

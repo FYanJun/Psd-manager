@@ -113,6 +113,10 @@ export function createDeviceController(port: DeviceControllerPort) {
   }
 
   function validateDeviceForSave(form: DeviceForm) {
+    if (form.id) {
+      const currentItem = port.read().items.find((item) => item.id === form.id);
+      if (currentItem) form.deviceType = currentItem.deviceType;
+    }
     const name = form.deviceName.trim();
     if (!name) {
       port.showStatus("请输入设备名称");
@@ -283,6 +287,7 @@ export function createDeviceController(port: DeviceControllerPort) {
 
   function setFormType(deviceType: DeviceType) {
     const state = port.read();
+    if (state.deviceForm.id) return;
     port.write({
       deviceForm: { ...state.deviceForm, deviceType },
       deviceTypeSearch: "",

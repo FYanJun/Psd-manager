@@ -17,6 +17,7 @@ import type {
   ThemePreference,
   TypePickerScope,
   VaultItem,
+  VaultPasswordDialogMode,
 } from "./types";
 
 export type WorkspaceSidebarView = {
@@ -71,8 +72,13 @@ export type WorkspaceTopbarActions = {
 };
 
 export type SettingsView = {
-  activeSection: "interface" | "workspace" | "generator" | "data" | "about";
+  activeSection: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment";
   tooltipEnabled: boolean;
+  startOnBoot: boolean;
+  startupLock: boolean;
+  autoLockMinutes: number;
+  autostartAvailable: boolean;
+  autostartUpdating: boolean;
   theme: ThemePreference;
   density: DensityPreference;
   fontSize: FontSizePreference;
@@ -102,6 +108,12 @@ export type SettingsView = {
 export type SettingsActions = {
   setSection(section: SettingsView["activeSection"]): void;
   setTooltipEnabled(value: boolean): void;
+  setStartOnBoot(value: boolean): void | Promise<void>;
+  setStartupLock(value: boolean): void | Promise<void>;
+  setAutoLockEnabled(value: boolean): void;
+  setAutoLockMinutes(value: number): void;
+  openVaultPasswordDialog(mode: VaultPasswordDialogMode): void;
+  lockNow(): void | Promise<void>;
   setTheme(value: ThemePreference): void;
   setDensity(value: DensityPreference): void;
   setFontSize(value: FontSizePreference): void;

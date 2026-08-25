@@ -2,7 +2,7 @@ use aes_gcm::{
     aead::{Aead, Generate, Key, KeyInit, Payload},
     Aes256Gcm, Nonce,
 };
-use keyring::{Entry, Error as KeyringError};
+use argon2::{Algorithm, Argon2, Params, Version};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -29,23 +29,32 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 
 const VAULT_FILE_NAME: &str = "vault.enc";
 const VAULT_BACKUP_FILE_NAME: &str = "vault.enc.bak";
-const LEGACY_DATA_FILE_NAME: &str = "data.enc.json";
-const LEGACY_DATA_BACKUP_FILE_NAME: &str = "data.enc.backup.json";
-const LEGACY_VAULT_FILE_NAME: &str = "vault.enc.json";
-const LEGACY_VAULT_BACKUP_FILE_NAME: &str = "vault.enc.backup.json";
 const VAULT_LOCK_FILE_NAME: &str = "vault.lock";
 const VAULT_KEY_FILE_NAME: &str = "vault.key";
+const VAULT_PASSWORD_FILE_NAME: &str = "vault.lock.json";
 const APP_SETTINGS_FILE_NAME: &str = "settings.json";
 const DATA_CONTAINER_NAME: &str = "Psd Manager";
 const DATA_DIRECTORY_NAME: &str = "data";
-const KEYRING_SERVICE: &str = "com.fan.psd-manager";
-const KEYRING_ACCOUNT: &str = "vault-key-v1";
 const VAULT_AAD: &[u8] = b"com.fan.psd-manager:vault:1";
+const VAULT_PASSWORD_AAD: &[u8] = b"com.fan.psd-manager:vault-password:1";
+const VAULT_RECOVERY_AAD: &[u8] = b"com.fan.psd-manager:vault-recovery:1";
 const VAULT_SCHEMA_VERSION: u64 = 2;
-const LEGACY_KEY_MIGRATION_REQUIRED: &str = "LEGACY_KEY_MIGRATION_REQUIRED";
 const BACKUP_RECOVERY_REQUIRED: &str = "BACKUP_RECOVERY_REQUIRED";
 static VAULT_IO_LOCK: Mutex<()> = Mutex::new(());
 static APP_SETTINGS_IO_LOCK: Mutex<()> = Mutex::new(());
+const PASSWORD_LOCK_VERSION: u8 = 1;
+const PASSWORD_SALT_LENGTH: usize = 16;
+const PASSWORD_NONCE_LENGTH: usize = 12;
+const PASSWORD_KEY_LENGTH: usize = 32;
+const PASSWORD_TAG_LENGTH: usize = 16;
+const RECOVERY_KEY_PREFIX: &str = "PSDM-";
+const RECOVERY_FILE_FORMAT: &str = "psd-manager-recovery";
+const RECOVERY_FILE_VERSION: u8 = 1;
+const PASSWORD_MIN_LENGTH: usize = 8;
+const PASSWORD_MAX_LENGTH: usize = 256;
+const PASSWORD_KDF_MEMORY_KIB: u32 = 64 * 1024;
+const PASSWORD_KDF_ITERATIONS: u32 = 3;
+const PASSWORD_KDF_PARALLELISM: u32 = 1;
 
 #[derive(Serialize, Deserialize)]
 struct EncryptedVaultFile {
@@ -53,6 +62,38 @@ struct EncryptedVaultFile {
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PasswordKdfParameters {
+    memory_kib: u32,
+    iterations: u32,
+    parallelism: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PasswordLockFile {
+    version: u8,
+    kdf: PasswordKdfParameters,
+    salt: Vec<u8>,
+    nonce: Vec<u8>,
+    wrapped_key: Vec<u8>,
+    #[serde(default)]
+    recovery_nonce: Vec<u8>,
+    #[serde(default)]
+    recovery_wrapped_key: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecoveryFilePayload {
+    format: String,
+    version: u8,
+    recovery_key: String,
+}
+
+struct VaultSession(Mutex<Option<Vec<u8>>>);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum VaultSource {
@@ -115,19 +156,10 @@ fn open_directory(path: &Path) -> Result<(), String> {
 
 fn vault_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     let directory = ensure_vault_directory(app)?;
-    migrate_legacy_vault_file_names(&directory)?;
     Ok((
         directory.join(VAULT_FILE_NAME),
         directory.join(VAULT_BACKUP_FILE_NAME),
     ))
-}
-
-fn legacy_app_identifier() -> String {
-    format!("com.fan.{}-{}-{}", "device", "password", "manager")
-}
-
-fn legacy_vault_aad() -> Vec<u8> {
-    format!("{}:vault:1", legacy_app_identifier()).into_bytes()
 }
 
 fn data_directory(app: &AppHandle) -> Result<PathBuf, String> {
@@ -141,37 +173,8 @@ fn data_directory(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(parent.join(DATA_CONTAINER_NAME).join(DATA_DIRECTORY_NAME))
 }
 
-fn migrate_legacy_data_directory(app: &AppHandle, current: &Path) -> Result<(), String> {
-    if current.exists() {
-        return Ok(());
-    }
-    let app_data_directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("无法获取旧版应用数据目录：{error}"))?;
-    let parent = app_data_directory
-        .parent()
-        .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
-    let legacy_directories = [
-        app_data_directory.clone(),
-        parent.join(legacy_app_identifier()),
-    ];
-    let Some(legacy_directory) = legacy_directories.iter().find(|path| path.exists()) else {
-        return Ok(());
-    };
-    let current_parent = current
-        .parent()
-        .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
-    fs::create_dir_all(current_parent)
-        .map_err(|error| format!("无法创建新的应用数据目录：{error}"))?;
-    fs::rename(legacy_directory, current)
-        .map_err(|error| format!("无法迁移旧版应用数据目录：{error}"))?;
-    Ok(())
-}
-
 fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let directory = data_directory(app)?;
-    migrate_legacy_data_directory(app, &directory)?;
     fs::create_dir_all(&directory).map_err(|error| format!("无法创建资产库目录：{error}"))?;
     #[cfg(unix)]
     {
@@ -180,25 +183,6 @@ fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
             .map_err(|error| format!("无法限制资产库目录权限：{error}"))?;
     }
     Ok(directory)
-}
-
-fn migrate_legacy_vault_file_names(directory: &Path) -> Result<(), String> {
-    for (legacy_name, current_name) in [
-        (LEGACY_DATA_FILE_NAME, VAULT_FILE_NAME),
-        (LEGACY_DATA_BACKUP_FILE_NAME, VAULT_BACKUP_FILE_NAME),
-        (LEGACY_VAULT_FILE_NAME, VAULT_FILE_NAME),
-        (LEGACY_VAULT_BACKUP_FILE_NAME, VAULT_BACKUP_FILE_NAME),
-    ] {
-        let legacy_path = directory.join(legacy_name);
-        let current_path = directory.join(current_name);
-        if current_path.exists() || !legacy_path.exists() {
-            continue;
-        }
-        fs::rename(&legacy_path, &current_path).map_err(|error| {
-            format!("无法迁移旧版数据文件 {legacy_name} 到 {current_name}：{error}")
-        })?;
-    }
-    Ok(())
 }
 
 fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -215,8 +199,8 @@ fn validate_app_settings_content(content: &str) -> Result<serde_json::Value, Str
         .get("schemaVersion")
         .and_then(Value::as_u64)
         .ok_or_else(|| "应用设置缺少 schemaVersion".to_string())?;
-    if schema_version != 1 && schema_version != 2 {
-        return Err("不支持的应用设置版本，当前支持 1 和 2".to_string());
+    if schema_version != 2 {
+        return Err("不支持的应用设置版本，当前仅支持 2".to_string());
     }
     Ok(value)
 }
@@ -311,6 +295,342 @@ fn vault_key_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(ensure_vault_directory(app)?.join(VAULT_KEY_FILE_NAME))
 }
 
+fn password_lock_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(ensure_vault_directory(app)?.join(VAULT_PASSWORD_FILE_NAME))
+}
+
+fn password_lock_parameters() -> PasswordKdfParameters {
+    PasswordKdfParameters {
+        memory_kib: PASSWORD_KDF_MEMORY_KIB,
+        iterations: PASSWORD_KDF_ITERATIONS,
+        parallelism: PASSWORD_KDF_PARALLELISM,
+    }
+}
+
+fn validate_master_password(password: &str) -> Result<(), String> {
+    let length = password.chars().count();
+    if length < PASSWORD_MIN_LENGTH {
+        return Err(format!("主密码至少需要 {PASSWORD_MIN_LENGTH} 个字符"));
+    }
+    if length > PASSWORD_MAX_LENGTH {
+        return Err(format!("主密码不能超过 {PASSWORD_MAX_LENGTH} 个字符"));
+    }
+    if password.chars().any(char::is_control) {
+        return Err("主密码不能包含控制字符".to_string());
+    }
+    Ok(())
+}
+
+fn derive_password_key(
+    password: &str,
+    salt: &[u8],
+    parameters: &PasswordKdfParameters,
+) -> Result<Vec<u8>, String> {
+    validate_password_kdf_parameters(salt, parameters)?;
+    let params = Params::new(
+        parameters.memory_kib,
+        parameters.iterations,
+        parameters.parallelism,
+        Some(PASSWORD_KEY_LENGTH),
+    )
+    .map_err(|error| format!("无法初始化主密码派生参数：{error}"))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut key = vec![0u8; PASSWORD_KEY_LENGTH];
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|error| format!("主密码派生失败：{error}"))?;
+    Ok(key)
+}
+
+fn validate_password_kdf_parameters(
+    salt: &[u8],
+    parameters: &PasswordKdfParameters,
+) -> Result<(), String> {
+    if salt.len() != PASSWORD_SALT_LENGTH
+        || parameters.memory_kib < 8 * 1024
+        || parameters.memory_kib > 512 * 1024
+        || parameters.iterations == 0
+        || parameters.iterations > 12
+        || parameters.parallelism == 0
+        || parameters.parallelism > 8
+    {
+        return Err("主密码加密参数不正确".to_string());
+    }
+    Ok(())
+}
+
+fn read_password_lock_file(app: &AppHandle) -> Result<Option<PasswordLockFile>, String> {
+    let path = password_lock_path(app)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    restrict_private_file(&path, "启动密码配置")?;
+    let bytes = fs::read(&path).map_err(|error| format!("无法读取启动密码配置：{error}"))?;
+    let lock_file: PasswordLockFile = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("启动密码配置格式不正确：{error}"))?;
+    if lock_file.version != PASSWORD_LOCK_VERSION
+        || lock_file.salt.len() != PASSWORD_SALT_LENGTH
+        || lock_file.nonce.len() != PASSWORD_NONCE_LENGTH
+        || lock_file.wrapped_key.len() != PASSWORD_KEY_LENGTH + PASSWORD_TAG_LENGTH
+        || (!lock_file.recovery_nonce.is_empty()
+            && lock_file.recovery_nonce.len() != PASSWORD_NONCE_LENGTH)
+        || (!lock_file.recovery_wrapped_key.is_empty()
+            && lock_file.recovery_wrapped_key.len() != PASSWORD_KEY_LENGTH + PASSWORD_TAG_LENGTH)
+    {
+        return Err("启动密码配置版本或密钥数据不正确".to_string());
+    }
+    validate_password_kdf_parameters(&lock_file.salt, &lock_file.kdf)?;
+    Ok(Some(lock_file))
+}
+
+fn write_private_bytes(path: &Path, bytes: &[u8], label: &str) -> Result<(), String> {
+    let temporary_path = path.with_extension("tmp");
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary_path)
+        .map_err(|error| format!("无法创建临时{label}：{error}"))?;
+    restrict_private_file(&temporary_path, &format!("临时{label}"))?;
+    file.write_all(bytes)
+        .map_err(|error| format!("无法写入{label}：{error}"))?;
+    file.sync_all()
+        .map_err(|error| format!("无法同步{label}：{error}"))?;
+    drop(file);
+    if let Err(rename_error) = fs::rename(&temporary_path, path) {
+        if path.exists() {
+            fs::remove_file(path).map_err(|error| {
+                format!("无法替换{label}：{rename_error}；无法移除旧文件：{error}")
+            })?;
+            fs::rename(&temporary_path, path)
+                .map_err(|error| format!("无法替换{label}：{error}"))?;
+        } else {
+            return Err(format!("无法替换{label}：{rename_error}"));
+        }
+    }
+    restrict_private_file(path, label)?;
+    sync_parent_directory(path)?;
+    Ok(())
+}
+
+fn wrap_vault_key(vault_key: &[u8], password: &str) -> Result<(PasswordLockFile, Vec<u8>), String> {
+    validate_master_password(password)?;
+    if vault_key.len() != PASSWORD_KEY_LENGTH {
+        return Err("资产库密钥长度不正确".to_string());
+    }
+    let kdf = password_lock_parameters();
+    let salt = Key::<Aes256Gcm>::generate().to_vec()[..PASSWORD_SALT_LENGTH].to_vec();
+    let password_key = derive_password_key(password, &salt, &kdf)?;
+    let cipher = Aes256Gcm::new_from_slice(&password_key)
+        .map_err(|error| format!("无法初始化主密码加密器：{error}"))?;
+    let nonce = Nonce::generate();
+    let wrapped_key = cipher
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: vault_key,
+                aad: VAULT_PASSWORD_AAD,
+            },
+        )
+        .map_err(|_| "无法使用主密码保护资产库密钥".to_string())?;
+    let recovery_secret = new_recovery_secret();
+    let (recovery_nonce, recovery_wrapped_key) =
+        wrap_vault_key_with_recovery(vault_key, &recovery_secret)?;
+    Ok((
+        PasswordLockFile {
+            version: PASSWORD_LOCK_VERSION,
+            kdf,
+            salt,
+            nonce: nonce.to_vec(),
+            wrapped_key,
+            recovery_nonce,
+            recovery_wrapped_key,
+        },
+        recovery_secret,
+    ))
+}
+
+fn unwrap_vault_key(lock_file: &PasswordLockFile, password: &str) -> Result<Vec<u8>, String> {
+    validate_master_password(password)?;
+    let password_key = derive_password_key(password, &lock_file.salt, &lock_file.kdf)?;
+    let cipher = Aes256Gcm::new_from_slice(&password_key)
+        .map_err(|error| format!("无法初始化主密码解密器：{error}"))?;
+    let nonce: [u8; PASSWORD_NONCE_LENGTH] = lock_file
+        .nonce
+        .as_slice()
+        .try_into()
+        .map_err(|_| "启动密码随机数格式不正确".to_string())?;
+    let key = cipher
+        .decrypt(
+            (&nonce).into(),
+            Payload {
+                msg: lock_file.wrapped_key.as_ref(),
+                aad: VAULT_PASSWORD_AAD,
+            },
+        )
+        .map_err(|_| "主密码不正确".to_string())?;
+    if key.len() != PASSWORD_KEY_LENGTH {
+        return Err("解锁得到的资产库密钥长度不正确".to_string());
+    }
+    Ok(key)
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
+}
+
+fn format_recovery_key(secret: &[u8]) -> Result<String, String> {
+    if secret.len() != PASSWORD_KEY_LENGTH {
+        return Err("恢复密钥长度不正确".to_string());
+    }
+    let hex = encode_hex(secret);
+    let groups = hex
+        .as_bytes()
+        .chunks(8)
+        .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
+        .collect::<Vec<_>>();
+    Ok(format!("{RECOVERY_KEY_PREFIX}{}", groups.join("-")))
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
+    let normalized = value
+        .trim()
+        .strip_prefix(RECOVERY_KEY_PREFIX)
+        .unwrap_or(value.trim())
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace() && *character != '-')
+        .collect::<String>();
+    if normalized.len() != PASSWORD_KEY_LENGTH * 2
+        || !normalized
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err("恢复密钥格式不正确".to_string());
+    }
+    let mut bytes = Vec::with_capacity(PASSWORD_KEY_LENGTH);
+    let characters = normalized.as_bytes();
+    for pair in characters.chunks_exact(2) {
+        let high = (pair[0] as char)
+            .to_digit(16)
+            .ok_or_else(|| "恢复密钥格式不正确".to_string())?;
+        let low = (pair[1] as char)
+            .to_digit(16)
+            .ok_or_else(|| "恢复密钥格式不正确".to_string())?;
+        bytes.push(((high << 4) | low) as u8);
+    }
+    Ok(bytes)
+}
+
+fn wrap_vault_key_with_recovery(
+    vault_key: &[u8],
+    recovery_secret: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>), String> {
+    if vault_key.len() != PASSWORD_KEY_LENGTH || recovery_secret.len() != PASSWORD_KEY_LENGTH {
+        return Err("恢复密钥长度不正确".to_string());
+    }
+    let cipher = Aes256Gcm::new_from_slice(recovery_secret)
+        .map_err(|error| format!("无法初始化恢复密钥加密器：{error}"))?;
+    let nonce = Nonce::generate();
+    let wrapped_key = cipher
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: vault_key,
+                aad: VAULT_RECOVERY_AAD,
+            },
+        )
+        .map_err(|_| "无法使用恢复密钥保护资产库密钥".to_string())?;
+    Ok((nonce.to_vec(), wrapped_key))
+}
+
+fn unwrap_vault_key_with_recovery(
+    lock_file: &PasswordLockFile,
+    recovery_secret: &[u8],
+) -> Result<Vec<u8>, String> {
+    if lock_file.recovery_nonce.len() != PASSWORD_NONCE_LENGTH
+        || lock_file.recovery_wrapped_key.len() != PASSWORD_KEY_LENGTH + PASSWORD_TAG_LENGTH
+    {
+        return Err("当前资产库没有可用的恢复密钥".to_string());
+    }
+    let cipher = Aes256Gcm::new_from_slice(recovery_secret)
+        .map_err(|error| format!("无法初始化恢复密钥解密器：{error}"))?;
+    let nonce: [u8; PASSWORD_NONCE_LENGTH] = lock_file
+        .recovery_nonce
+        .as_slice()
+        .try_into()
+        .map_err(|_| "恢复密钥随机数格式不正确".to_string())?;
+    let key = cipher
+        .decrypt(
+            (&nonce).into(),
+            Payload {
+                msg: lock_file.recovery_wrapped_key.as_ref(),
+                aad: VAULT_RECOVERY_AAD,
+            },
+        )
+        .map_err(|_| "恢复密钥不正确或已经失效".to_string())?;
+    if key.len() != PASSWORD_KEY_LENGTH {
+        return Err("恢复密钥得到的资产库密钥长度不正确".to_string());
+    }
+    Ok(key)
+}
+
+fn new_recovery_secret() -> Vec<u8> {
+    Key::<Aes256Gcm>::generate().to_vec()
+}
+
+fn parse_recovery_file(content: &str) -> Result<Vec<u8>, String> {
+    let trimmed = content.trim();
+    let payload: RecoveryFilePayload = match serde_json::from_str(trimmed) {
+        Ok(payload) => payload,
+        Err(_error) if trimmed.starts_with(RECOVERY_KEY_PREFIX) => return decode_hex(trimmed),
+        Err(error) => return Err(format!("恢复文件格式不正确：{error}")),
+    };
+    if payload.format != RECOVERY_FILE_FORMAT || payload.version != RECOVERY_FILE_VERSION {
+        return Err("不支持的恢复文件格式或版本".to_string());
+    }
+    decode_hex(&payload.recovery_key)
+}
+
+fn format_recovery_file(secret: &[u8]) -> Result<String, String> {
+    let payload = RecoveryFilePayload {
+        format: RECOVERY_FILE_FORMAT.to_string(),
+        version: RECOVERY_FILE_VERSION,
+        recovery_key: format_recovery_key(secret)?,
+    };
+    serde_json::to_string_pretty(&payload)
+        .map(|content| format!("{content}\n"))
+        .map_err(|error| format!("无法生成恢复文件：{error}"))
+}
+
+fn write_password_lock_file(app: &AppHandle, lock_file: &PasswordLockFile) -> Result<(), String> {
+    let path = password_lock_path(app)?;
+    let encoded =
+        serde_json::to_vec(lock_file).map_err(|error| format!("无法编码启动密码配置：{error}"))?;
+    write_private_bytes(&path, &encoded, "启动密码配置")
+}
+
+fn active_vault_key(app: &AppHandle, session: &VaultSession) -> Result<Vec<u8>, String> {
+    if read_password_lock_file(app)?.is_some() {
+        return session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())?
+            .clone()
+            .ok_or_else(|| "VAULT_LOCKED:资产库已锁定，请先解锁".to_string());
+    }
+    read_local_vault_key(app)?.ok_or_else(|| "资产库密钥不存在或已丢失，无法打开资产库".to_string())
+}
+
 fn sync_parent_directory(path: &Path) -> Result<(), String> {
     #[cfg(unix)]
     {
@@ -403,45 +723,38 @@ fn get_or_create_local_vault_key(app: &AppHandle, vault_exists: bool) -> Result<
         return Ok(key);
     }
     if vault_exists {
-        return Err(format!(
-            "{LEGACY_KEY_MIGRATION_REQUIRED}:现有资产库仍使用旧版系统钥匙串密钥，请先迁移旧资产库"
-        ));
+        return Err("资产库密钥不存在或已丢失，无法打开现有资产库".to_string());
     }
     let key = Key::<Aes256Gcm>::generate().to_vec();
     write_local_vault_key(app, &key)?;
     Ok(key)
 }
 
-fn validate_vault_payload(content: &str, allow_legacy: bool) -> Result<Value, String> {
+fn validate_vault_payload(content: &str) -> Result<Value, String> {
     let value: Value =
         serde_json::from_str(content).map_err(|error| format!("资产库内容格式不正确：{error}"))?;
     let object = value
         .as_object()
         .ok_or_else(|| "资产库内容必须是对象".to_string())?;
-    match object.get("schemaVersion") {
-        Some(version) if version.as_u64() == Some(VAULT_SCHEMA_VERSION) => {}
-        Some(version) if allow_legacy && version.as_u64() == Some(1) => {}
-        Some(version) => {
-            return Err(format!(
-                "不支持资产库数据版本 {}，当前仅支持 {VAULT_SCHEMA_VERSION}",
-                version
-            ))
-        }
-        None if allow_legacy => {}
-        None => return Err("资产库内容缺少 schemaVersion".to_string()),
+    let version = object
+        .get("schemaVersion")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "资产库内容缺少 schemaVersion".to_string())?;
+    if version != VAULT_SCHEMA_VERSION {
+        return Err(format!(
+            "不支持资产库数据版本 {version}，当前仅支持 {VAULT_SCHEMA_VERSION}"
+        ));
     }
     for key in ["items", "customDeviceTypes"] {
         if !object.get(key).is_some_and(Value::is_array) {
             return Err(format!("资产库字段 {key} 必须是数组"));
         }
     }
-    if !allow_legacy || object.contains_key("schemaVersion") {
-        if !object.get("snapshots").is_some_and(Value::is_array) {
-            return Err("资产库字段 snapshots 必须是数组".to_string());
-        }
-        if object.get("revision").and_then(Value::as_u64).is_none() {
-            return Err("资产库字段 revision 必须是非负整数".to_string());
-        }
+    if !object.get("snapshots").is_some_and(Value::is_array) {
+        return Err("资产库字段 snapshots 必须是数组".to_string());
+    }
+    if object.get("revision").and_then(Value::as_u64).is_none() {
+        return Err("资产库字段 revision 必须是非负整数".to_string());
     }
     Ok(value)
 }
@@ -497,27 +810,6 @@ fn restore_backup_as_primary(vault_path: &Path, backup_path: &Path) -> Result<()
     Ok(())
 }
 
-fn keyring_entry_for(service: &str) -> Result<Entry, String> {
-    Entry::new(service, KEYRING_ACCOUNT).map_err(|error| format!("无法访问系统凭据库：{error}"))
-}
-
-fn existing_keyring_vault_key() -> Result<Vec<u8>, String> {
-    let services = [KEYRING_SERVICE.to_string(), legacy_app_identifier()];
-    let mut errors = Vec::new();
-    for service in services {
-        let entry = keyring_entry_for(&service)?;
-        match entry.get_secret() {
-            Ok(key) if key.len() == 32 => return Ok(key),
-            Ok(_) => errors.push("系统凭据库中的资产库密钥长度不正确".to_string()),
-            Err(KeyringError::NoEntry) => {
-                errors.push("旧版系统钥匙串中的资产库密钥不存在".to_string())
-            }
-            Err(error) => errors.push(format!("无法读取系统凭据库：{error}")),
-        }
-    }
-    Err(errors.join("；"))
-}
-
 fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
     let bytes = fs::read(path).map_err(|error| format!("无法读取加密资产库：{error}"))?;
     let envelope: EncryptedVaultFile =
@@ -540,16 +832,6 @@ fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
                 aad: VAULT_AAD,
             },
         )
-        .or_else(|_| {
-            let legacy_aad = legacy_vault_aad();
-            cipher.decrypt(
-                &nonce,
-                Payload {
-                    msg: envelope.ciphertext.as_ref(),
-                    aad: legacy_aad.as_slice(),
-                },
-            )
-        })
         .map_err(|_| "加密资产库校验失败，文件可能已损坏".to_string())?;
     let content =
         String::from_utf8(plaintext).map_err(|error| format!("资产库文本编码不正确：{error}"))?;
@@ -568,11 +850,8 @@ fn load_secure_vault_sync(app: &AppHandle) -> Result<Option<String>, String> {
     if !vault_path.exists() && !backup_path.exists() {
         return Ok(None);
     }
-    let key = read_local_vault_key(app)?.ok_or_else(|| {
-        format!(
-            "{LEGACY_KEY_MIGRATION_REQUIRED}:现有资产库仍使用旧版系统钥匙串密钥，请先迁移旧资产库"
-        )
-    })?;
+    let session = app.state::<VaultSession>();
+    let key = active_vault_key(app, &session)?;
     let (content, source) = load_existing_vault(&vault_path, &backup_path, &key)?;
     if source == Some(VaultSource::Backup) {
         return Err(format!(
@@ -580,7 +859,7 @@ fn load_secure_vault_sync(app: &AppHandle) -> Result<Option<String>, String> {
         ));
     }
     if let Some(content) = content {
-        validate_vault_payload(&content, true)?;
+        validate_vault_payload(&content)?;
         return Ok(Some(content));
     }
     Ok(None)
@@ -595,17 +874,24 @@ fn save_secure_vault_sync(
         .lock()
         .map_err(|_| "资产库文件锁已损坏".to_string())?;
     let _file_guard = lock_vault_file(app)?;
-    let mut payload = validate_vault_payload(&content, false)?;
+    let mut payload = validate_vault_payload(&content)?;
     if vault_revision(&payload) != expected_revision {
         return Err("前端资产库版本与预期版本不一致".to_string());
     }
     let (vault_path, backup_path) = vault_paths(app)?;
     restrict_existing_vault_files(&vault_path, &backup_path)?;
-    let key = get_or_create_local_vault_key(app, vault_path.exists() || backup_path.exists())?;
+    let session = app.state::<VaultSession>();
+    let key = if vault_path.exists() || backup_path.exists() {
+        active_vault_key(app, &session)?
+    } else if read_password_lock_file(app)?.is_some() {
+        active_vault_key(app, &session)?
+    } else {
+        get_or_create_local_vault_key(app, false)?
+    };
     let (current_content, source) = load_existing_vault(&vault_path, &backup_path, &key)?;
     let current_revision = current_content
         .as_deref()
-        .map(|current| validate_vault_payload(current, true).map(|value| vault_revision(&value)))
+        .map(|current| validate_vault_payload(current).map(|value| vault_revision(&value)))
         .transpose()?
         .unwrap_or(0);
     if current_revision != expected_revision {
@@ -695,26 +981,6 @@ fn save_secure_vault_sync(
     Ok(content)
 }
 
-fn migrate_legacy_vault_key_sync(app: &AppHandle) -> Result<(), String> {
-    let _guard = VAULT_IO_LOCK
-        .lock()
-        .map_err(|_| "资产库文件锁已损坏".to_string())?;
-    let _file_guard = lock_vault_file(app)?;
-    if read_local_vault_key(app)?.is_some() {
-        return Ok(());
-    }
-    let (vault_path, backup_path) = vault_paths(app)?;
-    restrict_existing_vault_files(&vault_path, &backup_path)?;
-    if !vault_path.exists() && !backup_path.exists() {
-        return Err("找不到需要迁移的旧版资产库".to_string());
-    }
-    let key = existing_keyring_vault_key()?;
-    let (content, _) = load_existing_vault(&vault_path, &backup_path, &key)?;
-    let content = content.ok_or_else(|| "找不到需要迁移的旧版资产库".to_string())?;
-    validate_vault_payload(&content, true)?;
-    write_local_vault_key(app, &key)
-}
-
 fn recover_vault_backup_sync(app: &AppHandle) -> Result<(), String> {
     let _guard = VAULT_IO_LOCK
         .lock()
@@ -725,12 +991,13 @@ fn recover_vault_backup_sync(app: &AppHandle) -> Result<(), String> {
     if !backup_path.exists() {
         return Err("找不到可恢复的资产库安全备份".to_string());
     }
-    let key = read_local_vault_key(app)?.ok_or_else(|| "本地资产库密钥不存在".to_string())?;
+    let session = app.state::<VaultSession>();
+    let key = active_vault_key(app, &session)?;
     if vault_path.exists() && decrypt_vault_file(&vault_path, &key).is_ok() {
         return Err("主资产库已经恢复可读，请重新读取，未使用旧备份覆盖".to_string());
     }
     let content = decrypt_vault_file(&backup_path, &key)?;
-    validate_vault_payload(&content, true)?;
+    validate_vault_payload(&content)?;
     restore_backup_as_primary(&vault_path, &backup_path)
 }
 
@@ -755,10 +1022,178 @@ async fn save_secure_vault(
 }
 
 #[tauri::command]
-async fn migrate_legacy_vault_key(app: AppHandle) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || migrate_legacy_vault_key_sync(&app))
+async fn get_vault_lock_status(app: AppHandle) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(read_password_lock_file(&app)?.is_some()))
         .await
-        .map_err(|error| format!("旧版资产库密钥迁移任务失败：{error}"))?
+        .map_err(|error| format!("启动密码状态读取任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn setup_vault_password(app: AppHandle, password: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = VAULT_IO_LOCK
+            .lock()
+            .map_err(|_| "资产库文件锁已损坏".to_string())?;
+        let _file_guard = lock_vault_file(&app)?;
+        if read_password_lock_file(&app)?.is_some() {
+            return Err("启动密码已经设置".to_string());
+        }
+        let (vault_path, backup_path) = vault_paths(&app)?;
+        let vault_exists = vault_path.exists() || backup_path.exists();
+        let key = get_or_create_local_vault_key(&app, vault_exists)?;
+        let (lock_file, recovery_secret) = wrap_vault_key(&key, &password)?;
+        write_password_lock_file(&app, &lock_file)?;
+        let verified = unwrap_vault_key(&lock_file, &password)?;
+        if verified != key {
+            let _ = fs::remove_file(password_lock_path(&app)?);
+            return Err("启动密码配置校验失败".to_string());
+        }
+        let key_path = vault_key_path(&app)?;
+        if key_path.exists() {
+            if let Err(error) = fs::remove_file(&key_path) {
+                let _ = fs::remove_file(password_lock_path(&app)?);
+                return Err(format!("无法移除本地资产库密钥，启动密码未启用：{error}"));
+            }
+            sync_parent_directory(&key_path)?;
+        }
+        let session = app.state::<VaultSession>();
+        *session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())? = Some(key);
+        format_recovery_file(&recovery_secret)
+    })
+    .await
+    .map_err(|error| format!("设置启动密码任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn unlock_vault(app: AppHandle, password: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = VAULT_IO_LOCK
+            .lock()
+            .map_err(|_| "资产库文件锁已损坏".to_string())?;
+        let _file_guard = lock_vault_file(&app)?;
+        let lock_file =
+            read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let key = unwrap_vault_key(&lock_file, &password)?;
+        let session = app.state::<VaultSession>();
+        *session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())? = Some(key);
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("解锁资产库任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn recover_vault_password(
+    app: AppHandle,
+    recovery_file: String,
+    new_password: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = VAULT_IO_LOCK
+            .lock()
+            .map_err(|_| "资产库文件锁已损坏".to_string())?;
+        let _file_guard = lock_vault_file(&app)?;
+        let lock_file =
+            read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let recovery_secret = parse_recovery_file(&recovery_file)?;
+        let key = unwrap_vault_key_with_recovery(&lock_file, &recovery_secret)?;
+        let (new_lock_file, new_recovery_secret) = wrap_vault_key(&key, &new_password)?;
+        write_password_lock_file(&app, &new_lock_file)?;
+        let verified_key = unwrap_vault_key(&new_lock_file, &new_password)?;
+        if verified_key != key {
+            return Err("新启动密码配置校验失败".to_string());
+        }
+        let session = app.state::<VaultSession>();
+        *session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())? = Some(key);
+        format_recovery_file(&new_recovery_secret)
+    })
+    .await
+    .map_err(|error| format!("恢复启动密码任务失败：{error}"))?
+}
+
+#[tauri::command]
+fn lock_vault(state: tauri::State<'_, VaultSession>) -> Result<(), String> {
+    *state
+        .0
+        .lock()
+        .map_err(|_| "资产库解锁状态已损坏".to_string())? = None;
+    Ok(())
+}
+
+#[tauri::command]
+async fn change_vault_password(
+    app: AppHandle,
+    current_password: String,
+    new_password: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = VAULT_IO_LOCK
+            .lock()
+            .map_err(|_| "资产库文件锁已损坏".to_string())?;
+        let _file_guard = lock_vault_file(&app)?;
+        let old_lock_file =
+            read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let key = unwrap_vault_key(&old_lock_file, &current_password)?;
+        let (new_lock_file, recovery_secret) = wrap_vault_key(&key, &new_password)?;
+        write_password_lock_file(&app, &new_lock_file)?;
+        let verified = unwrap_vault_key(&new_lock_file, &new_password)?;
+        if verified != key {
+            return Err("新启动密码配置校验失败".to_string());
+        }
+        let session = app.state::<VaultSession>();
+        *session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())? = Some(key);
+        format_recovery_file(&recovery_secret)
+    })
+    .await
+    .map_err(|error| format!("修改启动密码任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn disable_vault_password(app: AppHandle, password: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = VAULT_IO_LOCK
+            .lock()
+            .map_err(|_| "资产库文件锁已损坏".to_string())?;
+        let _file_guard = lock_vault_file(&app)?;
+        let lock_file =
+            read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let key = unwrap_vault_key(&lock_file, &password)?;
+        let key_path = vault_key_path(&app)?;
+        let key_created = !key_path.exists();
+        if key_created {
+            write_local_vault_key(&app, &key)?;
+        } else if read_local_vault_key(&app)?.as_deref() != Some(key.as_slice()) {
+            return Err("本地资产库密钥与启动密码配置不一致，拒绝关闭启动密码".to_string());
+        }
+        let lock_path = password_lock_path(&app)?;
+        if let Err(error) = fs::remove_file(&lock_path) {
+            if key_created {
+                let _ = fs::remove_file(&key_path);
+            }
+            return Err(format!("无法关闭启动密码：{error}"));
+        }
+        sync_parent_directory(&lock_path)?;
+        let session = app.state::<VaultSession>();
+        *session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())? = Some(key);
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("关闭启动密码任务失败：{error}"))?
 }
 
 #[tauri::command]
@@ -812,6 +1247,7 @@ fn exit_application(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
+    builder = builder.manage(VaultSession(Mutex::new(None)));
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -824,6 +1260,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }));
+        builder = builder.plugin(tauri_plugin_autostart::Builder::new().build());
     }
 
     builder
@@ -850,15 +1287,19 @@ pub fn run() {
             {
                 let show_item =
                     MenuItem::with_id(app, "show", "打开密码管理器", true, None::<&str>)?;
+                let lock_item = MenuItem::with_id(app, "lock", "立即锁定", true, None::<&str>)?;
                 let separator = PredefinedMenuItem::separator(app)?;
                 let exit_item = MenuItem::with_id(app, "exit", "关闭程序", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show_item, &separator, &exit_item])?;
+                let menu =
+                    Menu::with_items(app, &[&show_item, &lock_item, &separator, &exit_item])?;
                 let mut tray = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .tooltip("密码管理器")
                     .on_menu_event(|app, event| {
                         if event.id() == "show" {
                             restore_main_window(app);
+                        } else if event.id() == "lock" {
+                            let _ = app.emit("tray-lock-requested", ());
                         } else if event.id() == "exit" {
                             let _ = app.emit("tray-exit-requested", ());
                         }
@@ -897,7 +1338,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_secure_vault,
             save_secure_vault,
-            migrate_legacy_vault_key,
+            get_vault_lock_status,
+            setup_vault_password,
+            unlock_vault,
+            recover_vault_password,
+            lock_vault,
+            change_vault_password,
+            disable_vault_password,
             recover_vault_backup,
             exit_application,
             load_app_settings,

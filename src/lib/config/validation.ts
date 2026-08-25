@@ -164,6 +164,9 @@ export function assertStructuredConfigIdentities(rawTypes: unknown[]) {
     devices.forEach((device, deviceIndex) => {
       const deviceRecord = device && typeof device === "object" ? device as Record<string, unknown> : {};
       const deviceName = readString(deviceRecord["设备名称"]).trim() || `第 ${deviceIndex + 1} 台设备`;
+      ["IP地址", "设备信息"].forEach((field) => {
+        if (field in deviceRecord) throw new ConfigImportError(`设备“${deviceName}”包含已废弃字段“${field}”，请改用“连接地址”`);
+      });
       requireImportedUuid(deviceRecord["设备UUID"], `设备“${deviceName}”`, deviceUuids);
       if (readString(deviceRecord["设备类型UUID"], typeUuid).trim().toLowerCase() !== typeUuid) {
         throw new ConfigImportError(`设备“${deviceName}”的设备类型 UUID 不匹配`);
@@ -210,7 +213,7 @@ export function assertCsvConfigIdentities(records: Array<Record<string, string>>
       deviceName,
       assetCode: readRecordValue(record, "资产编号"),
       location: readRecordValue(record, "设备位置"),
-      info: readRecordValue(record, "连接地址", "设备信息", "IP地址").trim(),
+      info: readRecordValue(record, "连接地址").trim(),
       notes: readRecordValue(record, "设备备注"),
       icon: readRecordValue(record, "设备图标"),
       updatedAt: readRecordValue(record, "设备更新时间"),

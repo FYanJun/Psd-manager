@@ -49,7 +49,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   }
 
   function derivePasswordState(state = port.read()) {
-    const bulkUsernameSuggestions = state.bulkUsernameSearch.trim() && !state.bulkPasswordForm.username.trim()
+    const bulkUsernameSuggestions = state.bulkUsernameSearch.trim()
       ? getBulkUsernameSuggestions(state.items, state.bulkPasswordForm, state.bulkUsernameSearch)
       : [];
     const bulkPasswordMatches = state.bulkPasswordForm.username.trim()
@@ -242,11 +242,9 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const patch: AccountPasswordPatch = {
       bulkUsernameSearch: username,
       bulkUsernameSuggestionsOpen: Boolean(username.trim()),
+      bulkPasswordForm: { ...state.bulkPasswordForm, username },
+      bulkPasswordDeselectedKeys: [],
     };
-    if (state.bulkPasswordForm.username) {
-      patch.bulkPasswordForm = { ...state.bulkPasswordForm, username: "" };
-      patch.bulkPasswordDeselectedKeys = [];
-    }
     port.write(patch);
   }
 

@@ -1,4 +1,5 @@
 import { typeColorOptions } from "./constants";
+import { isHexColor } from "./color";
 
 export const INPUT_LIMITS = {
   deviceTypeName: 40,
@@ -178,5 +179,5 @@ export function isValidDeviceTypeIconText(value: string) {
 }
 
 export function isValidDeviceTypeColor(value: string) {
-  return validDeviceTypeColors.has(value);
+  return validDeviceTypeColors.has(value) || isHexColor(value);
 }

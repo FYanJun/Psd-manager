@@ -16,7 +16,7 @@
 </script>
 
 {#if pendingConfirmation}
-  <ModalFrame title={pendingConfirmation.title} titleId="confirm-title" modalClass="confirm-modal" close={cancelPendingConfirmation}>
+  <ModalFrame title={pendingConfirmation.title} titleId="confirm-title" close={cancelPendingConfirmation}>
       <div class="confirmation-body">
         <strong>{pendingConfirmation.message}</strong>
         {#if pendingConfirmation.action === "import-config"}

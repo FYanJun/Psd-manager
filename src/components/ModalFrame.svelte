@@ -8,8 +8,6 @@
 
   export let title: string;
   export let titleId = "app-modal-title";
-  export let modalClass = "";
-  export let dialogWidth = "";
   export let close: () => void;
 
   let dialogElement: HTMLDivElement;
@@ -26,9 +24,6 @@
     "[contenteditable='true']",
     "[tabindex]:not([tabindex='-1'])",
   ].join(",");
-
-  $: modalClasses = ["modal", modalClass].filter(Boolean).join(" ");
-  $: modalStyle = dialogWidth ? `--dialog-width: ${dialogWidth};` : undefined;
 
   function getFocusableElements() {
     if (!dialogElement) return [];
@@ -98,12 +93,11 @@
 <div class="modal-backdrop">
   <div
     bind:this={dialogElement}
-    class={modalClasses}
+    class="modal"
     role="dialog"
     aria-modal="true"
     aria-labelledby={titleId}
     tabindex="-1"
-    style={modalStyle}
   >
     <header class="modal-header">
       <h2 id={titleId}>{title}</h2>
@@ -126,33 +120,17 @@
   }
 
   .modal {
-    --dialog-width: 720px;
+    width: min(720px, calc(100vw - 48px));
+    height: auto;
+    min-height: 360px;
+    max-height: calc(100vh - 48px);
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    width: min(var(--dialog-width), calc(100vw - 48px));
-    max-height: calc(100vh - 48px);
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--surface);
     box-shadow: var(--modal-shadow);
-  }
-
-  .modal:global(.type-modal) {
-    --dialog-width: 720px;
-    border-radius: 14px;
-  }
-
-  .modal:global(.bulk-modal) {
-    --dialog-width: 920px;
-  }
-
-  .modal:global(.confirm-modal) {
-    --dialog-width: 760px;
-  }
-
-  .modal:global(.settings-modal) {
-    --dialog-width: 860px;
   }
 
   .modal-header {

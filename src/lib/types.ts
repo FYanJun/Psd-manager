@@ -8,7 +8,7 @@ export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
 export type ThemePreference = "system" | "light" | "dark";
 export type DensityPreference = "standard" | "compact";
 export type FontSizePreference = "small" | "standard" | "large";
-export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | "settings" | null;
+export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | "settings" | "security-password" | null;
 export type ActivePopover =
   | "type-sort"
   | "device-sort"
@@ -118,7 +118,7 @@ export type VaultItem = {
   updatedAt: string;
   notes: string;
   history: PasswordHistory[];
-  accounts?: DeviceAccount[];
+  accounts: DeviceAccount[];
 };
 
 export type DeviceForm = {
@@ -167,11 +167,6 @@ export type PersistedVaultState = {
   revision: number;
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
-  paneLayout?: {
-    sidebarRatio?: number;
-    listRatio?: number;
-    generatorRatio?: number;
-  };
   snapshots: VaultSnapshot[];
 };
 
@@ -195,6 +190,7 @@ export type GeneratorTarget = "current-account" | "bulk-password" | null;
 export type TypePickerScope = "device" | "bulk";
 export type ResizePane = "sidebar" | "list" | "generator";
 export type ConfigFormat = "json" | "csv" | "yaml";
+export type VaultPasswordDialogMode = "set" | "change" | "disable";
 
 export type AppSettings = {
   schemaVersion: 2;
@@ -203,6 +199,9 @@ export type AppSettings = {
     theme: ThemePreference;
     density: DensityPreference;
     fontSize: FontSizePreference;
+    startOnBoot: boolean;
+    startupLock: boolean;
+    autoLockMinutes: number;
   };
   workspace: {
     rememberLayout: boolean;

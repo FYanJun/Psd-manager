@@ -69,11 +69,18 @@ button:disabled {
 
 
 .danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
   border: 1px solid #b92f25;
   border-radius: 8px;
   color: #fff;
   background: #c4382b;
   font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .danger-button:hover {

@@ -2,6 +2,20 @@ import { DEFAULT_ACCOUNT_TAG, fallbackDeviceTypeMeta } from "./constants";
 import type { AccountForm, DeviceAccount, DeviceForm, DeviceTypeMeta, PasswordHistory, VaultItem } from "./types";
 import { compactSearchValue, formatDateTime, normalizeSearchValue, parseDateTimeValue, readNumber, readString } from "./utils";
 import { createUuid, isUuid, normalizeUuid } from "./uuid";
+import { isHexColor } from "./color";
+
+const updatedTimestampCache = new WeakMap<VaultItem, number>();
+type SearchFields = {
+  deviceName: string;
+  ipAddress: string;
+  assetCode: string;
+  location: string;
+  compactDeviceName: string;
+  compactIpAddress: string;
+  compactAssetCode: string;
+  compactLocation: string;
+};
+const searchFieldsCache = new WeakMap<VaultItem, SearchFields>();
 
 function uniqueUuid(value: unknown, usedUuids: Set<string>) {
   let uuid = normalizeUuid(value);
@@ -11,33 +25,20 @@ function uniqueUuid(value: unknown, usedUuids: Set<string>) {
 }
 
 export function iconClassForColor(color: string) {
-  if (color === "cyan") return "icon-router";
-  if (color === "rose") return "icon-rose";
-  if (color === "indigo") return "icon-indigo";
-  if (color === "sand") return "icon-sand";
-  if (color === "gold") return "icon-gold";
-  if (color === "dark") return "icon-terminal";
+  const normalizedColor = color.trim().toLowerCase();
+  if (isHexColor(normalizedColor)) return `icon-custom icon-custom-${normalizedColor.slice(1)}`;
+  if (normalizedColor === "cyan") return "icon-router";
+  if (normalizedColor === "rose") return "icon-rose";
+  if (normalizedColor === "indigo") return "icon-indigo";
+  if (normalizedColor === "sand") return "icon-sand";
+  if (normalizedColor === "gold") return "icon-gold";
+  if (normalizedColor === "dark") return "icon-terminal";
   return "icon-cyan";
 }
 
 export function iconClassForType(deviceType: string, deviceTypes: DeviceTypeMeta[]) {
   const meta = deviceTypes.find((type) => type.label === deviceType) ?? fallbackDeviceTypeMeta;
   return iconClassForColor(meta.color);
-}
-
-export function accountFromItem(item: VaultItem): DeviceAccount {
-  return {
-    uuid: createUuid(),
-    id: 1,
-    title: item.username || item.title || "未填写用户名",
-    username: item.username,
-    password: item.password,
-    tag: item.tag,
-    notes: item.notes,
-    updatedAt: item.updatedAt,
-    passwordChangedAt: item.updatedAt,
-    history: item.history ?? [],
-  };
 }
 
 export function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
@@ -62,22 +63,22 @@ export function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
   });
 }
 
-export function normalizeAccount(value: unknown, fallback: VaultItem, index: number, inheritLegacyItemFields = false): DeviceAccount {
+export function normalizeAccount(value: unknown, index: number): DeviceAccount {
   const account = value as Partial<DeviceAccount>;
-  const username = readString(account.username, fallback.username);
-  const tagFallback = inheritLegacyItemFields ? fallback.tag : DEFAULT_ACCOUNT_TAG;
-  const history = normalizeHistoryEntries(account.history ?? fallback.history);
+  const username = readString(account.username).trim();
+  const history = normalizeHistoryEntries(account.history);
   const latestHistory = history.reduce<PasswordHistory | null>((latest, entry) => !latest || entry.id > latest.id ? entry : latest, null);
-  const passwordChangedAt = readString(account.passwordChangedAt).trim() || latestHistory?.changedAt || readString(account.updatedAt, fallback.updatedAt);
+  const updatedAt = readString(account.updatedAt);
+  const passwordChangedAt = readString(account.passwordChangedAt).trim() || latestHistory?.changedAt || updatedAt;
   return {
     uuid: normalizeUuid(account.uuid),
     id: readNumber(account.id, index + 1),
-    title: username || readString(account.title, fallback.title || "未填写用户名") || "未填写用户名",
+    title: username || readString(account.title, "未填写用户名") || "未填写用户名",
     username,
-    password: readString(account.password, fallback.password),
-    tag: readString(account.tag, tagFallback) || DEFAULT_ACCOUNT_TAG,
-    notes: readString(account.notes, inheritLegacyItemFields ? fallback.notes : ""),
-    updatedAt: readString(account.updatedAt, fallback.updatedAt),
+    password: readString(account.password),
+    tag: readString(account.tag) || DEFAULT_ACCOUNT_TAG,
+    notes: readString(account.notes),
+    updatedAt,
     passwordChangedAt,
     history,
   };
@@ -115,7 +116,6 @@ export function syncItemWithAccounts(item: VaultItem, accounts: DeviceAccount[])
     username: primaryAccount?.username ?? "",
     password: primaryAccount?.password ?? "",
     // Keep device metadata time independent from the primary account time.
-    // Legacy records without a device timestamp still inherit the account time.
     updatedAt: item.updatedAt || primaryAccount?.updatedAt || "",
     history: primaryAccount?.history ?? [],
     accounts,
@@ -125,7 +125,6 @@ export function syncItemWithAccounts(item: VaultItem, accounts: DeviceAccount[])
 export function normalizeVaultItem(value: unknown, index: number): VaultItem {
   const item = value as Partial<VaultItem>;
   const deviceType = readString(item.deviceType);
-  const hasExplicitAccounts = Array.isArray(item.accounts);
   const fallback: VaultItem = {
     uuid: normalizeUuid(item.uuid),
     id: readNumber(item.id, index + 1),
@@ -137,7 +136,7 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
     location: readString(item.location),
     username: readString(item.username),
     password: readString(item.password),
-    ipAddress: readString(item.ipAddress, readString((item as { ip?: unknown }).ip)).trim(),
+    ipAddress: readString(item.ipAddress).trim(),
     tag: readString(item.tag, DEFAULT_ACCOUNT_TAG) || DEFAULT_ACCOUNT_TAG,
     iconText: readString(item.iconText, fallbackDeviceTypeMeta.iconText),
     iconClass: readString(item.iconClass).trim() || iconClassForColor(fallbackDeviceTypeMeta.color),
@@ -146,19 +145,11 @@ export function normalizeVaultItem(value: unknown, index: number): VaultItem {
     history: normalizeHistoryEntries(item.history),
     accounts: [],
   };
-  const hasLegacyAccountData = Boolean(
-    fallback.username.trim() ||
-    fallback.password ||
-    fallback.history.length > 0
-  );
-  const legacyAccountSource = hasLegacyAccountData
-    ? [{ ...item, uuid: undefined, username: fallback.username.trim() || "未填写用户名" }]
-    : [];
-  const accountSource = hasExplicitAccounts ? item.accounts ?? [] : legacyAccountSource;
-  const accounts = normalizeAccountIds(accountSource.map((account, accountIndex) => normalizeAccount(account, fallback, accountIndex, !hasExplicitAccounts)));
+  if (!Array.isArray(item.accounts)) throw new Error("设备账号字段必须是数组");
+  const accounts = normalizeAccountIds(item.accounts.map((account, accountIndex) => normalizeAccount(account, accountIndex)));
   const normalizedItem = syncItemWithAccounts(fallback, accounts);
   const primaryAccount = accounts[0];
-  if (hasExplicitAccounts && primaryAccount?.tag && normalizedItem.tag === primaryAccount.tag) {
+  if (primaryAccount?.tag && normalizedItem.tag === primaryAccount.tag) {
     return { ...normalizedItem, tag: normalizedItem.deviceType || DEFAULT_ACCOUNT_TAG };
   }
   return normalizedItem;
@@ -195,8 +186,7 @@ export function normalizeVaultItems(value: unknown) {
 }
 
 export function getAccounts(item: VaultItem) {
-  if (Array.isArray(item.accounts)) return item.accounts.filter((account) => !isBlankPlaceholderAccount(account));
-  return item.id ? [accountFromItem(item)].filter((account) => !isBlankPlaceholderAccount(account)) : [];
+  return item.accounts.filter((account) => !isBlankPlaceholderAccount(account));
 }
 
 export function formatAccountTag(account: Pick<DeviceAccount, "tag">, deviceType = "", deviceTag = "") {
@@ -206,29 +196,50 @@ export function formatAccountTag(account: Pick<DeviceAccount, "tag">, deviceType
 }
 
 export function getVaultItemUpdatedTimestamp(item: VaultItem) {
-  return Math.max(parseDateTimeValue(item.updatedAt), ...getAccounts(item).map((account) => parseDateTimeValue(account.updatedAt)));
+  const cached = updatedTimestampCache.get(item);
+  if (cached !== undefined) return cached;
+  const timestamp = Math.max(parseDateTimeValue(item.updatedAt), ...getAccounts(item).map((account) => parseDateTimeValue(account.updatedAt)));
+  updatedTimestampCache.set(item, timestamp);
+  return timestamp;
 }
 
-function getSearchMatchStrength(source: string, query: string) {
-  const normalizedSource = normalizeSearchValue(source);
-  const normalizedQuery = normalizeSearchValue(query);
-  if (!normalizedSource || !normalizedQuery) return 0;
-  if (normalizedSource === normalizedQuery) return 4;
-  if (normalizedSource.startsWith(normalizedQuery)) return 3;
-  if (normalizedSource.includes(normalizedQuery)) return 2;
-
-  const compactSource = compactSearchValue(normalizedSource);
-  const compactQuery = compactSearchValue(normalizedQuery);
+function getSearchMatchStrength(source: string, compactSource: string, query: string, compactQuery: string) {
+  if (!source || !query) return 0;
+  if (source === query) return 4;
+  if (source.startsWith(query)) return 3;
+  if (source.includes(query)) return 2;
   return compactQuery && compactSource.includes(compactQuery) ? 1 : 0;
 }
 
+function getSearchFields(item: VaultItem): SearchFields {
+  const cached = searchFieldsCache.get(item);
+  if (cached) return cached;
+  const fields = [item.deviceName, item.ipAddress, item.assetCode, item.location].map((value) => normalizeSearchValue(value));
+  const [deviceName, ipAddress, assetCode, location] = fields;
+  const searchFields = {
+    deviceName,
+    ipAddress,
+    assetCode,
+    location,
+    compactDeviceName: compactSearchValue(deviceName),
+    compactIpAddress: compactSearchValue(ipAddress),
+    compactAssetCode: compactSearchValue(assetCode),
+    compactLocation: compactSearchValue(location),
+  };
+  searchFieldsCache.set(item, searchFields);
+  return searchFields;
+}
+
 export function getVaultItemSearchScore(item: VaultItem, query: string) {
-  const deviceNameStrength = getSearchMatchStrength(item.deviceName, query);
+  const normalizedQuery = normalizeSearchValue(query);
+  const compactQuery = compactSearchValue(normalizedQuery);
+  const fields = getSearchFields(item);
+  const deviceNameStrength = getSearchMatchStrength(fields.deviceName, fields.compactDeviceName, normalizedQuery, compactQuery);
   if (deviceNameStrength) return 500 + deviceNameStrength;
 
-  const ipAddressStrength = getSearchMatchStrength(item.ipAddress, query);
-  const assetCodeStrength = getSearchMatchStrength(item.assetCode, query);
-  const locationStrength = getSearchMatchStrength(item.location, query);
+  const ipAddressStrength = getSearchMatchStrength(fields.ipAddress, fields.compactIpAddress, normalizedQuery, compactQuery);
+  const assetCodeStrength = getSearchMatchStrength(fields.assetCode, fields.compactAssetCode, normalizedQuery, compactQuery);
+  const locationStrength = getSearchMatchStrength(fields.location, fields.compactLocation, normalizedQuery, compactQuery);
   return Math.max(
     ipAddressStrength ? ipAddressStrength * 100 + 3 : 0,
     assetCodeStrength ? assetCodeStrength * 100 + 2 : 0,

@@ -75,6 +75,19 @@
   export let tooltipEnabled = true;
   export let settingsView: import("../lib/view-models").SettingsView;
   export let settingsActions: import("../lib/view-models").SettingsActions;
+  export let vaultPasswordDialogMode: import("../lib/types").VaultPasswordDialogMode = "set";
+  export let vaultPasswordForm: { currentPassword: string; newPassword: string; confirmPassword: string };
+  export let vaultPasswordError = "";
+  export let vaultPasswordBusy = false;
+  export let recoveryKey = "";
+  export let recoveryAcknowledged = false;
+  export let recoveryFileName = "";
+  export let recoveryFileSaved = false;
+  export let recoveryFileBusy = false;
+  export let recoveryFileError = "";
+  export let saveRecoveryFile: () => void;
+  export let finishRecoverySetup: () => void;
+  export let saveVaultPassword: () => void;
 </script>
 
 <ActionPopover model={actionPopoverModel} actions={actionPopoverActions} />
@@ -95,6 +108,19 @@
   actions={appDialogActions}
   {settingsView}
   {settingsActions}
+  {vaultPasswordDialogMode}
+  {vaultPasswordForm}
+  {vaultPasswordError}
+  {vaultPasswordBusy}
+  {recoveryKey}
+  bind:recoveryAcknowledged
+  {recoveryFileName}
+  {recoveryFileSaved}
+  {recoveryFileBusy}
+  {recoveryFileError}
+  {saveRecoveryFile}
+  {finishRecoverySetup}
+  {saveVaultPassword}
 />
 
 <VaultSnapshotsDialog

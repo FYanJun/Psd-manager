@@ -13,6 +13,7 @@
     TypePickerScope,
   } from "../../lib/types";
   import type { BulkPasswordDialogActions, BulkPasswordDialogView } from "../../lib/view-models";
+  import { typeColorClass, typeColorStyle } from "../../lib/color";
 
   export let bulkPasswordForm: BulkPasswordForm;
   export let openTypePicker: TypePickerScope | null = null;
@@ -49,13 +50,13 @@
     toggleBulkPasswordMatch, saveBulkPasswordUpdate } = actions);
 </script>
 
-<div class="form-grid">
+<div class="form-grid bulk-password-form">
   <div class="form-control type-combo-field wide-field">
     <span>设备类型</span>
     <div class="type-combo">
       {#if selectedBulkTypeMeta}
         <button type="button" class="type-combo-trigger" aria-expanded={openTypePicker === "bulk"} aria-controls="bulk-type-options" on:click={() => toggleTypePicker("bulk")}>
-          <span class={`type-combo-icon type-${selectedBulkTypeMeta.color}`}>{selectedBulkTypeMeta.iconText}</span>
+          <span class={`type-combo-icon ${typeColorClass(selectedBulkTypeMeta.color)}`} style={typeColorStyle(selectedBulkTypeMeta.color)}>{selectedBulkTypeMeta.iconText}</span>
           <span class="type-combo-copy"><strong>{selectedBulkTypeMeta.label}</strong><small>{selectedBulkTypeMeta.count} 个设备</small></span>
           <ChevronDown size={18} />
         </button>
@@ -72,7 +73,7 @@
             {:else}
               {#each filteredBulkTypeRows as type}
                 <button type="button" class:selected={bulkPasswordForm.deviceType === type.label} role="option" aria-selected={bulkPasswordForm.deviceType === type.label} on:click={() => setBulkPasswordDeviceType(type.label)}>
-                  <span class={`type-combo-icon type-${type.color}`}>{type.iconText}</span>
+                  <span class={`type-combo-icon ${typeColorClass(type.color)}`} style={typeColorStyle(type.color)}>{type.iconText}</span>
                   <span class="type-combo-copy"><strong>{type.label}</strong><small>{type.count} 个设备</small></span>
                 </button>
               {/each}
@@ -84,14 +85,14 @@
   </div>
   <div class="form-control bulk-username-field">
     <span>匹配用户名</span>
-    <ClearableInput value={bulkUsernameSearch} placeholder="输入用户名，先选择完整用户名" maxlength={INPUT_LIMITS.username} transformValue={sanitizeSingleLineTextInput} onValueChange={updateBulkUsernameSearch} />
-    {#if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim() && bulkUsernameSuggestions.length > 0}
+    <ClearableInput value={bulkUsernameSearch} placeholder="输入用户名，可直接匹配或选择候选" maxlength={INPUT_LIMITS.username} transformValue={sanitizeSingleLineTextInput} onValueChange={updateBulkUsernameSearch} />
+    {#if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && bulkUsernameSuggestions.length > 0}
       <div class="bulk-username-suggestions" role="listbox" aria-label="完整用户名候选">
         {#each bulkUsernameSuggestions.slice(0, 8) as suggestion}
           <button type="button" role="option" aria-selected={false} on:click={() => selectBulkUsername(suggestion)}><strong>{suggestion.username}</strong></button>
         {/each}
       </div>
-    {:else if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && !bulkPasswordForm.username.trim()}
+    {:else if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim()}
       <p class="quiet-text">没有匹配的完整用户名。</p>
     {/if}
   </div>
@@ -119,9 +120,9 @@
       {/if}
     </div>
     {#if !bulkPasswordForm.username.trim()}
-      <p class="quiet-text">{bulkUsernameSearch.trim() ? "请先从上方选择一个完整用户名。" : "输入用户名后，先选择完整用户名，再选择需要改密的账号。"}</p>
+      <p class="quiet-text">输入用户名后，会立即匹配账号；候选框可用于快速选择完整用户名。</p>
     {:else if bulkPasswordMatches.length === 0}
-      <p class="quiet-text">这个用户名没有匹配账号，请重新选择。</p>
+      <p class="quiet-text">没有完全匹配的账号，请检查用户名或从候选框中选择。</p>
     {:else}
       <div class="bulk-match-list">
         {#each bulkPasswordMatches as match}

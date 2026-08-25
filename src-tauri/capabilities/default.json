@@ -21,6 +21,7 @@
     "core:app:allow-version",
     "dialog:allow-open",
     "dialog:allow-save",
+    "autostart:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file"
   ]

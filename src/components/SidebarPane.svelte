@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowDownUp, ChevronRight, Pencil, Plus, Trash2 } from "@lucide/svelte";
   import type { DeviceType, DeviceTypeMeta } from "../lib/types";
+  import { typeColorClass, typeColorStyle } from "../lib/color";
 
   export let deviceTypeRows: Array<DeviceTypeMeta & { count: number }>;
   export let selectedDeviceType: "全部设备" | DeviceType;
@@ -52,7 +53,7 @@
         on:click={() => selectDeviceType(type.label)}
         on:contextmenu={(event) => openTypeContextMenu(type.label, event)}
       >
-        <span class={`type-icon type-${type.color}`}>{type.iconText}</span>
+        <span class={`type-icon ${typeColorClass(type.color)}`} style={typeColorStyle(type.color)}>{type.iconText}</span>
         <span class="type-copy">
           <strong>{type.label}</strong>
           <small>{type.count} 个设备</small>

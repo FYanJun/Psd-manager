@@ -93,6 +93,10 @@ export function parseCsvConfigContent(content: string): ConfigData {
 
 export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
   const headers = rows[0].map((header) => header.trim());
+  const unsupportedHeaders = ["IP地址", "设备信息"].filter((header) => headers.includes(header));
+  if (unsupportedHeaders.length > 0) {
+    throw new ConfigImportError(`CSV 配置包含已废弃字段：${unsupportedHeaders.join("、")}；请改用连接地址`);
+  }
   if (!["设备类型", "设备名称", "用户名", "密码历史"].every((header) => headers.includes(header))) {
     throw new ConfigImportError("CSV 配置缺少必要列：设备类型、设备名称、用户名、密码历史");
   }
@@ -123,7 +127,7 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
     const deviceName = readRecordValue(record, "设备名称").trim();
     const assetCode = readRecordValue(record, "资产编号").trim();
     const location = readRecordValue(record, "设备位置").trim();
-    const deviceInfo = readRecordValue(record, "连接地址", "设备信息", "IP地址").trim();
+    const deviceInfo = readRecordValue(record, "连接地址").trim();
     const deviceNotes = readRecordValue(record, "设备备注");
     const deviceIcon = readRecordValue(record, "设备图标").trim() || typeIcon || deviceType.slice(0, 1) || "设";
     const history = parseCsvHistory(readRecordValue(record, "密码历史"), rowNumber);
@@ -172,7 +176,7 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
     const username = readRecordValue(record, "用户名").trim();
     const account: DeviceAccount = {
       uuid: readRecordValue(record, "账号UUID"),
-      id: (item.accounts ?? []).length + 1,
+      id: item.accounts.length + 1,
       title: username || "未填写用户名",
       username,
       password: readRecordValue(record, "密码"),
@@ -182,7 +186,7 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
       passwordChangedAt: readRecordValue(record, "密码更新时间").trim(),
       history,
     };
-    item.accounts = [...(item.accounts ?? []), account];
+    item.accounts = [...item.accounts, account];
     if (item.accounts.length === 1) {
       item.title = account.title;
       item.username = account.username;

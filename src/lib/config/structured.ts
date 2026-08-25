@@ -8,7 +8,7 @@ import { assertStructuredConfigIdentities } from "./validation";
 import { ConfigImportError, stripUtf8Bom } from "./shared";
 
 function readConnectionAddress(record: Record<string, unknown>) {
-  return readString(record["连接地址"]).trim() || readString(record["IP地址"]).trim();
+  return readString(record["连接地址"]).trim();
 }
 
 export function createJsonDeviceRecord(item: VaultItem, typeIconText: string) {

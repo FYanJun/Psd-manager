@@ -75,7 +75,7 @@ function windowBounds(value: unknown): AppSettings["workspace"]["windowBounds"] 
 
 export function normalizeAppSettings(value: unknown): AppSettings {
   const defaults = cloneDefaults();
-  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION)) return defaults;
+  if (!isRecord(value) || value.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION) return defaults;
   const interfaceValue = isRecord(value.interface) ? value.interface : {};
   const workspaceValue = isRecord(value.workspace) ? value.workspace : {};
   const layoutValue = isRecord(workspaceValue.paneLayout) ? workspaceValue.paneLayout : {};
@@ -88,6 +88,9 @@ export function normalizeAppSettings(value: unknown): AppSettings {
       theme: theme(interfaceValue.theme, defaults.interface.theme),
       density: density(interfaceValue.density, defaults.interface.density),
       fontSize: fontSize(interfaceValue.fontSize, defaults.interface.fontSize),
+      startOnBoot: bool(interfaceValue.startOnBoot, defaults.interface.startOnBoot),
+      startupLock: bool(interfaceValue.startupLock, defaults.interface.startupLock),
+      autoLockMinutes: numberValue(interfaceValue.autoLockMinutes, defaults.interface.autoLockMinutes, 0, 10080),
     },
     workspace: {
       rememberLayout: bool(workspaceValue.rememberLayout, defaults.workspace.rememberLayout),
@@ -132,19 +135,13 @@ export function createDefaultAppSettings() {
 
 export async function loadAppSettings() {
   const content = isTauri() ? await invoke<string | null>("load_app_settings") : browserSettingsContent;
-  if (!content) return { settings: createDefaultAppSettings(), hasStoredSettings: false, needsMigration: false };
+  if (!content) return createDefaultAppSettings();
   try {
     const parsed = JSON.parse(content) as unknown;
-    if (!isRecord(parsed) || (parsed.schemaVersion !== 1 && parsed.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION)) {
-      throw new Error("不支持的应用设置版本，当前支持 1 和 2");
+    if (!isRecord(parsed) || parsed.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION) {
+      throw new Error(`不支持的应用设置版本，当前仅支持 ${APP_SETTINGS_SCHEMA_VERSION}`);
     }
-    return {
-      settings: normalizeAppSettings(parsed),
-      hasStoredSettings: true,
-      needsMigration: isRecord(parsed)
-        && (parsed.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION
-          || (isRecord(parsed.interface) && "reduceMotion" in parsed.interface)),
-    };
+    return normalizeAppSettings(parsed);
   } catch (error) {
     throw error instanceof Error ? error : new Error(`应用设置不是合法 JSON：${String(error)}`);
   }
@@ -166,19 +163,4 @@ export async function resetAppSettings() {
     browserSettingsContent = null;
   }
   return createDefaultAppSettings();
-}
-
-export function mergeLegacyPaneLayout(settings: AppSettings, paneLayout: AppSettings["workspace"]["paneLayout"] | undefined) {
-  if (!paneLayout) return settings;
-  return {
-    ...settings,
-    workspace: {
-      ...settings.workspace,
-      paneLayout: {
-        sidebarRatio: clampPaneRatio(Number(paneLayout.sidebarRatio), "sidebar"),
-        listRatio: clampPaneRatio(Number(paneLayout.listRatio), "list"),
-        generatorRatio: clampPaneRatio(Number(paneLayout.generatorRatio), "generator"),
-      },
-    },
-  };
 }
