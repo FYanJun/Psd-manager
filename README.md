@@ -5,8 +5,6 @@
 [![最新版本](https://img.shields.io/github/v/release/FYanJun/Psd-manager?display_name=tag)](https://github.com/FYanJun/Psd-manager/releases/latest)
 [![构建发布](https://github.com/FYanJun/Psd-manager/actions/workflows/release.yml/badge.svg)](https://github.com/FYanJun/Psd-manager/actions/workflows/release.yml)
 
-![应用图标](src-tauri/icons/icon.png)
-
 Psd Manager（密码管理器）用于集中管理真实设备资产、设备账号、当前密码和密码历史。它适合个人或小团队在本地维护服务器、交换机、路由器、NAS、工控机等设备的登录信息，不依赖在线账号，也不要求把资产库上传到云端。
 
 ## 功能概览
