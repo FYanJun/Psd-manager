@@ -16,7 +16,7 @@ export const INPUT_LIMITS = {
   deviceTypeIcon: 2,
 } as const;
 
-export const PASSWORD_CHARACTER_ERROR = `密码只能使用半角英文、数字和常用符号，不能包含中文、空格或全角字符，且不能超过 ${INPUT_LIMITS.password} 个字符`;
+export const PASSWORD_CHARACTER_ERROR = `密码不能包含换行、控制字符或不可见字符，且不能超过 ${INPUT_LIMITS.password} 个字符`;
 export const CONNECTION_ADDRESS_ERROR = "连接地址格式不正确，请输入有效的 IPv4、IPv6、主机名或网络 URL";
 
 const validDeviceTypeColors = new Set(typeColorOptions.map((option) => option.value));
@@ -55,6 +55,8 @@ function isInvisibleControlCharacter(character: string, allowLineBreaks = false)
   return (code >= 0x200b && code <= 0x200f)
     || (code >= 0x202a && code <= 0x202e)
     || (code >= 0x2060 && code <= 0x206f)
+    || code === 0x2028
+    || code === 0x2029
     || code === 0xfeff;
 }
 
@@ -91,11 +93,20 @@ export function hasValidTextInput(value: string, maxLength: number, allowLineBre
 }
 
 export function sanitizePasswordInput(value: string) {
-  return Array.from(value).filter(isVisibleAsciiCharacter).join("");
+  return sanitizeTextInput(value);
 }
 
-export function sanitizeAsciiSymbols(value: string) {
-  return Array.from(value).filter(isAsciiSymbol).join("");
+export function sanitizeGeneratorSymbols(value: string) {
+  return Array.from(value)
+    .filter((character) => {
+      if (isInvisibleControlCharacter(character)) return false;
+      if (isAsciiSymbol(character)) return true;
+      // The field is for symbols, so letters and numbers remain covered by
+      // their dedicated generator groups while Unicode punctuation/symbols
+      // can still be used as custom characters.
+      return !/[\p{L}\p{N}]/u.test(character);
+    })
+    .join("");
 }
 
 export function sanitizeConnectionAddressInput(value: string) {
@@ -103,7 +114,14 @@ export function sanitizeConnectionAddressInput(value: string) {
 }
 
 export function hasValidPasswordCharacters(value: string) {
-  return sanitizePasswordInput(value) === value && Array.from(value).length <= INPUT_LIMITS.password;
+  return hasValidTextInput(value, INPUT_LIMITS.password);
+}
+
+// Keep this named alias at the persistence boundary so the storage and import
+// code make their compatibility intent explicit while sharing the same rule as
+// new password entry fields.
+export function hasValidPersistedPassword(value: string) {
+  return hasValidPasswordCharacters(value);
 }
 
 function isValidIpv4(value: string) {

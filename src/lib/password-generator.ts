@@ -1,4 +1,4 @@
-import { sanitizeAsciiSymbols, sanitizePasswordInput } from "./input-validation";
+import { sanitizeGeneratorSymbols, sanitizePasswordInput } from "./input-validation";
 
 export type GeneratorOptions = {
   length: number;
@@ -14,8 +14,12 @@ export type GeneratorOptions = {
   excludedCharacters: string;
 };
 
+function splitCharacters(value: string) {
+  return Array.from(value);
+}
+
 export function uniqueChars(value: string) {
-  return Array.from(new Set(value.split(""))).join("");
+  return Array.from(new Set(splitCharacters(value))).join("");
 }
 
 export function normalizeGeneratorLength(length: number) {
@@ -24,12 +28,11 @@ export function normalizeGeneratorLength(length: number) {
 
 export function getGeneratorGroups(options: GeneratorOptions) {
   const customExcludes = new Set(
-    `${sanitizePasswordInput(options.excludedCharacters)}${options.excludeSimilar ? "0O1Il|`'" : ""}`.split("")
+    splitCharacters(`${sanitizePasswordInput(options.excludedCharacters)}${options.excludeSimilar ? "0O1Il|`'" : ""}`)
   );
   const filter = (source: string) =>
     uniqueChars(
-      source
-        .split("")
+      splitCharacters(source)
         .filter((char) => !customExcludes.has(char))
         .join("")
     );
@@ -38,7 +41,7 @@ export function getGeneratorGroups(options: GeneratorOptions) {
     { key: "upper", chars: options.useUpper ? filter("ABCDEFGHIJKLMNOPQRSTUVWXYZ") : "" },
     { key: "lower", chars: options.useLower ? filter("abcdefghijklmnopqrstuvwxyz") : "" },
     { key: "numbers", chars: options.useNumbers ? filter("0123456789") : "" },
-    { key: "symbols", chars: options.useSymbols ? filter(sanitizeAsciiSymbols(options.allowedSymbols)) : "" },
+    { key: "symbols", chars: options.useSymbols ? filter(sanitizeGeneratorSymbols(options.allowedSymbols)) : "" },
   ].filter((group) => group.chars.length > 0);
 }
 
@@ -54,10 +57,11 @@ function randomIndex(max: number) {
 }
 
 function pickFrom(source: string, previous = "", preventRepeats = false) {
-  if (source.length === 0) return "";
-  if (!preventRepeats || source.length === 1) return source[randomIndex(source.length)];
-  const candidates = source.split("").filter((char) => char !== previous);
-  return (candidates.length > 0 ? candidates : source.split(""))[randomIndex(candidates.length || source.length)];
+  const characters = splitCharacters(source);
+  if (characters.length === 0) return "";
+  if (!preventRepeats || characters.length === 1) return characters[randomIndex(characters.length)];
+  const candidates = characters.filter((char) => char !== previous);
+  return (candidates.length > 0 ? candidates : characters)[randomIndex(candidates.length || characters.length)];
 }
 
 function shuffleValues<T>(values: T[]) {
@@ -88,7 +92,7 @@ function buildPasswordWithoutAdjacentRepeats(sources: string[]) {
 
     for (const sourceIndex of sourceIndexes) {
       const source = uniqueSources[sourceIndex];
-      const candidates = shuffleValues(source.split("").filter((char) => char !== previous));
+      const candidates = shuffleValues(splitCharacters(source).filter((char) => char !== previous));
       for (const candidate of candidates) {
         const nextRemaining = [...remaining];
         nextRemaining[sourceIndex] -= 1;

@@ -546,7 +546,7 @@
   display: grid;
   gap: 6px;
   min-height: 0;
-  max-height: none;
+  max-height: min(260px, 34vh);
   overflow: auto;
   padding-right: 2px;
 }

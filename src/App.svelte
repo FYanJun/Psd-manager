@@ -172,7 +172,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   let tooltipEnabled = true;
   let autostartAvailable = false;
   let autostartUpdating = false;
-  let appVersion = "0.1.14";
+  let appVersion = "0.1.17";
   let dataDialogReturnToSettings = false;
   let installationPath = "";
   let dataPath = "";
@@ -186,6 +186,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   let vaultPasswordError = "";
   let vaultPasswordBusy = false;
   let autoLockTimer: ReturnType<typeof window.setTimeout> | null = null;
+  let lastActivityAt = 0;
   let removeTrayLockListener: (() => void) | null = null;
   let trayLockListenerPromise: Promise<() => void> | null = null;
   let recoveryKey = "";
@@ -575,6 +576,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     },
     actions: {
       closeGenerator: () => closeGeneratorPanel(),
+      closeOverlays,
       cancelPendingConfirmation,
       clearSearch,
       confirmPendingAction,
@@ -598,7 +600,10 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     clampLayout: () => layoutController.clamp(),
     showStatus,
     persistAppSettings,
+    captureWindowBounds: () => windowSettingsController.capture(),
     isLockEnabled: () => vaultLockEnabled,
+    isLocked: () => vaultLocked,
+    hasPendingRecoveryFile: () => Boolean(recoveryKey && !recoveryFileSaved),
     lock: lockVaultSession,
     writeViewState: (state) => {
       vaultStorageState = state.state;
@@ -777,7 +782,16 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   }
 
   function offerSnapshotUndo(snapshotId: string, message: string) {
-    snapshotController.offerUndo(snapshotId, message);
+    // Importing from settings closes the data dialog before the toast is shown.
+    // Keep that context with the undo action so restoring from the toast does
+    // not unexpectedly drop the user back into the workspace.
+    const returnToSettings = dataDialogReturnToSettings || activeDialog === "settings";
+    snapshotController.offerUndo(snapshotId, message, () => {
+      if (returnToSettings && activeDialog === null) {
+        settingsActiveSection = "data";
+        activeDialog = "settings";
+      }
+    });
   }
 
   function requestRestoreSnapshot(snapshot: VaultSnapshot) {
@@ -786,34 +800,44 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
   async function recoverVaultBackup() {
     await vaultStorageController.recoverBackup();
+    if (vaultStorageState === "ready" && !vaultLocked) scheduleAutoLock();
   }
 
   async function retryVaultStorage() {
     await vaultStorageController.retry();
+    if (vaultStorageState === "ready" && !vaultLocked) scheduleAutoLock();
   }
 
   onMount(() => {
     systemThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     systemThemeMediaQuery.addEventListener("change", handleSystemThemeChange);
+    // Register native close/exit and tray listeners before startup work. This
+    // prevents an early close or tray action from being lost while the vault is
+    // still loading.
     void (async () => {
+      await vaultStorageController.mountCloseProtection();
+      if (isTauri()) {
+        const listenerPromise = listen("tray-lock-requested", () => {
+          void lockVaultNow();
+        });
+        trayLockListenerPromise = listenerPromise;
+        try {
+          const removeListener = await listenerPromise;
+          if (trayLockListenerPromise === listenerPromise) removeTrayLockListener = removeListener;
+          else removeListener();
+        } catch (error) {
+          if (trayLockListenerPromise === listenerPromise) trayLockListenerPromise = null;
+          showStatus(`托盘锁定监听初始化失败：${error instanceof Error ? error.message : String(error ?? "未知错误")}`, 6000);
+        }
+      }
       await initializeAppSettings();
       await initializeVaultLock();
     })();
-    vaultStorageController.mountCloseProtection();
     overlayController.mount();
-    if (isTauri()) {
-      const listenerPromise = listen("tray-lock-requested", () => {
-        void lockVaultNow();
-      });
-      trayLockListenerPromise = listenerPromise;
-      void listenerPromise.then((removeListener) => {
-        if (trayLockListenerPromise === listenerPromise) removeTrayLockListener = removeListener;
-        else removeListener();
-      });
-    }
     window.addEventListener("keydown", handleGlobalKeydown);
     window.addEventListener("keydown", handleUserActivity);
     window.addEventListener("pointerdown", handleUserActivity);
+    window.addEventListener("pointermove", handleUserActivity);
     window.addEventListener("resize", clampPaneLayout);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
@@ -821,6 +845,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("keydown", handleUserActivity);
       window.removeEventListener("pointerdown", handleUserActivity);
+      window.removeEventListener("pointermove", handleUserActivity);
       window.removeEventListener("resize", clampPaneLayout);
       window.removeEventListener("blur", handleWindowBlur);
       vaultStorageController.destroy();
@@ -996,8 +1021,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   function selectDeviceType(deviceType: "全部设备" | DeviceType) {
     if (searchApplyTimer) window.clearTimeout(searchApplyTimer);
     searchApplyTimer = null;
-    navigationController.selectDeviceType(deviceType);
-    searchDraft = searchQuery;
+    navigationController.selectDeviceType(deviceType, searchDraft);
     persistLastView();
   }
 
@@ -1101,7 +1125,13 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   }
 
   function handleUserActivity() {
-    if (!vaultLocked) scheduleAutoLock();
+    if (vaultLocked) return;
+    const now = Date.now();
+    // Pointer movement can fire many times per frame; one reset per second is
+    // enough to represent activity without continuously rebuilding the timer.
+    if (now - lastActivityAt < 1000) return;
+    lastActivityAt = now;
+    scheduleAutoLock();
   }
 
   function openSnapshotsDialog() {
@@ -1129,6 +1159,9 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     items = initialItems;
     customDeviceTypes = [];
     vaultSnapshots = [];
+    selectedDeviceType = "全部设备";
+    searchQuery = "";
+    searchDraft = "";
     selectedId = 0;
     selectedAccountId = 0;
     selectedAccountIds = [];
@@ -1142,11 +1175,28 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     activePopover = null;
     pendingConfirmation = null;
     pendingImportedConfig = null;
+    dataDialogReturnToSettings = false;
     passwordVisible = false;
     accountForm = createEmptyAccountForm();
     passwordForm = { password: "", reason: "" };
     bulkPasswordForm = { deviceType: "全部设备", username: "", password: "", reason: "" };
+    bulkUsernameSearch = "";
+    bulkUsernameSuggestionsOpen = false;
+    bulkPasswordDeselectedKeys = [];
+    bulkTypeSearch = "";
+    deviceTypeSearch = "";
+    openTypePicker = null;
+    typeForm = { originalUuid: null, originalLabel: null, label: "", iconText: "", color: "blue" };
     deviceForm = createEmptyDeviceForm();
+    vaultPasswordForm = { currentPassword: "", newPassword: "", confirmPassword: "" };
+    vaultPasswordError = "";
+    recoveryKey = "";
+    recoveryAcknowledged = false;
+    recoveryError = "";
+    recoveryFileContent = "";
+    recoveryFileName = "";
+    recoveryFileSaved = false;
+    recoveryFileError = "";
     revealResetToken += 1;
   }
 
@@ -1162,7 +1212,15 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   }
 
   async function lockVaultNow() {
-    if (!vaultLockEnabled || vaultLocked) return;
+    if (!vaultLockEnabled) {
+      showStatus("请先开启启动密码");
+      return;
+    }
+    if (vaultLocked) return;
+    if (recoveryKey && !recoveryFileSaved) {
+      showStatus("请先保存启动密码恢复文件", 6000);
+      return;
+    }
     try {
       if (vaultStorageState === "save-error") {
         throw new Error("资产库尚未安全保存，请先重试保存");
@@ -1181,9 +1239,11 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     if (!vaultLocked || vaultUnlockBusy || !vaultUnlockPassword) return;
     vaultUnlockBusy = true;
     vaultUnlockError = "";
+    let unlocked = false;
     try {
       if (!isTauri()) throw new Error("浏览器预览模式不支持启动密码");
       await invoke("unlock_vault", { password: vaultUnlockPassword });
+      unlocked = true;
       vaultUnlockPassword = "";
       await vaultStorageController.initialize();
       if (vaultStorageState !== "ready") {
@@ -1192,9 +1252,16 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       vaultLocked = false;
       scheduleAutoLock();
     } catch (error) {
-      vaultUnlockError = error instanceof Error ? error.message : String(error ?? "解锁失败");
+      if (unlocked) {
+        // The password is valid, but the storage overlay must remain available
+        // so the user can retry or explicitly recover a valid backup.
+        vaultLocked = false;
+        vaultUnlockError = "";
+      } else {
+        vaultUnlockError = error instanceof Error ? error.message : String(error ?? "解锁失败");
+        await invoke("lock_vault").catch(() => undefined);
+      }
       vaultUnlockPassword = "";
-      await invoke("lock_vault").catch(() => undefined);
     } finally {
       vaultUnlockBusy = false;
     }
@@ -1341,6 +1408,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
         });
         if (!path || Array.isArray(path)) return;
         recoveryFileContent = await readTextFile(path);
+        if (!recoveryFileContent.trim()) throw new Error("恢复文件为空");
         recoveryFileName = fileNameFromPath(path);
         recoveryFileSaved = false;
       } else {
@@ -1355,6 +1423,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
           input.click();
         });
         if (!content) return;
+        if (!content.content.trim()) throw new Error("恢复文件为空");
         recoveryFileContent = content.content;
         recoveryFileName = content.name;
         recoveryFileSaved = false;
@@ -1383,7 +1452,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       vaultUnlockError = "";
       vaultUnlockPassword = "";
       scheduleAutoLock();
-      showStatus("资产库已恢复");
+      showStatus(vaultStorageState === "ready" ? "资产库已恢复" : "恢复文件已保存，请处理资产库读取问题");
       return;
     }
     activeDialog = "settings";
@@ -1397,12 +1466,14 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     if (recoveryBusy || !recoveryInput) return;
     recoveryBusy = true;
     recoveryError = "";
+    let passwordRecovered = false;
     try {
       if (!isTauri()) throw new Error("浏览器预览模式不支持恢复文件");
       recoveryKey = await invoke<string>("recover_vault_password", {
         recoveryFile: recoveryInput,
         newPassword,
       });
+      passwordRecovered = true;
       await vaultStorageController.initialize();
       if (vaultStorageState !== "ready") {
         throw new Error(vaultStorageError || "资产库读取失败");
@@ -1413,10 +1484,23 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       recoveryFileError = "";
       recoveryAcknowledged = false;
     } catch (error) {
-      recoveryKey = "";
-      recoveryFileSaved = false;
-      recoveryError = error instanceof Error ? error.message : String(error ?? "恢复失败");
-      await invoke("lock_vault").catch(() => undefined);
+      if (passwordRecovered) {
+        // Keep the newly generated recovery file visible until the user saves
+        // it, even when the vault still needs an explicit backup recovery or a
+        // retry before the workspace can open.
+        vaultLocked = true;
+        recoveryError = "";
+        recoveryFileSaved = false;
+        recoveryAcknowledged = false;
+        recoveryFileError = error instanceof Error
+          ? `主密码已恢复，但资产库暂时无法读取：${error.message}`
+          : "主密码已恢复，但资产库暂时无法读取，请先保存恢复文件";
+      } else {
+        recoveryKey = "";
+        recoveryFileSaved = false;
+        recoveryError = error instanceof Error ? error.message : String(error ?? "恢复失败");
+        await invoke("lock_vault").catch(() => undefined);
+      }
     } finally {
       recoveryBusy = false;
     }
@@ -1435,7 +1519,9 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       ...appSettings,
       interface: {
         ...appSettings.interface,
-        autoLockMinutes: value ? Math.max(15, appSettings.interface.autoLockMinutes) : 0,
+        autoLockMinutes: value
+          ? appSettings.interface.autoLockMinutes > 0 ? appSettings.interface.autoLockMinutes : 15
+          : 0,
       },
     });
     scheduleAutoLock();
@@ -1467,7 +1553,10 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     }
     if (autostartUpdating) return;
     autostartUpdating = true;
+    const previousSettings = appSettings;
+    let previousAutostart: boolean | null = null;
     try {
+      previousAutostart = await isAutostartEnabled();
       if (value) await enableAutostart();
       else await disableAutostart();
       const enabled = await isAutostartEnabled();
@@ -1480,6 +1569,21 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       autostartAvailable = true;
       showStatus(enabled ? "已开启开机自启" : "已关闭开机自启");
     } catch (error) {
+      appSettings = previousSettings;
+      applyAppSettings(appSettings);
+      try {
+        await persistAppSettings();
+      } catch {
+        // Keep the original failure visible; the next startup will re-read the file.
+      }
+      if (previousAutostart !== null) {
+        try {
+          if (previousAutostart) await enableAutostart();
+          else await disableAutostart();
+        } catch {
+          // Keep the original failure visible if the platform refuses rollback.
+        }
+      }
       showStatus(`开机自启设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
     } finally {
       autostartUpdating = false;
@@ -1571,11 +1675,17 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   }
 
   async function resetSettings() {
+    const previousSettings = appSettings;
+    let previousAutostart = false;
+    let defaultsApplied = false;
     try {
       if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
       settingsSaveTimer = null;
       await settingsSaveQueue;
-      if (isTauri() && autostartAvailable) await disableAutostart();
+      if (isTauri() && autostartAvailable) {
+        previousAutostart = await isAutostartEnabled();
+        if (previousAutostart) await disableAutostart();
+      }
       await resetAppSettings();
       const defaults = createDefaultAppSettings();
       appSettings = normalizeAppSettings({
@@ -1584,9 +1694,26 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       });
       applyAppSettings(appSettings);
       await persistAppSettings();
+      defaultsApplied = true;
       scheduleAutoLock();
       showStatus("应用设置已恢复默认值");
     } catch (error) {
+      if (!defaultsApplied) {
+        appSettings = previousSettings;
+        applyAppSettings(appSettings);
+        try {
+          await persistAppSettings();
+        } catch {
+          // Keep the original failure visible; the next startup will re-read the file.
+        }
+        if (isTauri() && autostartAvailable && previousAutostart) {
+          try {
+            await enableAutostart();
+          } catch {
+            // The original setting is best-effort when the platform refuses rollback.
+          }
+        }
+      }
       showStatus(`恢复设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
     }
   }
@@ -1962,7 +2089,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     importMode: ConfigImportMode;
   };
 
-  const confirmationHandlers: Partial<Record<ConfirmationAction, (context: ConfirmationContext) => void | Promise<void>>> = {
+  const confirmationHandlers: Partial<Record<ConfirmationAction, (context: ConfirmationContext) => void | boolean | Promise<void | boolean>>> = {
     "delete-device-type": async ({ confirmation }) => {
       await deleteDeviceType(confirmation);
     },
@@ -1971,7 +2098,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     },
     "import-config": async ({ importedConfig, configFormat, importMode }) => {
       if (!importedConfig) throw new Error("待导入配置已失效，请重新选择文件");
-      await applyImportedConfig(importedConfig, configFormat, importMode);
+      return applyImportedConfig(importedConfig, configFormat, importMode);
     },
     "save-device": ({ confirmation }) => executeSaveDevice(confirmation),
     "save-device-type": ({ confirmation }) => executeSaveDeviceType(confirmation),
@@ -1995,16 +2122,36 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       importMode: importConfigMode,
     };
     pendingConfirmation = null;
-    pendingImportedConfig = null;
     try {
-      if (await accountPasswordController.executeConfirmation(confirmation)) return;
+      if (await accountPasswordController.executeConfirmation(confirmation)) {
+        pendingImportedConfig = null;
+        return;
+      }
       const handler = confirmationHandlers[confirmation.action];
       if (!handler) {
+        pendingImportedConfig = null;
         showStatus("这个操作暂时无法执行", 5000);
         return;
       }
-      await handler(context);
+      const result = await handler(context);
+      if (confirmation.action === "import-config" && result === false) {
+        pendingImportedConfig = context.importedConfig;
+        pendingConfirmation = confirmation;
+        return;
+      }
+      pendingImportedConfig = null;
+      if (confirmation.action === "import-config" && dataDialogReturnToSettings) {
+        dataDialogReturnToSettings = false;
+        settingsActiveSection = "data";
+        activeDialog = "settings";
+      }
     } catch (error) {
+      if (confirmation.action === "import-config") {
+        pendingImportedConfig = context.importedConfig;
+        pendingConfirmation = confirmation;
+      } else {
+        pendingImportedConfig = null;
+      }
       const reason = error instanceof Error ? error.message : String(error ?? "");
       showStatus(reason ? `操作失败：${reason}` : "操作失败：发生未知错误", 7000);
     }
@@ -2017,9 +2164,9 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
   async function exportConfig(format: ConfigFormat = exportConfigFormat) {
     const returnToSettings = dataDialogReturnToSettings;
-    dataDialogReturnToSettings = false;
     await configTransferController.exportConfig(format);
     if (returnToSettings && activeDialog === null) {
+      dataDialogReturnToSettings = false;
       settingsActiveSection = "data";
       activeDialog = "settings";
     }
@@ -2038,12 +2185,14 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
   async function applyImportedConfig(config: ConfigData, format: ConfigFormat, mode: ConfigImportMode) {
     const returnToSettings = dataDialogReturnToSettings;
+    const applied = await configTransferController.applyImportedConfig(config, format, mode);
+    if (!applied) return false;
     dataDialogReturnToSettings = false;
-    await configTransferController.applyImportedConfig(config, format, mode);
     if (returnToSettings && activeDialog === null) {
       settingsActiveSection = "data";
       activeDialog = "settings";
     }
+    return true;
   }
 
   async function selectConfigFileFromBrowser(event: Event) {
@@ -2386,10 +2535,12 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     busy={vaultUnlockBusy}
     unlock={unlockVault}
     recover={recoverVaultPassword}
+    chooseRecoveryFile={chooseRecoveryFile}
     recoveryBusy={recoveryBusy}
     recoveryError={recoveryError}
     recoveryResultFile={recoveryKey}
     bind:recoveryResultAcknowledged={recoveryAcknowledged}
+    recoveryFileContent={recoveryFileContent}
     {recoveryFileName}
     {recoveryFileSaved}
     {recoveryFileBusy}

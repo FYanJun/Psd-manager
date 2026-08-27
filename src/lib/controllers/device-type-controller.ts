@@ -306,10 +306,12 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     let items = state.items;
     const updatedAt = originalLabel ? formatDateTime(new Date()) : "";
     if (originalLabel) {
-      customDeviceTypes = [
-        ...customDeviceTypes.filter((type) => type.uuid !== originalUuid),
-        nextMeta,
-      ];
+      const originalIndex = customDeviceTypes.findIndex((type) => type.uuid === originalUuid);
+      if (originalIndex < 0) {
+        port.showStatus("保存失败：待修改的设备类型已不存在", 5000);
+        return;
+      }
+      customDeviceTypes = customDeviceTypes.map((type, index) => index === originalIndex ? nextMeta : type);
       items = items.map((item) =>
         item.deviceTypeUuid === originalUuid
           ? {
@@ -328,9 +330,14 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       customDeviceTypes = [...customDeviceTypes, nextMeta];
     }
 
-    port.write({ items, customDeviceTypes });
-    port.pushNavigationState();
-    port.write({ selectedDeviceType: label });
+    const nextSelectedDeviceType = originalLabel
+      ? state.selectedDeviceType === originalLabel ? label : state.selectedDeviceType
+      : label;
+    port.write({
+      items,
+      customDeviceTypes,
+      selectedDeviceType: nextSelectedDeviceType,
+    });
     port.setActiveDialog(null);
   }
 

@@ -239,15 +239,10 @@ export function createDeviceController(port: DeviceControllerPort) {
             updatedAt,
           }, getAccounts(item))
         : item);
-      const nextSelectedDeviceType = form.deviceType.trim();
-      if (nextSelectedDeviceType !== state.selectedDeviceType || currentItem.id !== state.selectedId || state.searchQuery.trim()) {
-        port.pushNavigationState();
-      }
       port.write({
         items: nextItems,
         selectedId: currentItem.id,
-        selectedDeviceType: nextSelectedDeviceType,
-        searchQuery: "",
+        selectedDeviceType: currentItem.deviceType,
         selectedAccountIds: [],
         activeDialog: null,
       });

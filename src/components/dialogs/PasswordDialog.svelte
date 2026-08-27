@@ -40,5 +40,5 @@
 </div>
 <footer class="modal-actions">
   <button class="secondary-button" on:click={() => closeOverlays()}>取消</button>
-  <button class="primary-button" disabled={!passwordForm.password.trim()} on:click={() => savePasswordUpdate()}>保存修改</button>
+  <button class="primary-button" disabled={!passwordForm.password} on:click={() => savePasswordUpdate()}>保存修改</button>
 </footer>

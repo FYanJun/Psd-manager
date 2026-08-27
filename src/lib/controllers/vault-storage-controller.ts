@@ -26,7 +26,10 @@ type VaultStoragePort = {
   clampLayout(): void;
   showStatus(message: string, duration?: number): void;
   persistAppSettings(): Promise<void>;
+  captureWindowBounds(): Promise<void>;
   isLockEnabled(): boolean;
+  isLocked(): boolean;
+  hasPendingRecoveryFile(): boolean;
   lock(): Promise<void>;
   writeViewState(state: VaultStorageViewState): void;
 };
@@ -54,8 +57,11 @@ export function createVaultStorageController(port: VaultStoragePort) {
   let saveWaiters: VaultSaveWaiter[] = [];
   let closeInProgress = false;
   let exitInProgress = false;
-  let removeCloseRequestedListener: (() => void) | null = null;
+  let removeNativeCloseRequestedListener: (() => void) | null = null;
+  let removeNativeWindowCloseRequestedListener: (() => void) | null = null;
+  let removeNativeExitRequestedListener: (() => void) | null = null;
   let removeTrayExitListener: (() => void) | null = null;
+  let closeProtectionPromise: Promise<void> | null = null;
   let destroyed = false;
 
   function publish() {
@@ -305,75 +311,147 @@ export function createVaultStorageController(port: VaultStoragePort) {
     publish();
   }
 
+  async function handleCloseRequested(appWindow: ReturnType<typeof getCurrentWindow>) {
+    if (exitInProgress || closeInProgress) return;
+    closeInProgress = true;
+    let lockAttempted = false;
+    try {
+      if (storageState === "load-error") {
+        throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
+      }
+      if (port.hasPendingRecoveryFile()) {
+        throw new Error("请先保存启动密码恢复文件，再关闭应用");
+      }
+      if (storageState === "save-error") {
+        throw new Error(storageError || "资产库尚未安全保存，请先重试保存");
+      }
+      if (storageState === "loading" && !port.isLocked()) {
+        throw new Error("资产库正在读取，请稍后再关闭");
+      }
+      if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+      await port.captureWindowBounds();
+      await port.persistAppSettings();
+      if (port.isLockEnabled()) {
+        lockAttempted = true;
+        await port.lock();
+      }
+      await appWindow.hide();
+    } catch (error) {
+      // Keep the window visible whenever the save or lock sequence fails so the
+      // error remains actionable and the user can retry immediately.
+      await appWindow.show().catch(() => undefined);
+      const reason = error instanceof Error ? error.message : String(error ?? "");
+      if (lockAttempted) {
+        port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000);
+      } else {
+        port.showStatus(reason ? `保存失败，窗口保持打开：${reason}` : "保存失败，窗口保持打开", 7000);
+      }
+    } finally {
+      closeInProgress = false;
+    }
+  }
+
   function mountCloseProtection() {
-    if (!isTauri()) return;
+    if (!isTauri()) return Promise.resolve();
+    if (closeProtectionPromise) return closeProtectionPromise;
+
     const appWindow = getCurrentWindow();
-    void listen("tray-exit-requested", () => {
-      if (exitInProgress || closeInProgress) return;
-      exitInProgress = true;
-      void (async () => {
-        try {
-          if (storageState === "save-error") {
-            throw new Error("资产库尚未安全保存，请先重试保存");
-          }
-          if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
-          if (port.isLockEnabled()) await port.lock();
-          await port.persistAppSettings();
-          // The Rust command exits the application, rather than destroying only
-          // the main window. A rejected invoke can happen when the process exits
-          // before the IPC response is delivered, so it is intentionally ignored.
-          await invoke("exit_application").catch(() => undefined);
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : String(error ?? "");
-          port.showStatus(reason || "资产库尚未安全保存，请先重试保存", 7000);
-          exitInProgress = false;
-        }
-      })();
-    }).then((removeListener) => {
-      if (destroyed) removeListener();
-      else removeTrayExitListener = removeListener;
-    });
-    void appWindow.onCloseRequested(async (event) => {
-      if (exitInProgress) return;
-      if (closeInProgress) {
-        event.preventDefault();
+    // The native Tauri window event is the single close entry point. Rust
+    // already prevents the default close before emitting its compatibility
+    // event. Keep a webview-level guard as well so packaged Windows builds
+    // cannot destroy the window before the save/lock/hide flow starts.
+    closeProtectionPromise = (async () => {
+      const registrations = await Promise.allSettled([
+        appWindow.onCloseRequested((event) => {
+          event.preventDefault();
+          void handleCloseRequested(appWindow);
+        }),
+        // Rust prevents the native close immediately and emits this event as a
+        // compatibility path for packaged environments where the webview-level
+        // close-request listener is not delivered reliably.
+        listen("window-close-requested", () => {
+          void handleCloseRequested(appWindow);
+        }),
+        listen("window-exit-requested", () => {
+          void handleCloseRequested(appWindow);
+        }),
+        listen("tray-exit-requested", () => {
+          if (exitInProgress || closeInProgress) return;
+          exitInProgress = true;
+          void (async () => {
+            let lockAttempted = false;
+            try {
+              if (storageState === "load-error") {
+                throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
+              }
+              if (port.hasPendingRecoveryFile()) {
+                throw new Error("请先保存启动密码恢复文件，再关闭应用");
+              }
+              if (storageState === "save-error") {
+                throw new Error(storageError || "资产库尚未安全保存，请先重试保存");
+              }
+              if (storageState === "loading" && !port.isLocked()) {
+                throw new Error("资产库正在读取，请稍后再关闭");
+              }
+              if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+              await port.captureWindowBounds();
+              await port.persistAppSettings();
+              if (port.isLockEnabled()) {
+                lockAttempted = true;
+                await port.lock();
+              }
+              // The Rust command exits the application, rather than destroying only
+              // the main window. A rejected invoke can happen when the process exits
+              // before the IPC response is delivered, so it is intentionally ignored.
+              await invoke("exit_application").catch(() => undefined);
+            } catch (error) {
+              await appWindow.show().catch(() => undefined);
+              const reason = error instanceof Error ? error.message : String(error ?? "");
+              const prefix = lockAttempted ? "锁定失败" : "关闭失败";
+              port.showStatus(reason ? `${prefix}：${reason}` : `${prefix}：资产库尚未安全保存，请先重试保存`, 7000);
+              exitInProgress = false;
+            }
+          })();
+        }),
+      ]);
+      const removeListeners = registrations
+        .filter((result): result is PromiseFulfilledResult<() => void> => result.status === "fulfilled")
+        .map((result) => result.value);
+      const registrationError = registrations.find((result): result is PromiseRejectedResult => result.status === "rejected");
+      if (registrationError) {
+        removeListeners.forEach((removeListener) => removeListener());
+        throw registrationError.reason;
+      }
+      if (destroyed) {
+        removeListeners.forEach((removeListener) => removeListener());
         return;
       }
-      event.preventDefault();
-      closeInProgress = true;
-      try {
-        if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
-        if (port.isLockEnabled()) await port.lock();
-        await appWindow.hide();
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error ?? "");
-        if (port.isLockEnabled()) {
-          port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000);
-        } else {
-          port.showStatus(reason ? `保存失败，窗口已隐藏：${reason}` : "窗口已隐藏，资产库尚未安全保存", 7000);
-          try {
-            await appWindow.hide();
-          } catch {
-            // The close request remains prevented; keep the process alive if hiding fails.
-          }
-        }
-      } finally {
-        closeInProgress = false;
-      }
-    }).then((removeListener) => {
-      if (destroyed) removeListener();
-      else removeCloseRequestedListener = removeListener;
+      [
+        removeNativeCloseRequestedListener,
+        removeNativeWindowCloseRequestedListener,
+        removeNativeExitRequestedListener,
+        removeTrayExitListener,
+      ] = removeListeners;
+    })().catch((error) => {
+      closeProtectionPromise = null;
+      port.showStatus(`窗口关闭保护初始化失败：${error instanceof Error ? error.message : String(error ?? "未知错误")}`, 7000);
     });
+    return closeProtectionPromise;
   }
 
   function destroy() {
     destroyed = true;
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = null;
-    removeCloseRequestedListener?.();
-    removeCloseRequestedListener = null;
+    removeNativeCloseRequestedListener?.();
+    removeNativeCloseRequestedListener = null;
+    removeNativeWindowCloseRequestedListener?.();
+    removeNativeWindowCloseRequestedListener = null;
+    removeNativeExitRequestedListener?.();
+    removeNativeExitRequestedListener = null;
     removeTrayExitListener?.();
     removeTrayExitListener = null;
+    closeProtectionPromise = null;
   }
 
   publish();

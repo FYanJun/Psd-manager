@@ -142,5 +142,5 @@
 </div>
 <footer class="modal-actions">
   <button class="secondary-button" on:click={() => closeOverlays()}>取消</button>
-  <button class="primary-button" disabled={!bulkPasswordForm.password.trim() || bulkPasswordSelectedMatches.length === 0} on:click={() => saveBulkPasswordUpdate()}>确认更新</button>
+  <button class="primary-button" disabled={!bulkPasswordForm.password || bulkPasswordSelectedMatches.length === 0} on:click={() => saveBulkPasswordUpdate()}>确认更新</button>
 </footer>

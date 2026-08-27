@@ -10,6 +10,7 @@
   export let chooseRecoveryFile: () => void;
   export let recoveryBusy = false;
   export let recoveryError = "";
+  export let recoveryFileContent = "";
   export let recoveryResultFile = "";
   export let recoveryResultAcknowledged = false;
   export let recoveryFileName = "";
@@ -25,7 +26,10 @@
   let recoveryNewPassword = "";
   let recoveryConfirmPassword = "";
   $: recoveryMismatch = recoveryNewPassword.length > 0 && recoveryConfirmPassword.length > 0 && recoveryNewPassword !== recoveryConfirmPassword;
-  $: canRecover = !recoveryBusy && (manualRecoveryMode ? manualRecoveryKey.length > 0 : recoveryFileName.length > 0) && recoveryNewPassword.length >= 8 && recoveryConfirmPassword.length >= 8 && !recoveryMismatch;
+  $: hasRecoverySource = manualRecoveryMode
+    ? manualRecoveryKey.trim().length > 0
+    : recoveryFileName.trim().length > 0 && recoveryFileContent.trim().length > 0;
+  $: canRecover = !recoveryBusy && hasRecoverySource && recoveryNewPassword.length >= 8 && recoveryConfirmPassword.length >= 8 && !recoveryMismatch;
 </script>
 
 <div class="vault-lock-screen">

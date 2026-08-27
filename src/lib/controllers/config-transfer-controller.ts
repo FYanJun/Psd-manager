@@ -76,7 +76,6 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     const filename = createConfigFilename(format);
     const formatLabel = format.toUpperCase();
     port.setActivePopover(null);
-    port.setActiveDialog(null);
 
     if (isTauri()) {
       try {
@@ -90,6 +89,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
           return;
         }
         await writeTextFile(path, payload);
+        port.setActiveDialog(null);
         port.showStatus(`${formatLabel} 配置已导出`);
       } catch (error) {
         port.showStatus(formatFileError("导出", error), 5000);
@@ -104,6 +104,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
+    port.setActiveDialog(null);
     port.showStatus(`${formatLabel} 配置已导出`);
   }
 
@@ -231,12 +232,12 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     const hasChanges = Object.values(diff).some((count) => count > 0);
     if (mode === "add-missing" && !hasChanges) {
       port.showStatus("没有可新增的数据");
-      return;
+      return false;
     }
 
     const modeLabel = mode === "replace" ? "全部覆盖" : "仅新增";
     const snapshot = await port.createSafetySnapshot(`${modeLabel}导入 ${format.toUpperCase()} 配置前`);
-    if (!snapshot) return;
+    if (!snapshot) return false;
 
     const normalized = ensureDeviceTypeMetadata(nextConfig.items, nextConfig.customDeviceTypes);
     const nextItems = normalized.items;
@@ -246,6 +247,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     });
     if (mode === "replace") port.resetWorkspaceAfterReplace(nextItems);
     port.offerSnapshotUndo(snapshot.id, `${format.toUpperCase()} 配置已按“${modeLabel}”导入`);
+    return true;
   }
 
   async function selectConfigFileFromBrowser(event: Event) {

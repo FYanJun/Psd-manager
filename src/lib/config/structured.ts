@@ -4,7 +4,7 @@ import { getAccounts, iconClassForColor } from "../vault";
 import { readString } from "../utils";
 import { buildDeviceTypeGroups } from "./export-utils";
 import { normalizeVaultIdentityData } from "./normalization";
-import { assertStructuredConfigIdentities } from "./validation";
+import { assertAllowedFields, assertStructuredConfigIdentities } from "./validation";
 import { ConfigImportError, stripUtf8Bom } from "./shared";
 
 function readConnectionAddress(record: Record<string, unknown>) {
@@ -83,10 +83,11 @@ export function parseJsonConfigContent(content: string): ConfigData {
 export function isStructuredConfigPayload(parsed: unknown): parsed is Record<string, unknown> {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
   const record = parsed as Record<string, unknown>;
-  return Array.isArray(record["设备类型"]) && !("元信息" in record);
+  return Array.isArray(record["设备类型"]);
 }
 
 export function parseStructuredConfigPayload(parsed: Record<string, unknown>): ConfigData {
+  assertAllowedFields(parsed, "配置", ["设备类型"]);
   const rawTypes = Array.isArray(parsed["设备类型"]) ? parsed["设备类型"] : [];
   assertStructuredConfigIdentities(rawTypes);
   const rawItems = rawTypes.flatMap((type, typeIndex) => {

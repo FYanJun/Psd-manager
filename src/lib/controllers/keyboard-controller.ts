@@ -24,6 +24,7 @@ type KeyboardPatch = Partial<Pick<KeyboardState,
 
 type KeyboardActions = {
   closeGenerator(): void;
+  closeOverlays(): void;
   cancelPendingConfirmation(): void;
   clearSearch(): void;
   confirmPendingAction(): void;
@@ -57,7 +58,7 @@ export function createKeyboardController(port: KeyboardControllerPort) {
     if (state.openTypePicker) port.write({ openTypePicker: null });
     else if (state.bulkUsernameSuggestionsOpen) port.write({ bulkUsernameSuggestionsOpen: false });
     else if (state.pendingConfirmation) port.actions.cancelPendingConfirmation();
-    else if (state.activeDialog) port.write({ activeDialog: null });
+    else if (state.activeDialog) port.actions.closeOverlays();
     else if (state.generatorPanelOpen) port.actions.closeGenerator();
     else if (state.activePopover) port.write({ activePopover: null });
     else if (state.searchQuery.trim()) port.actions.clearSearch();

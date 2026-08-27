@@ -11,7 +11,10 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::Command,
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
 };
 use tauri::{AppHandle, Manager};
 
@@ -42,6 +45,9 @@ const VAULT_SCHEMA_VERSION: u64 = 2;
 const BACKUP_RECOVERY_REQUIRED: &str = "BACKUP_RECOVERY_REQUIRED";
 static VAULT_IO_LOCK: Mutex<()> = Mutex::new(());
 static APP_SETTINGS_IO_LOCK: Mutex<()> = Mutex::new(());
+
+#[derive(Default)]
+struct ExitIntent(AtomicBool);
 const PASSWORD_LOCK_VERSION: u8 = 1;
 const PASSWORD_SALT_LENGTH: usize = 16;
 const PASSWORD_NONCE_LENGTH: usize = 12;
@@ -57,6 +63,7 @@ const PASSWORD_KDF_ITERATIONS: u32 = 3;
 const PASSWORD_KDF_PARALLELISM: u32 = 1;
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct EncryptedVaultFile {
     version: u8,
     nonce: Vec<u8>,
@@ -64,6 +71,7 @@ struct EncryptedVaultFile {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct PasswordKdfParameters {
     memory_kib: u32,
@@ -72,6 +80,7 @@ struct PasswordKdfParameters {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct PasswordLockFile {
     version: u8,
@@ -86,6 +95,7 @@ struct PasswordLockFile {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct RecoveryFilePayload {
     format: String,
@@ -189,20 +199,189 @@ fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(ensure_vault_directory(app)?.join(APP_SETTINGS_FILE_NAME))
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppSettingsFile {
+    schema_version: u64,
+    interface: AppInterfaceSettings,
+    workspace: AppWorkspaceSettings,
+    password_generator: AppGeneratorSettings,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppInterfaceSettings {
+    tooltip_enabled: bool,
+    theme: String,
+    density: String,
+    font_size: String,
+    start_on_boot: bool,
+    startup_lock: bool,
+    auto_lock_minutes: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppWorkspaceSettings {
+    remember_layout: bool,
+    pane_layout: AppPaneLayout,
+    device_sort_mode: String,
+    device_type_sort_mode: String,
+    remember_last_view: bool,
+    remember_window_bounds: bool,
+    window_bounds: Option<AppWindowBounds>,
+    last_view: AppLastView,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppPaneLayout {
+    sidebar_ratio: f64,
+    list_ratio: f64,
+    generator_ratio: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppWindowBounds {
+    x: i64,
+    y: i64,
+    width: u64,
+    height: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppLastView {
+    device_type: String,
+    search_query: String,
+    sort_mode: String,
+    selected_device_uuid: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct AppGeneratorSettings {
+    length: u64,
+    use_upper: bool,
+    use_lower: bool,
+    use_numbers: bool,
+    use_symbols: bool,
+    exclude_similar: bool,
+    prevent_repeats: bool,
+    minimum_numbers: u64,
+    minimum_symbols: u64,
+    allowed_symbols: String,
+    excluded_characters: String,
+}
+
+fn is_valid_uuid(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() == 36
+        && [8, 13, 18, 23].iter().all(|index| bytes[*index] == b'-')
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| [8, 13, 18, 23].contains(&index) || byte.is_ascii_hexdigit())
+        && matches!(bytes[14], b'1'..=b'8')
+        && matches!(bytes[19].to_ascii_lowercase(), b'8' | b'9' | b'a' | b'b')
+}
+
+fn validate_setting_enum(value: &str, field: &str, allowed: &[&str]) -> Result<(), String> {
+    if allowed.contains(&value) {
+        Ok(())
+    } else {
+        Err(format!("应用设置字段 {field} 的值不受支持"))
+    }
+}
+
 fn validate_app_settings_content(content: &str) -> Result<serde_json::Value, String> {
-    let value: serde_json::Value =
-        serde_json::from_str(content).map_err(|error| format!("应用设置不是合法 JSON：{error}"))?;
-    let object = value
-        .as_object()
-        .ok_or_else(|| "应用设置必须是对象".to_string())?;
-    let schema_version = object
-        .get("schemaVersion")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| "应用设置缺少 schemaVersion".to_string())?;
-    if schema_version != 2 {
+    let settings: AppSettingsFile =
+        serde_json::from_str(content).map_err(|error| format!("应用设置格式不正确：{error}"))?;
+    if settings.schema_version != 2 {
         return Err("不支持的应用设置版本，当前仅支持 2".to_string());
     }
-    Ok(value)
+    validate_setting_enum(
+        &settings.interface.theme,
+        "interface.theme",
+        &["system", "light", "dark"],
+    )?;
+    validate_setting_enum(
+        &settings.interface.density,
+        "interface.density",
+        &["standard", "compact"],
+    )?;
+    validate_setting_enum(
+        &settings.interface.font_size,
+        "interface.fontSize",
+        &["small", "standard", "large"],
+    )?;
+    if settings.interface.auto_lock_minutes > 10_080 {
+        return Err("应用设置字段 interface.autoLockMinutes 超出范围".to_string());
+    }
+    validate_setting_enum(
+        &settings.workspace.device_sort_mode,
+        "workspace.deviceSortMode",
+        &["updatedDesc", "nameAsc", "typeAsc"],
+    )?;
+    validate_setting_enum(
+        &settings.workspace.device_type_sort_mode,
+        "workspace.deviceTypeSortMode",
+        &["default", "nameAsc", "countDesc"],
+    )?;
+    validate_setting_enum(
+        &settings.workspace.last_view.sort_mode,
+        "workspace.lastView.sortMode",
+        &["updatedDesc", "nameAsc", "typeAsc"],
+    )?;
+    if settings.workspace.last_view.device_type.trim().is_empty()
+        || (!settings.workspace.last_view.selected_device_uuid.is_empty()
+            && !is_valid_uuid(&settings.workspace.last_view.selected_device_uuid))
+    {
+        return Err("应用设置中的最近视图数据不正确".to_string());
+    }
+    let layout = &settings.workspace.pane_layout;
+    for (field, value, minimum, maximum) in [
+        ("sidebarRatio", layout.sidebar_ratio, 0.12, 0.20),
+        ("listRatio", layout.list_ratio, 0.18, 0.34),
+        ("generatorRatio", layout.generator_ratio, 0.24, 0.48),
+    ] {
+        if !value.is_finite() || value < minimum || value > maximum {
+            return Err(format!(
+                "应用设置字段 workspace.paneLayout.{field} 超出范围"
+            ));
+        }
+    }
+    if let Some(bounds) = &settings.workspace.window_bounds {
+        if bounds.width < 1024
+            || bounds.width > 10_000
+            || bounds.height < 720
+            || bounds.height > 10_000
+        {
+            return Err("应用设置中的窗口尺寸超出范围".to_string());
+        }
+        if bounds.x < -100_000 || bounds.x > 100_000 || bounds.y < -100_000 || bounds.y > 100_000 {
+            return Err("应用设置中的窗口位置超出范围".to_string());
+        }
+    }
+    let generator = &settings.password_generator;
+    if !(3..=24).contains(&generator.length)
+        || generator.minimum_numbers > generator.length
+        || generator.minimum_symbols > generator.length
+        || generator.minimum_numbers + generator.minimum_symbols > generator.length
+        || generator.allowed_symbols.chars().count() > 128
+        || generator.excluded_characters.chars().count() > 128
+    {
+        return Err("应用设置中的密码生成器参数不正确".to_string());
+    }
+    serde_json::to_value(settings).map_err(|error| format!("无法编码应用设置：{error}"))
 }
 
 fn load_app_settings_sync(app: &AppHandle) -> Result<Option<String>, String> {
@@ -245,19 +424,9 @@ fn save_app_settings_sync(app: &AppHandle, content: String) -> Result<String, St
     file.sync_all()
         .map_err(|error| format!("无法同步应用设置：{error}"))?;
     drop(file);
-    if let Err(rename_error) = fs::rename(&temporary_path, &path) {
-        if path.exists() {
-            fs::remove_file(&path).map_err(|error| {
-                format!("无法替换应用设置：{rename_error}；无法移除旧设置：{error}")
-            })?;
-            fs::rename(&temporary_path, &path)
-                .map_err(|error| format!("无法替换应用设置：{error}"))?;
-        } else {
-            return Err(format!("无法替换应用设置：{rename_error}"));
-        }
-    }
+    replace_file_with_rollback(&temporary_path, &path, "应用设置")?;
     restrict_private_file(&path, "应用设置")?;
-    sync_parent_directory(&path)?;
+    let _ = sync_parent_directory(&path);
     Ok(normalized)
 }
 
@@ -401,19 +570,84 @@ fn write_private_bytes(path: &Path, bytes: &[u8], label: &str) -> Result<(), Str
     file.sync_all()
         .map_err(|error| format!("无法同步{label}：{error}"))?;
     drop(file);
-    if let Err(rename_error) = fs::rename(&temporary_path, path) {
-        if path.exists() {
-            fs::remove_file(path).map_err(|error| {
-                format!("无法替换{label}：{rename_error}；无法移除旧文件：{error}")
-            })?;
-            fs::rename(&temporary_path, path)
-                .map_err(|error| format!("无法替换{label}：{error}"))?;
-        } else {
-            return Err(format!("无法替换{label}：{rename_error}"));
+    replace_file_with_rollback(&temporary_path, path, label)?;
+    restrict_private_file(path, label)?;
+    // The file itself was synced before replacement. Directory fsync is
+    // best-effort so a platform refusal cannot make callers believe a password
+    // change failed after the lock file was updated.
+    let _ = sync_parent_directory(path);
+    Ok(())
+}
+
+fn replace_file_with_rollback(
+    temporary_path: &Path,
+    target_path: &Path,
+    label: &str,
+) -> Result<(), String> {
+    cleanup_replace_backups(target_path, label)?;
+    let first_error = match fs::rename(temporary_path, target_path) {
+        Ok(()) => return Ok(()),
+        Err(error) => error,
+    };
+
+    if !target_path.exists() {
+        return Err(format!("无法替换{label}：{first_error}"));
+    }
+
+    // Windows does not consistently replace an existing file with rename.
+    // Move the old file aside first so a failed second rename can restore it.
+    let file_name = target_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("无法替换{label}：目标文件名不正确"))?;
+    let rollback_path = target_path.with_file_name(format!(
+        ".{file_name}.replace-backup-{}",
+        std::process::id()
+    ));
+    fs::rename(target_path, &rollback_path)
+        .map_err(|error| format!("无法替换{label}：无法暂存旧文件：{error}"))?;
+
+    match fs::rename(temporary_path, target_path) {
+        Ok(()) => {
+            // The target has already been replaced successfully. A stale rollback
+            // file is recoverable and must not make callers report a false failure
+            // (especially for password-lock changes).
+            let _ = fs::remove_file(&rollback_path);
+            Ok(())
+        }
+        Err(rename_error) => {
+            let rollback_error = fs::rename(&rollback_path, target_path).err();
+            let _ = fs::remove_file(temporary_path);
+            match rollback_error {
+                Some(error) => Err(format!(
+                    "无法替换{label}：{rename_error}；回滚旧文件失败：{error}"
+                )),
+                None => Err(format!("无法替换{label}：{rename_error}")),
+            }
         }
     }
-    restrict_private_file(path, label)?;
-    sync_parent_directory(path)?;
+}
+
+fn cleanup_replace_backups(target_path: &Path, label: &str) -> Result<(), String> {
+    let parent = target_path
+        .parent()
+        .ok_or_else(|| format!("无法替换{label}：目标文件路径不正确"))?;
+    let file_name = target_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("无法替换{label}：目标文件名不正确"))?;
+    let prefix = format!(".{file_name}.replace-backup-");
+    let entries = fs::read_dir(parent)
+        .map_err(|error| format!("无法替换{label}：无法检查旧替换备份：{error}"))?;
+    for entry in entries {
+        let entry =
+            entry.map_err(|error| format!("无法替换{label}：无法读取旧替换备份：{error}"))?;
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with(&prefix) {
+            fs::remove_file(entry.path())
+                .map_err(|error| format!("无法替换{label}：无法清理旧替换备份：{error}"))?;
+        }
+    }
     Ok(())
 }
 
@@ -619,6 +853,19 @@ fn write_password_lock_file(app: &AppHandle, lock_file: &PasswordLockFile) -> Re
     write_private_bytes(&path, &encoded, "启动密码配置")
 }
 
+fn restore_private_file(path: &Path, previous: Option<&[u8]>, label: &str) -> Result<(), String> {
+    match previous {
+        Some(bytes) => write_private_bytes(path, bytes, label),
+        None => {
+            if path.exists() {
+                fs::remove_file(path).map_err(|error| format!("无法清理{label}：{error}"))?;
+                sync_parent_directory(path)?;
+            }
+            Ok(())
+        }
+    }
+}
+
 fn active_vault_key(app: &AppHandle, session: &VaultSession) -> Result<Vec<u8>, String> {
     if read_password_lock_file(app)?.is_some() {
         return session
@@ -730,31 +977,443 @@ fn get_or_create_local_vault_key(app: &AppHandle, vault_exists: bool) -> Result<
     Ok(key)
 }
 
+fn require_object<'a>(
+    value: &'a Value,
+    path: &str,
+) -> Result<&'a serde_json::Map<String, Value>, String> {
+    value.as_object().ok_or_else(|| format!("{path}必须是对象"))
+}
+
+fn reject_unknown_fields(
+    object: &serde_json::Map<String, Value>,
+    path: &str,
+    allowed: &[&str],
+) -> Result<(), String> {
+    if let Some(field) = object
+        .keys()
+        .find(|field| !allowed.contains(&field.as_str()))
+    {
+        return Err(format!("{path}包含当前格式不支持的字段 {field}"));
+    }
+    Ok(())
+}
+
+fn require_value<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<&'a Value, String> {
+    object
+        .get(key)
+        .ok_or_else(|| format!("{path}缺少字段 {key}"))
+}
+
+fn require_string_field(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<String, String> {
+    require_value(object, key, path)?
+        .as_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| format!("{path}.{key}必须是文本"))
+}
+
+fn validate_text_value(
+    value: &str,
+    path: &str,
+    maximum: usize,
+    allow_line_breaks: bool,
+) -> Result<(), String> {
+    if value.chars().count() > maximum {
+        return Err(format!("{path}不能超过 {maximum} 个字符"));
+    }
+    if value.chars().any(|character| {
+        is_invisible_control_character(character)
+            && !(allow_line_breaks && (character == '\n' || character == '\r'))
+    }) {
+        return Err(format!("{path}不能包含不可见控制字符"));
+    }
+    Ok(())
+}
+
+fn is_invisible_control_character(character: char) -> bool {
+    character.is_control()
+        || matches!(
+            character,
+            '\u{200b}'..='\u{200f}'
+                | '\u{202a}'..='\u{202e}'
+                | '\u{2060}'..='\u{206f}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{feff}'
+        )
+}
+
+fn validate_password_value(value: &str, path: &str) -> Result<(), String> {
+    // Passwords already stored in a vault can come from older versions or
+    // another manager, so ordinary Unicode, spaces, and full-width symbols
+    // must remain readable. New password forms enforce their own input rule.
+    validate_text_value(value, path, 1024, false)?;
+    Ok(())
+}
+
+fn require_text_field(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+    maximum: usize,
+    allow_line_breaks: bool,
+) -> Result<String, String> {
+    let value = require_string_field(object, key, path)?;
+    validate_text_value(&value, &format!("{path}.{key}"), maximum, allow_line_breaks)?;
+    Ok(value)
+}
+
+fn require_password_field(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<String, String> {
+    let value = require_string_field(object, key, path)?;
+    validate_password_value(&value, &format!("{path}.{key}"))?;
+    Ok(value)
+}
+
+fn require_connection_address_field(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<String, String> {
+    let value = require_string_field(object, key, path)?;
+    validate_text_value(&value, &format!("{path}.{key}"), 2048, false)?;
+    if value.chars().any(char::is_whitespace) {
+        return Err(format!("{path}.{key}不能包含空白字符"));
+    }
+    Ok(value)
+}
+
+fn require_integer_field(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<u64, String> {
+    let value = require_value(object, key, path)?
+        .as_u64()
+        .ok_or_else(|| format!("{path}.{key}必须是非负整数"))?;
+    if value > 9_007_199_254_740_991 {
+        return Err(format!("{path}.{key}超出安全整数范围"));
+    }
+    Ok(value)
+}
+
+fn require_array_field<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<&'a Vec<Value>, String> {
+    require_value(object, key, path)?
+        .as_array()
+        .ok_or_else(|| format!("{path}.{key}必须是数组"))
+}
+
+fn validate_history_payload(
+    value: &Value,
+    path: &str,
+    used_uuids: &mut std::collections::HashSet<String>,
+) -> Result<(), String> {
+    let entries = value
+        .as_array()
+        .ok_or_else(|| format!("{path}必须是数组"))?;
+    let mut ids = std::collections::HashSet::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let entry_path = format!("{path}[{index}]");
+        let object = require_object(entry, &entry_path)?;
+        reject_unknown_fields(
+            object,
+            &entry_path,
+            &[
+                "uuid",
+                "id",
+                "password",
+                "newPassword",
+                "changedAt",
+                "reason",
+            ],
+        )?;
+        let uuid = require_string_field(object, "uuid", &entry_path)?.to_lowercase();
+        if !is_valid_uuid(&uuid) || !used_uuids.insert(uuid) {
+            return Err(format!("{entry_path}.uuid无效或重复"));
+        }
+        let id = require_integer_field(object, "id", &entry_path)?;
+        if id == 0 || !ids.insert(id) {
+            return Err(format!("{entry_path}.id无效或重复"));
+        }
+        let _ = require_password_field(object, "password", &entry_path)?;
+        let _ = require_password_field(object, "newPassword", &entry_path)?;
+        let _ = require_text_field(object, "changedAt", &entry_path, 64, false)?;
+        let _ = require_text_field(object, "reason", &entry_path, 200, false)?;
+    }
+    Ok(())
+}
+
+fn validate_accounts_payload(
+    value: &Value,
+    path: &str,
+    account_uuids: &mut std::collections::HashSet<String>,
+    history_uuids: &mut std::collections::HashSet<String>,
+) -> Result<(), String> {
+    let entries = value
+        .as_array()
+        .ok_or_else(|| format!("{path}必须是数组"))?;
+    let mut ids = std::collections::HashSet::new();
+    let mut usernames = std::collections::HashSet::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let entry_path = format!("{path}[{index}]");
+        let object = require_object(entry, &entry_path)?;
+        reject_unknown_fields(
+            object,
+            &entry_path,
+            &[
+                "uuid",
+                "id",
+                "title",
+                "username",
+                "password",
+                "tag",
+                "notes",
+                "updatedAt",
+                "passwordChangedAt",
+                "history",
+            ],
+        )?;
+        let uuid = require_string_field(object, "uuid", &entry_path)?.to_lowercase();
+        if !is_valid_uuid(&uuid) || !account_uuids.insert(uuid) {
+            return Err(format!("{entry_path}.uuid无效或重复"));
+        }
+        let id = require_integer_field(object, "id", &entry_path)?;
+        if id == 0 || !ids.insert(id) {
+            return Err(format!("{entry_path}.id无效或重复"));
+        }
+        let username = require_text_field(object, "username", &entry_path, 120, false)?
+            .trim()
+            .to_owned();
+        if username.is_empty() || !usernames.insert(username) {
+            return Err(format!("{path}存在空用户名或重复用户名"));
+        }
+        let _ = require_text_field(object, "title", &entry_path, 120, false)?;
+        let _ = require_password_field(object, "password", &entry_path)?;
+        let _ = require_text_field(object, "tag", &entry_path, 40, false)?;
+        let _ = require_text_field(object, "notes", &entry_path, 2000, true)?;
+        let _ = require_text_field(object, "updatedAt", &entry_path, 64, false)?;
+        let _ = require_text_field(object, "passwordChangedAt", &entry_path, 64, false)?;
+        validate_history_payload(
+            require_value(object, "history", &entry_path)?,
+            &format!("{entry_path}.history"),
+            history_uuids,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_device_types_payload(
+    value: &Value,
+    path: &str,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let entries = value
+        .as_array()
+        .ok_or_else(|| format!("{path}必须是数组"))?;
+    let mut labels = std::collections::HashSet::new();
+    let mut uuids = std::collections::HashSet::new();
+    let mut by_label = std::collections::HashMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let entry_path = format!("{path}[{index}]");
+        let object = require_object(entry, &entry_path)?;
+        reject_unknown_fields(object, &entry_path, &["uuid", "label", "iconText", "color"])?;
+        let uuid = require_string_field(object, "uuid", &entry_path)?.to_lowercase();
+        let label = require_text_field(object, "label", &entry_path, 40, false)?
+            .trim()
+            .to_owned();
+        if !is_valid_uuid(&uuid)
+            || !uuids.insert(uuid.clone())
+            || label.is_empty()
+            || !labels.insert(label.clone())
+        {
+            return Err(format!("{entry_path}的 UUID 或名称无效或重复"));
+        }
+        let icon_text = require_text_field(object, "iconText", &entry_path, 2, false)?;
+        if icon_text.trim().is_empty() {
+            return Err(format!("{entry_path}.iconText不能为空"));
+        }
+        let color = require_string_field(object, "color", &entry_path)?.to_lowercase();
+        let valid_named_color =
+            ["blue", "cyan", "rose", "indigo", "sand", "gold", "dark"].contains(&color.as_str());
+        let valid_hex_color = color.len() == 7
+            && color.starts_with('#')
+            && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit);
+        if !valid_named_color && !valid_hex_color {
+            return Err(format!("{entry_path}.color不是有效颜色"));
+        }
+        by_label.insert(label, uuid);
+    }
+    Ok(by_label)
+}
+
+fn validate_items_payload(
+    value: &Value,
+    path: &str,
+    device_types: &std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let entries = value
+        .as_array()
+        .ok_or_else(|| format!("{path}必须是数组"))?;
+    let mut ids = std::collections::HashSet::new();
+    let mut names = std::collections::HashSet::new();
+    let mut device_uuids = std::collections::HashSet::new();
+    let mut account_uuids = std::collections::HashSet::new();
+    let mut history_uuids = std::collections::HashSet::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let entry_path = format!("{path}[{index}]");
+        let object = require_object(entry, &entry_path)?;
+        reject_unknown_fields(
+            object,
+            &entry_path,
+            &[
+                "uuid",
+                "id",
+                "title",
+                "deviceName",
+                "deviceType",
+                "deviceTypeUuid",
+                "assetCode",
+                "location",
+                "username",
+                "password",
+                "ipAddress",
+                "tag",
+                "iconText",
+                "iconClass",
+                "updatedAt",
+                "notes",
+                "history",
+                "accounts",
+            ],
+        )?;
+        let uuid = require_string_field(object, "uuid", &entry_path)?.to_lowercase();
+        let id = require_integer_field(object, "id", &entry_path)?;
+        let device_name = require_text_field(object, "deviceName", &entry_path, 120, false)?
+            .trim()
+            .to_owned();
+        let device_type = require_text_field(object, "deviceType", &entry_path, 40, false)?
+            .trim()
+            .to_owned();
+        if !is_valid_uuid(&uuid)
+            || !device_uuids.insert(uuid)
+            || id == 0
+            || !ids.insert(id)
+            || device_name.is_empty()
+            || device_type.is_empty()
+            || !names.insert(format!("{device_type}\u{0}{device_name}"))
+        {
+            return Err(format!("{entry_path}的 UUID、ID 或名称无效或重复"));
+        }
+        let device_type_uuid =
+            require_string_field(object, "deviceTypeUuid", &entry_path)?.to_lowercase();
+        if !is_valid_uuid(&device_type_uuid)
+            || device_types.get(&device_type) != Some(&device_type_uuid)
+        {
+            return Err(format!("{entry_path}.deviceTypeUuid与设备类型不匹配"));
+        }
+        let _ = require_text_field(object, "title", &entry_path, 120, false)?;
+        let _ = require_text_field(object, "assetCode", &entry_path, 80, false)?;
+        let _ = require_text_field(object, "location", &entry_path, 120, false)?;
+        let _ = require_text_field(object, "username", &entry_path, 120, false)?;
+        let _ = require_password_field(object, "password", &entry_path)?;
+        let _ = require_connection_address_field(object, "ipAddress", &entry_path)?;
+        let _ = require_text_field(object, "tag", &entry_path, 40, false)?;
+        let icon_text = require_text_field(object, "iconText", &entry_path, 2, false)?;
+        if icon_text.trim().is_empty() {
+            return Err(format!("{entry_path}.iconText不能为空"));
+        }
+        let _ = require_text_field(object, "iconClass", &entry_path, 64, false)?;
+        let _ = require_text_field(object, "updatedAt", &entry_path, 64, false)?;
+        let _ = require_text_field(object, "notes", &entry_path, 2000, true)?;
+        // Device history is a denormalized mirror and intentionally has its own UUID scope.
+        let mut device_history_uuids = std::collections::HashSet::new();
+        validate_history_payload(
+            require_value(object, "history", &entry_path)?,
+            &format!("{entry_path}.history"),
+            &mut device_history_uuids,
+        )?;
+        validate_accounts_payload(
+            require_value(object, "accounts", &entry_path)?,
+            &format!("{entry_path}.accounts"),
+            &mut account_uuids,
+            &mut history_uuids,
+        )?;
+    }
+    Ok(())
+}
+
 fn validate_vault_payload(content: &str) -> Result<Value, String> {
     let value: Value =
         serde_json::from_str(content).map_err(|error| format!("资产库内容格式不正确：{error}"))?;
-    let object = value
-        .as_object()
-        .ok_or_else(|| "资产库内容必须是对象".to_string())?;
-    let version = object
-        .get("schemaVersion")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| "资产库内容缺少 schemaVersion".to_string())?;
+    let object = require_object(&value, "资产库")?;
+    reject_unknown_fields(
+        object,
+        "资产库",
+        &[
+            "schemaVersion",
+            "revision",
+            "items",
+            "customDeviceTypes",
+            "snapshots",
+        ],
+    )?;
+    let version = require_integer_field(object, "schemaVersion", "资产库")?;
     if version != VAULT_SCHEMA_VERSION {
         return Err(format!(
             "不支持资产库数据版本 {version}，当前仅支持 {VAULT_SCHEMA_VERSION}"
         ));
     }
-    for key in ["items", "customDeviceTypes"] {
-        if !object.get(key).is_some_and(Value::is_array) {
-            return Err(format!("资产库字段 {key} 必须是数组"));
+    let _ = require_integer_field(object, "revision", "资产库")?;
+    let device_types = validate_device_types_payload(
+        require_value(object, "customDeviceTypes", "资产库")?,
+        "customDeviceTypes",
+    )?;
+    validate_items_payload(
+        require_value(object, "items", "资产库")?,
+        "items",
+        &device_types,
+    )?;
+    let snapshots = require_array_field(object, "snapshots", "资产库")?;
+    if snapshots.len() > 10 {
+        return Err("资产库最多保留 10 个数据快照".to_string());
+    }
+    let mut snapshot_ids = std::collections::HashSet::new();
+    for (index, snapshot) in snapshots.iter().enumerate() {
+        let path = format!("snapshots[{index}]");
+        let snapshot_object = require_object(snapshot, &path)?;
+        reject_unknown_fields(
+            snapshot_object,
+            &path,
+            &["id", "createdAt", "reason", "items", "customDeviceTypes"],
+        )?;
+        let snapshot_id = require_text_field(snapshot_object, "id", &path, 128, false)?;
+        if snapshot_id.is_empty() || !snapshot_ids.insert(snapshot_id) {
+            return Err(format!("{path}.id无效或重复"));
         }
-    }
-    if !object.get("snapshots").is_some_and(Value::is_array) {
-        return Err("资产库字段 snapshots 必须是数组".to_string());
-    }
-    if object.get("revision").and_then(Value::as_u64).is_none() {
-        return Err("资产库字段 revision 必须是非负整数".to_string());
+        let _ = require_text_field(snapshot_object, "createdAt", &path, 64, false)?;
+        let _ = require_text_field(snapshot_object, "reason", &path, 200, false)?;
+        let snapshot_types = validate_device_types_payload(
+            require_value(snapshot_object, "customDeviceTypes", &path)?,
+            &format!("{path}.customDeviceTypes"),
+        )?;
+        validate_items_payload(
+            require_value(snapshot_object, "items", &path)?,
+            &format!("{path}.items"),
+            &snapshot_types,
+        )?;
     }
     Ok(value)
 }
@@ -778,10 +1437,10 @@ fn load_existing_vault(
     key: &[u8],
 ) -> Result<(Option<String>, Option<VaultSource>), String> {
     if vault_path.exists() {
-        match decrypt_vault_file(vault_path, key) {
+        match load_valid_vault_file(vault_path, key) {
             Ok(content) => return Ok((Some(content), Some(VaultSource::Primary))),
             Err(primary_error) if backup_path.exists() => {
-                return decrypt_vault_file(backup_path, key)
+                return load_valid_vault_file(backup_path, key)
                     .map(|content| (Some(content), Some(VaultSource::Backup)))
                     .map_err(|backup_error| {
                         format!(
@@ -793,7 +1452,7 @@ fn load_existing_vault(
         }
     }
     if backup_path.exists() {
-        return decrypt_vault_file(backup_path, key)
+        return load_valid_vault_file(backup_path, key)
             .map(|content| (Some(content), Some(VaultSource::Backup)));
     }
     Ok((None, None))
@@ -840,6 +1499,12 @@ fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
     Ok(content)
 }
 
+fn load_valid_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
+    let content = decrypt_vault_file(path, key)?;
+    validate_vault_payload(&content)?;
+    Ok(content)
+}
+
 fn load_secure_vault_sync(app: &AppHandle) -> Result<Option<String>, String> {
     let _guard = VAULT_IO_LOCK
         .lock()
@@ -881,13 +1546,12 @@ fn save_secure_vault_sync(
     let (vault_path, backup_path) = vault_paths(app)?;
     restrict_existing_vault_files(&vault_path, &backup_path)?;
     let session = app.state::<VaultSession>();
-    let key = if vault_path.exists() || backup_path.exists() {
-        active_vault_key(app, &session)?
-    } else if read_password_lock_file(app)?.is_some() {
-        active_vault_key(app, &session)?
-    } else {
-        get_or_create_local_vault_key(app, false)?
-    };
+    let key =
+        if vault_path.exists() || backup_path.exists() || read_password_lock_file(app)?.is_some() {
+            active_vault_key(app, &session)?
+        } else {
+            get_or_create_local_vault_key(app, false)?
+        };
     let (current_content, source) = load_existing_vault(&vault_path, &backup_path, &key)?;
     let current_revision = current_content
         .as_deref()
@@ -900,7 +1564,9 @@ fn save_secure_vault_sync(
         ));
     }
     if source == Some(VaultSource::Backup) {
-        restore_backup_as_primary(&vault_path, &backup_path)?;
+        return Err(format!(
+            "{BACKUP_RECOVERY_REQUIRED}:主资产库无法读取，但安全备份仍然有效，请确认后恢复"
+        ));
     }
     let next_revision = expected_revision
         .checked_add(1)
@@ -953,24 +1619,63 @@ fn save_secure_vault_sync(
         return Err("加密资产库写入校验不一致".to_string());
     }
 
+    let previous_backup_path = if backup_path.exists() {
+        Some(vault_path.with_file_name(format!(
+            "{VAULT_BACKUP_FILE_NAME}.previous-{}",
+            std::process::id()
+        )))
+    } else {
+        None
+    };
+    if let Some(previous_backup_path) = &previous_backup_path {
+        let _ = fs::remove_file(previous_backup_path);
+        fs::rename(&backup_path, previous_backup_path)
+            .map_err(|error| format!("无法暂存旧资产库安全快照：{error}"))?;
+    }
     if vault_path.exists() {
-        if backup_path.exists() {
-            fs::remove_file(&backup_path)
-                .map_err(|error| format!("无法清理旧资产库快照：{error}"))?;
-            sync_parent_directory(&backup_path)?;
+        if let Err(error) = fs::rename(&vault_path, &backup_path) {
+            if let Some(previous_backup_path) = &previous_backup_path {
+                let _ = fs::rename(previous_backup_path, &backup_path);
+            }
+            let _ = fs::remove_file(&temporary_path);
+            return Err(format!("无法创建资产库安全快照：{error}"));
         }
-        fs::rename(&vault_path, &backup_path)
-            .map_err(|error| format!("无法创建资产库安全快照：{error}"))?;
-        sync_parent_directory(&backup_path)?;
+        // Directory fsync is best-effort; the file contents were already
+        // flushed and the rotation remains recoverable if the platform refuses
+        // to sync a directory.
+        let _ = sync_parent_directory(&backup_path);
     }
     if let Err(error) = fs::rename(&temporary_path, &vault_path) {
+        let mut restore_errors = Vec::new();
         if backup_path.exists() && !vault_path.exists() {
-            let _ = fs::rename(&backup_path, &vault_path);
-            let _ = sync_parent_directory(&vault_path);
+            if let Err(restore_error) = fs::rename(&backup_path, &vault_path) {
+                restore_errors.push(format!("恢复主资产库失败：{restore_error}"));
+            } else {
+                let _ = sync_parent_directory(&vault_path);
+            }
         }
-        return Err(format!("无法替换加密资产库：{error}"));
+        if let Some(previous_backup_path) = &previous_backup_path {
+            if let Err(restore_error) = fs::rename(previous_backup_path, &backup_path) {
+                restore_errors.push(format!("恢复旧安全快照失败：{restore_error}"));
+            }
+        }
+        let _ = fs::remove_file(&temporary_path);
+        return if restore_errors.is_empty() {
+            Err(format!("无法替换加密资产库：{error}"))
+        } else {
+            Err(format!(
+                "无法替换加密资产库：{error}；{}",
+                restore_errors.join("；")
+            ))
+        };
     }
-    sync_parent_directory(&vault_path)?;
+    let _ = sync_parent_directory(&vault_path);
+    if let Some(previous_backup_path) = &previous_backup_path {
+        // The new primary and its recovery point are already durable. Failure
+        // to remove an older recovery point must not turn a successful save into
+        // a misleading error or discard the current recovery chain.
+        let _ = fs::remove_file(previous_backup_path);
+    }
 
     let persisted = decrypt_vault_file(&vault_path, &key)?;
     if persisted != content {
@@ -993,11 +1698,10 @@ fn recover_vault_backup_sync(app: &AppHandle) -> Result<(), String> {
     }
     let session = app.state::<VaultSession>();
     let key = active_vault_key(app, &session)?;
-    if vault_path.exists() && decrypt_vault_file(&vault_path, &key).is_ok() {
+    if vault_path.exists() && load_valid_vault_file(&vault_path, &key).is_ok() {
         return Err("主资产库已经恢复可读，请重新读取，未使用旧备份覆盖".to_string());
     }
-    let content = decrypt_vault_file(&backup_path, &key)?;
-    validate_vault_payload(&content)?;
+    load_valid_vault_file(&backup_path, &key)?;
     restore_backup_as_primary(&vault_path, &backup_path)
 }
 
@@ -1042,19 +1746,34 @@ async fn setup_vault_password(app: AppHandle, password: String) -> Result<String
         let vault_exists = vault_path.exists() || backup_path.exists();
         let key = get_or_create_local_vault_key(&app, vault_exists)?;
         let (lock_file, recovery_secret) = wrap_vault_key(&key, &password)?;
+        let lock_path = password_lock_path(&app)?;
         write_password_lock_file(&app, &lock_file)?;
         let verified = unwrap_vault_key(&lock_file, &password)?;
         if verified != key {
-            let _ = fs::remove_file(password_lock_path(&app)?);
+            let _ = restore_private_file(&lock_path, None, "启动密码配置");
             return Err("启动密码配置校验失败".to_string());
         }
         let key_path = vault_key_path(&app)?;
         if key_path.exists() {
             if let Err(error) = fs::remove_file(&key_path) {
-                let _ = fs::remove_file(password_lock_path(&app)?);
+                let _ = restore_private_file(&lock_path, None, "启动密码配置");
                 return Err(format!("无法移除本地资产库密钥，启动密码未启用：{error}"));
             }
-            sync_parent_directory(&key_path)?;
+            if let Err(error) = sync_parent_directory(&key_path) {
+                let key_restore = restore_private_file(&key_path, Some(&key), "资产库密钥");
+                let lock_cleanup = restore_private_file(&lock_path, None, "启动密码配置");
+                return Err(format!(
+                    "无法同步本地资产库密钥，启动密码未启用：{error}{}{}",
+                    key_restore
+                        .err()
+                        .map(|restore_error| format!("；恢复本地资产库密钥失败：{restore_error}"))
+                        .unwrap_or_default(),
+                    lock_cleanup
+                        .err()
+                        .map(|cleanup_error| format!("；清理启动密码配置失败：{cleanup_error}"))
+                        .unwrap_or_default(),
+                ));
+            }
         }
         let session = app.state::<VaultSession>();
         *session
@@ -1101,11 +1820,27 @@ async fn recover_vault_password(
         let _file_guard = lock_vault_file(&app)?;
         let lock_file =
             read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let lock_path = password_lock_path(&app)?;
+        let old_lock_bytes =
+            fs::read(&lock_path).map_err(|error| format!("无法读取旧启动密码配置：{error}"))?;
         let recovery_secret = parse_recovery_file(&recovery_file)?;
         let key = unwrap_vault_key_with_recovery(&lock_file, &recovery_secret)?;
         let (new_lock_file, new_recovery_secret) = wrap_vault_key(&key, &new_password)?;
         write_password_lock_file(&app, &new_lock_file)?;
-        let verified_key = unwrap_vault_key(&new_lock_file, &new_password)?;
+        let verified_key = match unwrap_vault_key(&new_lock_file, &new_password) {
+            Ok(verified_key) if verified_key == key => verified_key,
+            _ => {
+                let rollback =
+                    restore_private_file(&lock_path, Some(&old_lock_bytes), "启动密码配置");
+                return Err(format!(
+                    "新启动密码配置校验失败{}",
+                    rollback
+                        .err()
+                        .map(|error| format!("；恢复旧启动密码配置失败：{error}"))
+                        .unwrap_or_default(),
+                ));
+            }
+        };
         if verified_key != key {
             return Err("新启动密码配置校验失败".to_string());
         }
@@ -1142,10 +1877,26 @@ async fn change_vault_password(
         let _file_guard = lock_vault_file(&app)?;
         let old_lock_file =
             read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let lock_path = password_lock_path(&app)?;
+        let old_lock_bytes =
+            fs::read(&lock_path).map_err(|error| format!("无法读取旧启动密码配置：{error}"))?;
         let key = unwrap_vault_key(&old_lock_file, &current_password)?;
         let (new_lock_file, recovery_secret) = wrap_vault_key(&key, &new_password)?;
         write_password_lock_file(&app, &new_lock_file)?;
-        let verified = unwrap_vault_key(&new_lock_file, &new_password)?;
+        let verified = match unwrap_vault_key(&new_lock_file, &new_password) {
+            Ok(verified) if verified == key => verified,
+            _ => {
+                let rollback =
+                    restore_private_file(&lock_path, Some(&old_lock_bytes), "启动密码配置");
+                return Err(format!(
+                    "新启动密码配置校验失败{}",
+                    rollback
+                        .err()
+                        .map(|error| format!("；恢复旧启动密码配置失败：{error}"))
+                        .unwrap_or_default(),
+                ));
+            }
+        };
         if verified != key {
             return Err("新启动密码配置校验失败".to_string());
         }
@@ -1178,13 +1929,45 @@ async fn disable_vault_password(app: AppHandle, password: String) -> Result<(), 
             return Err("本地资产库密钥与启动密码配置不一致，拒绝关闭启动密码".to_string());
         }
         let lock_path = password_lock_path(&app)?;
+        let old_lock_bytes =
+            fs::read(&lock_path).map_err(|error| format!("无法读取旧启动密码配置：{error}"))?;
         if let Err(error) = fs::remove_file(&lock_path) {
             if key_created {
                 let _ = fs::remove_file(&key_path);
             }
             return Err(format!("无法关闭启动密码：{error}"));
         }
-        sync_parent_directory(&lock_path)?;
+        if let Err(error) = sync_parent_directory(&lock_path) {
+            let lock_restore =
+                restore_private_file(&lock_path, Some(&old_lock_bytes), "启动密码配置");
+            let key_cleanup = if key_created {
+                fs::remove_file(&key_path)
+                    .and_then(|_| {
+                        #[cfg(unix)]
+                        {
+                            let directory = key_path
+                                .parent()
+                                .ok_or_else(|| std::io::Error::other("资产库路径缺少父目录"))?;
+                            let directory_file = File::open(directory)?;
+                            directory_file.sync_all()?;
+                        }
+                        Ok(())
+                    })
+                    .err()
+            } else {
+                None
+            };
+            return Err(format!(
+                "无法同步启动密码配置，启动密码保持开启：{error}{}{}",
+                lock_restore
+                    .err()
+                    .map(|restore_error| format!("；恢复启动密码配置失败：{restore_error}"))
+                    .unwrap_or_default(),
+                key_cleanup
+                    .map(|cleanup_error| format!("；清理本地资产库密钥失败：{cleanup_error}"))
+                    .unwrap_or_default(),
+            ));
+        }
         let session = app.state::<VaultSession>();
         *session
             .0
@@ -1241,6 +2024,7 @@ fn open_storage_path(app: AppHandle, kind: String) -> Result<(), String> {
 
 #[tauri::command]
 fn exit_application(app: AppHandle) {
+    app.state::<ExitIntent>().0.store(true, Ordering::SeqCst);
     app.exit(0);
 }
 
@@ -1248,6 +2032,7 @@ fn exit_application(app: AppHandle) {
 pub fn run() {
     let mut builder = tauri::Builder::default();
     builder = builder.manage(VaultSession(Mutex::new(None)));
+    builder = builder.manage(ExitIntent::default());
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -1261,6 +2046,15 @@ pub fn run() {
             }
         }));
         builder = builder.plugin(tauri_plugin_autostart::Builder::new().build());
+        builder = builder.on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Prevent the native close action immediately. The frontend then
+                // flushes pending data, locks the vault when enabled, and hides
+                // the window so the process remains available from the tray.
+                api.prevent_close();
+                let _ = window.emit("window-close-requested", ());
+            }
+        });
     }
 
     builder
@@ -1353,6 +2147,18 @@ pub fn run() {
             get_storage_info,
             open_storage_path
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                // Only the tray's explicit `app.exit(0)` is allowed to terminate
+                // the process. Other native exit requests return to the tray.
+                if !app.state::<ExitIntent>().0.swap(false, Ordering::SeqCst) {
+                    api.prevent_exit();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("window-exit-requested", ());
+                    }
+                }
+            }
+        });
 }

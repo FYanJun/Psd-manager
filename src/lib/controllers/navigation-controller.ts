@@ -112,14 +112,14 @@ export function createNavigationController(port: NavigationPort) {
     port.write({ searchQuery: "" });
   }
 
-  function selectDeviceType(deviceType: "全部设备" | DeviceType) {
+  function selectDeviceType(deviceType: "全部设备" | DeviceType, searchValue = port.read().searchQuery) {
     const state = port.read();
-    if (deviceType === state.selectedDeviceType && !state.searchQuery) return;
+    if (deviceType === state.selectedDeviceType) return;
     push();
     const firstMatch = state.items.find((item) => deviceType === "全部设备" || item.deviceType === deviceType);
     port.write({
       selectedDeviceType: deviceType,
-      searchQuery: "",
+      searchQuery: searchValue,
       selectedId: firstMatch?.id ?? 0,
       selectedAccountIds: [],
       activePopover: null,
@@ -156,7 +156,7 @@ export function createNavigationController(port: NavigationPort) {
       selectedAccountId: 0,
       selectedAccountIds: [],
       searchQuery: "",
-      sortMode: "updatedDesc",
+      sortMode: port.read().sortMode,
       backStack: [],
       forwardStack: [],
       restoringView: false,

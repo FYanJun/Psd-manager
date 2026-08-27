@@ -32,22 +32,29 @@ export function createSnapshotController(port: SnapshotControllerPort) {
     try {
       await port.persistImmediately();
       return snapshot;
-    } catch {
+    } catch (error) {
       port.writeSnapshots(previousSnapshots);
       port.refreshDirtyState();
+      const reason = error instanceof Error ? error.message : String(error ?? "未知错误");
+      port.showStatus(
+        reason
+          ? `安全快照保存失败，操作已取消：${reason}`
+          : "安全快照保存失败，操作已取消",
+        7000,
+      );
       return null;
     }
   }
 
-  async function restoreSnapshot(snapshotId: string, createCurrentBackup: boolean) {
+  async function restoreSnapshot(snapshotId: string, createCurrentBackup: boolean): Promise<boolean> {
     const snapshot = port.read().snapshots.find((candidate) => candidate.id === snapshotId);
     if (!snapshot) {
       port.showStatus("找不到要恢复的数据快照", 5000);
-      return;
+      return false;
     }
     if (createCurrentBackup) {
       const backup = await createSafetySnapshot("恢复快照前自动保存");
-      if (!backup) return;
+      if (!backup) return false;
     }
     port.applySnapshot(snapshot);
     port.setActiveDialog(null);
@@ -55,19 +62,30 @@ export function createSnapshotController(port: SnapshotControllerPort) {
     try {
       await port.persistImmediately();
       port.showStatus("数据快照已恢复");
-    } catch {
-      // The storage controller exposes the save error and keeps the restored state dirty.
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error ?? "未知错误");
+      // The restored state remains in memory and dirty so the storage retry path
+      // can persist it without silently discarding the user's selected snapshot.
+      port.showStatus(
+        reason
+          ? `快照已应用，但保存失败：${reason}；请重试保存后再关闭程序`
+          : "快照已应用，但保存失败；请重试保存后再关闭程序",
+        8000,
+      );
     }
+    return true;
   }
 
-  function offerUndo(snapshotId: string, message: string) {
+  function offerUndo(snapshotId: string, message: string, onRestored?: () => void) {
     const expectedState = dataSignature();
     port.showStatus(message, 8000, "撤销", () => {
       if (dataSignature() !== expectedState) {
         port.showStatus("数据已继续变化，请从“数据快照”中选择恢复", 5000);
         return;
       }
-      void restoreSnapshot(snapshotId, false);
+      void restoreSnapshot(snapshotId, false).then((restored) => {
+        if (restored) onRestored?.();
+      });
     });
   }
 

@@ -1,5 +1,11 @@
 import { VAULT_SCHEMA_VERSION } from "./constants";
-import { isValidDeviceTypeColor } from "./input-validation";
+import {
+  getTextInputValidationError,
+  hasValidPersistedPassword,
+  isValidConnectionAddress,
+  isValidDeviceTypeColor,
+  INPUT_LIMITS,
+} from "./input-validation";
 import type { DeviceAccount, DeviceTypeMeta, PasswordHistory, PersistedVaultState, VaultItem, VaultSnapshot } from "./types";
 import { isUuid } from "./uuid";
 
@@ -29,6 +35,31 @@ function requireString(record: Record<string, unknown>, key: string, path: strin
   return record[key] as string;
 }
 
+function requireText(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+  maximum: number,
+  allowLineBreaks = false,
+) {
+  const value = requireString(record, key, path);
+  const error = getTextInputValidationError(value, maximum, allowLineBreaks);
+  if (error) throw new VaultSchemaError(`${path}.${key}${error}`);
+  return value;
+}
+
+function requirePassword(record: Record<string, unknown>, key: string, path: string) {
+  const value = requireString(record, key, path);
+  if (!hasValidPersistedPassword(value)) throw new VaultSchemaError(`${path}.${key}包含不可用字符或长度超出限制`);
+  return value;
+}
+
+function requireConnectionAddress(record: Record<string, unknown>, key: string, path: string) {
+  const value = requireString(record, key, path);
+  if (!isValidConnectionAddress(value)) throw new VaultSchemaError(`${path}.${key}格式不正确`);
+  return value;
+}
+
 function requireInteger(record: Record<string, unknown>, key: string, path: string, minimum = 0) {
   const value = record[key];
   if (!Number.isSafeInteger(value) || (value as number) < minimum) {
@@ -49,21 +80,30 @@ function rejectField(record: Record<string, unknown>, key: string, path: string)
   if (key in record) throw new VaultSchemaError(`${path}包含当前格式不支持的字段 ${key}`);
 }
 
+function rejectUnknownFields(record: Record<string, unknown>, path: string, allowedFields: readonly string[]) {
+  const allowed = new Set(allowedFields);
+  const unsupported = Object.keys(record).filter((key) => !allowed.has(key));
+  if (unsupported.length > 0) {
+    throw new VaultSchemaError(`${path}包含当前格式不支持的字段 ${unsupported.join("、")}`);
+  }
+}
+
 function validateHistory(value: unknown, path: string, usedUuids: Set<string>): PasswordHistory[] {
   const ids = new Set<number>();
   return requireArray(value, path).map((entry, index) => {
     const entryPath = `${path}[${index}]`;
     const record = requireRecord(entry, entryPath);
+    rejectUnknownFields(record, entryPath, ["uuid", "id", "password", "newPassword", "changedAt", "reason"]);
     const id = requireInteger(record, "id", entryPath, 1);
     if (ids.has(id)) throw new VaultSchemaError(`${path}存在重复历史 ID ${id}`);
     ids.add(id);
     return {
       uuid: requireUuid(record, "uuid", entryPath, usedUuids),
       id,
-      password: requireString(record, "password", entryPath),
-      newPassword: requireString(record, "newPassword", entryPath),
-      changedAt: requireString(record, "changedAt", entryPath),
-      reason: requireString(record, "reason", entryPath),
+      password: requirePassword(record, "password", entryPath),
+      newPassword: requirePassword(record, "newPassword", entryPath),
+      changedAt: requireText(record, "changedAt", entryPath, 64),
+      reason: requireText(record, "reason", entryPath, INPUT_LIMITS.passwordReason),
     };
   });
 }
@@ -79,8 +119,11 @@ function validateAccounts(
   return requireArray(value, path).map((entry, index) => {
     const entryPath = `${path}[${index}]`;
     const record = requireRecord(entry, entryPath);
+    rejectUnknownFields(record, entryPath, [
+      "uuid", "id", "title", "username", "password", "tag", "notes", "updatedAt", "passwordChangedAt", "history",
+    ]);
     const id = requireInteger(record, "id", entryPath, 1);
-    const username = requireString(record, "username", entryPath).trim();
+    const username = requireText(record, "username", entryPath, INPUT_LIMITS.username).trim();
     if (ids.has(id)) throw new VaultSchemaError(`${path}存在重复账号 ID ${id}`);
     if (!username) throw new VaultSchemaError(`${entryPath}.username不能为空`);
     if (usernames.has(username)) throw new VaultSchemaError(`${path}存在重复用户名“${username}”`);
@@ -89,13 +132,13 @@ function validateAccounts(
     return {
       uuid: requireUuid(record, "uuid", entryPath, accountUuids),
       id,
-      title: requireString(record, "title", entryPath),
+      title: requireText(record, "title", entryPath, INPUT_LIMITS.username),
       username,
-      password: requireString(record, "password", entryPath),
-      tag: requireString(record, "tag", entryPath),
-      notes: requireString(record, "notes", entryPath),
-      updatedAt: requireString(record, "updatedAt", entryPath),
-      passwordChangedAt: requireString(record, "passwordChangedAt", entryPath),
+      password: requirePassword(record, "password", entryPath),
+      tag: requireText(record, "tag", entryPath, INPUT_LIMITS.accountTag),
+      notes: requireText(record, "notes", entryPath, INPUT_LIMITS.notes, true),
+      updatedAt: requireText(record, "updatedAt", entryPath, 64),
+      passwordChangedAt: requireText(record, "passwordChangedAt", entryPath, 64),
       history: validateHistory(record.history, `${entryPath}.history`, historyUuids),
     };
   });
@@ -115,9 +158,13 @@ function validateItems(
     const entryPath = `${path}[${index}]`;
     const record = requireRecord(entry, entryPath);
     rejectField(record, "ip", entryPath);
+    rejectUnknownFields(record, entryPath, [
+      "uuid", "id", "title", "deviceName", "deviceType", "deviceTypeUuid", "assetCode", "location", "username", "password",
+      "ipAddress", "tag", "iconText", "iconClass", "updatedAt", "notes", "history", "accounts",
+    ]);
     const id = requireInteger(record, "id", entryPath, 1);
-    const deviceName = requireString(record, "deviceName", entryPath).trim();
-    const deviceType = requireString(record, "deviceType", entryPath).trim();
+    const deviceName = requireText(record, "deviceName", entryPath, INPUT_LIMITS.deviceName).trim();
+    const deviceType = requireText(record, "deviceType", entryPath, INPUT_LIMITS.deviceTypeName).trim();
     if (ids.has(id)) throw new VaultSchemaError(`${path}存在重复设备 ID ${id}`);
     if (!deviceName) throw new VaultSchemaError(`${entryPath}.deviceName不能为空`);
     if (!deviceType) throw new VaultSchemaError(`${entryPath}.deviceType不能为空`);
@@ -133,20 +180,22 @@ function validateItems(
     return {
       uuid: requireUuid(record, "uuid", entryPath, deviceUuids),
       id,
-      title: requireString(record, "title", entryPath),
+      title: requireText(record, "title", entryPath, INPUT_LIMITS.deviceName),
       deviceName,
       deviceType,
       deviceTypeUuid,
-      assetCode: requireString(record, "assetCode", entryPath),
-      location: requireString(record, "location", entryPath),
-      username: requireString(record, "username", entryPath),
-      password: requireString(record, "password", entryPath),
-      ipAddress: requireString(record, "ipAddress", entryPath),
-      tag: requireString(record, "tag", entryPath),
-      iconText: requireString(record, "iconText", entryPath),
-      iconClass: requireString(record, "iconClass", entryPath),
-      updatedAt: requireString(record, "updatedAt", entryPath),
-      notes: requireString(record, "notes", entryPath),
+      assetCode: requireText(record, "assetCode", entryPath, INPUT_LIMITS.assetCode),
+      location: requireText(record, "location", entryPath, INPUT_LIMITS.location),
+      username: requireText(record, "username", entryPath, INPUT_LIMITS.username),
+      password: requirePassword(record, "password", entryPath),
+      ipAddress: requireConnectionAddress(record, "ipAddress", entryPath),
+      tag: requireText(record, "tag", entryPath, INPUT_LIMITS.accountTag),
+      iconText: requireText(record, "iconText", entryPath, INPUT_LIMITS.deviceTypeIcon),
+      iconClass: requireText(record, "iconClass", entryPath, 64),
+      updatedAt: requireText(record, "updatedAt", entryPath, 64),
+      notes: requireText(record, "notes", entryPath, INPUT_LIMITS.notes, true),
+      // The device-level history is a denormalized mirror of the primary
+      // account history, so it intentionally has its own UUID scope.
       history: validateHistory(record.history, `${entryPath}.history`, new Set<string>()),
       accounts: validateAccounts(record.accounts, `${entryPath}.accounts`, accountUuids, historyUuids),
     };
@@ -159,16 +208,19 @@ function validateDeviceTypes(value: unknown, path: string): DeviceTypeMeta[] {
   return requireArray(value, path).map((entry, index) => {
     const entryPath = `${path}[${index}]`;
     const record = requireRecord(entry, entryPath);
-    const label = requireString(record, "label", entryPath).trim();
+    rejectUnknownFields(record, entryPath, ["uuid", "label", "iconText", "color"]);
+    const label = requireText(record, "label", entryPath, INPUT_LIMITS.deviceTypeName).trim();
     if (!label) throw new VaultSchemaError(`${entryPath}.label不能为空`);
     if (labels.has(label)) throw new VaultSchemaError(`${path}存在重复类型“${label}”`);
     const color = requireString(record, "color", entryPath).trim().toLowerCase();
     if (!isValidDeviceTypeColor(color)) throw new VaultSchemaError(`${entryPath}.color不是有效的设备类型颜色`);
     labels.add(label);
+    const iconText = requireText(record, "iconText", entryPath, INPUT_LIMITS.deviceTypeIcon);
+    if (!iconText.trim()) throw new VaultSchemaError(`${entryPath}.iconText不能为空`);
     return {
       uuid: requireUuid(record, "uuid", entryPath, uuids),
       label,
-      iconText: requireString(record, "iconText", entryPath),
+      iconText,
       color,
     };
   });
@@ -179,7 +231,8 @@ function validateSnapshots(value: unknown, path: string): VaultSnapshot[] {
   return requireArray(value, path).map((entry, index) => {
     const entryPath = `${path}[${index}]`;
     const record = requireRecord(entry, entryPath);
-    const id = requireString(record, "id", entryPath);
+    rejectUnknownFields(record, entryPath, ["id", "createdAt", "reason", "items", "customDeviceTypes"]);
+    const id = requireText(record, "id", entryPath, 128);
     if (!id) throw new VaultSchemaError(`${entryPath}.id不能为空`);
     if (ids.has(id)) throw new VaultSchemaError(`${path}存在重复快照 ID`);
     ids.add(id);
@@ -187,8 +240,8 @@ function validateSnapshots(value: unknown, path: string): VaultSnapshot[] {
     const deviceTypes = new Map(customDeviceTypes.map((type) => [type.label, type]));
     return {
       id,
-      createdAt: requireString(record, "createdAt", entryPath),
-      reason: requireString(record, "reason", entryPath),
+      createdAt: requireText(record, "createdAt", entryPath, 64),
+      reason: requireText(record, "reason", entryPath, 200),
       items: validateItems(record.items, `${entryPath}.items`, deviceTypes),
       customDeviceTypes,
     };
@@ -200,6 +253,7 @@ function validateCurrentState(value: unknown): PersistedVaultState {
   const schemaVersion = requireInteger(record, "schemaVersion", "资产库", 1);
   if (schemaVersion !== VAULT_SCHEMA_VERSION) throw new VaultSchemaError(`资产库数据版本应为 ${VAULT_SCHEMA_VERSION}`);
   rejectField(record, "paneLayout", "资产库");
+  rejectUnknownFields(record, "资产库", ["schemaVersion", "revision", "items", "customDeviceTypes", "snapshots"]);
   const customDeviceTypes = validateDeviceTypes(record.customDeviceTypes, "customDeviceTypes");
   const deviceTypes = new Map(customDeviceTypes.map((type) => [type.label, type]));
   const state: PersistedVaultState = {

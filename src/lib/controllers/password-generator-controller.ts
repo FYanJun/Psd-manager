@@ -3,7 +3,7 @@ import {
   normalizeGeneratorLength,
   type GeneratorOptions,
 } from "../password-generator";
-import { INPUT_LIMITS, sanitizeAsciiSymbols, sanitizePasswordInput } from "../input-validation";
+import { INPUT_LIMITS, sanitizeGeneratorSymbols, sanitizePasswordInput } from "../input-validation";
 import type { ActiveDialog, GeneratorTarget } from "../types";
 
 export type PasswordGeneratorState = GeneratorOptions & {
@@ -71,7 +71,7 @@ export function createPasswordGeneratorController(port: PasswordGeneratorPort) {
   }
 
   function setCharacters(field: "allowedSymbols" | "excludedCharacters", value: string) {
-    const sanitized = field === "allowedSymbols" ? sanitizeAsciiSymbols(value) : sanitizePasswordInput(value);
+    const sanitized = field === "allowedSymbols" ? sanitizeGeneratorSymbols(value) : sanitizePasswordInput(value);
     update({
       [field]: Array.from(sanitized).slice(0, INPUT_LIMITS.generatorCharacters).join(""),
     });

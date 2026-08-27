@@ -37,7 +37,6 @@ function visibleBounds(bounds: WindowBounds, monitors: Awaited<ReturnType<typeof
 export function createWindowSettingsController(port: WindowSettingsPort) {
   let resizeUnlisten: (() => void) | null = null;
   let moveUnlisten: (() => void) | null = null;
-  let closeUnlisten: (() => void) | null = null;
   let captureTimer: ReturnType<typeof window.setTimeout> | null = null;
   let applying = false;
   let destroyed = false;
@@ -96,7 +95,6 @@ export function createWindowSettingsController(port: WindowSettingsPort) {
     const current = getCurrentWindow();
     resizeUnlisten = await current.onResized(() => scheduleCapture());
     moveUnlisten = await current.onMoved(() => scheduleCapture());
-    closeUnlisten = await current.onCloseRequested(() => { void capture(); });
   }
 
   function destroy() {
@@ -105,10 +103,8 @@ export function createWindowSettingsController(port: WindowSettingsPort) {
     captureTimer = null;
     resizeUnlisten?.();
     moveUnlisten?.();
-    closeUnlisten?.();
     resizeUnlisten = null;
     moveUnlisten = null;
-    closeUnlisten = null;
   }
 
   return { mount, restore, applyTheme, capture, destroy };

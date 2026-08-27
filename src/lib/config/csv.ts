@@ -5,7 +5,7 @@ import { formatDateTime, readString } from "../utils";
 import { isUuid } from "../uuid";
 import { buildDeviceTypeGroups } from "./export-utils";
 import { normalizeVaultIdentityData } from "./normalization";
-import { assertCsvConfigIdentities } from "./validation";
+import { assertAllowedFields, assertCsvConfigIdentities } from "./validation";
 import {
   CSV_HEADERS,
   ConfigImportError,
@@ -93,9 +93,20 @@ export function parseCsvConfigContent(content: string): ConfigData {
 
 export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
   const headers = rows[0].map((header) => header.trim());
+  if (headers.some((header) => !header)) {
+    throw new ConfigImportError("CSV 配置的表头不能包含空列名");
+  }
+  const duplicateHeaders = headers.filter((header, index) => headers.indexOf(header) !== index);
+  if (duplicateHeaders.length > 0) {
+    throw new ConfigImportError(`CSV 配置包含重复列：${[...new Set(duplicateHeaders)].join("、")}`);
+  }
   const unsupportedHeaders = ["IP地址", "设备信息"].filter((header) => headers.includes(header));
   if (unsupportedHeaders.length > 0) {
     throw new ConfigImportError(`CSV 配置包含已废弃字段：${unsupportedHeaders.join("、")}；请改用连接地址`);
+  }
+  const unknownHeaders = headers.filter((header) => !CSV_HEADERS.includes(header));
+  if (unknownHeaders.length > 0) {
+    throw new ConfigImportError(`CSV 配置包含当前格式不支持的列：${[...new Set(unknownHeaders)].join("、")}`);
   }
   if (!["设备类型", "设备名称", "用户名", "密码历史"].every((header) => headers.includes(header))) {
     throw new ConfigImportError("CSV 配置缺少必要列：设备类型、设备名称、用户名、密码历史");
@@ -108,7 +119,12 @@ export function parseFlatCsvConfigRows(rows: string[][]): ConfigData {
   }
 
   const records = rows.slice(1)
-    .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
+    .map((row, index) => {
+      if (row.length > headers.length) {
+        throw new ConfigImportError(`CSV 第 ${index + 2} 行包含多余列，无法与表头对应`);
+      }
+      return Object.fromEntries(headers.map((header, headerIndex) => [header, row[headerIndex] ?? ""]));
+    });
   assertCsvConfigIdentities(records);
 
   const typeRecords = new Map<string, Record<string, string>>();
@@ -221,7 +237,17 @@ export function parseCsvHistory(value: string, rowNumber: number): PasswordHisto
     throw new ConfigImportError(`CSV 第 ${rowNumber} 行的密码历史必须是 JSON 数组`);
   }
   return parsed.map((entry, index) => {
-    const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new ConfigImportError(`CSV 第 ${rowNumber} 行的第 ${index + 1} 条密码历史必须是对象`);
+    }
+    const record = entry as Record<string, unknown>;
+    assertAllowedFields(record, `CSV 第 ${rowNumber} 行的第 ${index + 1} 条密码历史`, [
+      "历史UUID",
+      "旧密码",
+      "新密码",
+      "修改时间",
+      "修改原因",
+    ]);
     return {
       uuid: readString(record["历史UUID"]),
       id: index + 1,

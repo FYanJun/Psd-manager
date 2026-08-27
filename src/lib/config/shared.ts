@@ -58,34 +58,70 @@ export function parseCsvRows(content: string) {
   let row: string[] = [];
   let cell = "";
   let inQuotes = false;
+  let justClosedQuote = false;
+  let fieldStarted = false;
+
+  const pushCell = () => {
+    row.push(cell);
+    cell = "";
+    justClosedQuote = false;
+    fieldStarted = false;
+  };
+
+  const pushRow = () => {
+    pushCell();
+    rows.push(row);
+    row = [];
+  };
 
   for (let index = 0; index < content.length; index += 1) {
     const char = content[index];
     const nextChar = content[index + 1];
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
+
+    if (inQuotes) {
+      if (char === '"' && nextChar === '"') {
         cell += '"';
         index += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+        justClosedQuote = true;
       } else {
-        inQuotes = !inQuotes;
+        cell += char;
       }
-    } else if (char === "," && !inQuotes) {
-      row.push(cell);
-      cell = "";
-    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      continue;
+    }
+
+    if (justClosedQuote) {
+      if (char === ",") {
+        pushCell();
+      } else if (char === "\n" || char === "\r") {
+        if (char === "\r" && nextChar === "\n") index += 1;
+        pushRow();
+      } else {
+        throw new ConfigImportError("CSV 格式错误：闭合引号后只能跟逗号或换行");
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      if (fieldStarted || cell.length > 0) {
+        throw new ConfigImportError("CSV 格式错误：引号只能出现在字段开头");
+      }
+      inQuotes = true;
+      fieldStarted = true;
+    } else if (char === ",") {
+      pushCell();
+    } else if (char === "\n" || char === "\r") {
       if (char === "\r" && nextChar === "\n") index += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
+      pushRow();
     } else {
       cell += char;
+      fieldStarted = true;
     }
   }
 
   if (inQuotes) throw new ConfigImportError("CSV 格式错误：存在未闭合的引号");
 
-  row.push(cell);
-  rows.push(row);
+  pushRow();
   return rows;
 }
