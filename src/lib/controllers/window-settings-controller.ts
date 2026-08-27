@@ -49,8 +49,17 @@ export function createWindowSettingsController(port: WindowSettingsPort) {
     try {
       const monitors = await availableMonitors();
       const next = visibleBounds(bounds, monitors);
+      const [outerSize, innerSize] = await Promise.all([appWindow.outerSize(), appWindow.innerSize()]);
+      // Bounds are saved as the physical outer rectangle, but setSize changes
+      // the inner content area. Remove the native frame before restoring so
+      // Windows does not reopen larger than the saved window.
+      const frameWidth = Math.max(0, outerSize.width - innerSize.width);
+      const frameHeight = Math.max(0, outerSize.height - innerSize.height);
       applying = true;
-      await appWindow.setSize(new PhysicalSize(next.width, next.height));
+      await appWindow.setSize(new PhysicalSize(
+        Math.max(1, next.width - frameWidth),
+        Math.max(1, next.height - frameHeight),
+      ));
       await appWindow.setPosition(new PhysicalPosition(next.x, next.y));
     } catch {
       // Window restoration is a preference; a platform refusal must not block startup.

@@ -1538,7 +1538,17 @@ fn apply_saved_window_bounds(window: &tauri::WebviewWindow, bounds: &AppWindowBo
     ) else {
         return;
     };
-    let _ = window.set_size(PhysicalSize::new(width, height));
+    // `outer_size` is persisted, while Tauri's `set_size` changes the inner
+    // content area. Subtract the current frame so Windows does not grow the
+    // rebuilt window by the title bar and border dimensions.
+    let (Ok(outer_size), Ok(inner_size)) = (window.outer_size(), window.inner_size()) else {
+        return;
+    };
+    let frame_width = outer_size.width.saturating_sub(inner_size.width);
+    let frame_height = outer_size.height.saturating_sub(inner_size.height);
+    let inner_width = width.saturating_sub(frame_width).max(1);
+    let inner_height = height.saturating_sub(frame_height).max(1);
+    let _ = window.set_size(PhysicalSize::new(inner_width, inner_height));
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
