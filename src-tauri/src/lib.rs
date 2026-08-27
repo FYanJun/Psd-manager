@@ -1518,6 +1518,9 @@ fn validate_vault_payload(content: &str) -> Result<Value, String> {
 
 #[cfg(desktop)]
 fn restore_main_window(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.show();
+
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Some(window) = app.get_webview_window("main") {
@@ -2318,16 +2321,28 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                // A live main window still needs the frontend save/lock handshake;
-                // once low-memory mode has destroyed it, the native app is clean
-                // and can accept an external exit request directly.
-                if !app.state::<ExitIntent>().0.swap(false, Ordering::SeqCst)
-                    && app.get_webview_window("main").is_some()
-                {
-                    api.prevent_exit();
-                    let _ = app.emit("window-exit-requested", ());
+            match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    // A live main window still needs the frontend save/lock handshake;
+                    // low-memory mode destroys the main WebView, so the tray process
+                    // must also cancel the implicit exit caused by removing the last
+                    // window. Only the explicit tray exit command may terminate the
+                    // process.
+                    if !app.state::<ExitIntent>().0.swap(false, Ordering::SeqCst) {
+                        api.prevent_exit();
+                        if app.get_webview_window("main").is_some() {
+                            let _ = app.emit("window-exit-requested", ());
+                        }
+                    }
                 }
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen {
+                    has_visible_windows: false,
+                    ..
+                } => {
+                    restore_main_window(app);
+                }
+                _ => {}
             }
         });
 }
