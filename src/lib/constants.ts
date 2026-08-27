@@ -29,6 +29,7 @@ export const DEFAULT_APP_SETTINGS = {
     startOnBoot: false,
     startupLock: false,
     autoLockMinutes: 0,
+    lowMemoryBackground: true,
   },
   workspace: {
     rememberLayout: true,

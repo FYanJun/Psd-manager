@@ -62,7 +62,7 @@ function validateAppSettingsShape(value: unknown) {
 
   const interfaceValue = requireRecord(root.interface, "应用设置.interface");
   rejectUnknownFields(interfaceValue, "应用设置.interface", [
-    "tooltipEnabled", "theme", "density", "fontSize", "startOnBoot", "startupLock", "autoLockMinutes",
+    "tooltipEnabled", "theme", "density", "fontSize", "startOnBoot", "startupLock", "autoLockMinutes", "lowMemoryBackground",
   ]);
   requireBoolean(interfaceValue.tooltipEnabled, "应用设置.interface.tooltipEnabled");
   if (interfaceValue.theme !== "system" && interfaceValue.theme !== "light" && interfaceValue.theme !== "dark") {
@@ -77,6 +77,9 @@ function validateAppSettingsShape(value: unknown) {
   requireBoolean(interfaceValue.startOnBoot, "应用设置.interface.startOnBoot");
   requireBoolean(interfaceValue.startupLock, "应用设置.interface.startupLock");
   requireNumber(interfaceValue.autoLockMinutes, "应用设置.interface.autoLockMinutes", 0, 10080, true);
+  if ("lowMemoryBackground" in interfaceValue) {
+    requireBoolean(interfaceValue.lowMemoryBackground, "应用设置.interface.lowMemoryBackground");
+  }
 
   const workspace = requireRecord(root.workspace, "应用设置.workspace");
   rejectUnknownFields(workspace, "应用设置.workspace", [
@@ -218,6 +221,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
       startOnBoot: bool(interfaceValue.startOnBoot, defaults.interface.startOnBoot),
       startupLock: bool(interfaceValue.startupLock, defaults.interface.startupLock),
       autoLockMinutes: numberValue(interfaceValue.autoLockMinutes, defaults.interface.autoLockMinutes, 0, 10080),
+      lowMemoryBackground: bool(interfaceValue.lowMemoryBackground, defaults.interface.lowMemoryBackground),
     },
     workspace: {
       rememberLayout: bool(workspaceValue.rememberLayout, defaults.workspace.rememberLayout),

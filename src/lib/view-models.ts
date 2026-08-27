@@ -77,6 +77,7 @@ export type SettingsView = {
   startOnBoot: boolean;
   startupLock: boolean;
   autoLockMinutes: number;
+  lowMemoryBackground: boolean;
   autostartAvailable: boolean;
   autostartUpdating: boolean;
   theme: ThemePreference;
@@ -101,7 +102,7 @@ export type SettingsView = {
     excludedCharacters: string;
   };
   installationPath: string;
-  dataPath: string;
+  appDataPath: string;
   version: string;
 };
 
@@ -112,6 +113,7 @@ export type SettingsActions = {
   setStartupLock(value: boolean): void | Promise<void>;
   setAutoLockEnabled(value: boolean): void;
   setAutoLockMinutes(value: number): void;
+  setLowMemoryBackground(value: boolean): void;
   openVaultPasswordDialog(mode: VaultPasswordDialogMode): void;
   lockNow(): void | Promise<void>;
   setTheme(value: ThemePreference): void;
@@ -123,7 +125,7 @@ export type SettingsActions = {
   setDeviceSortMode(value: SortMode): void;
   setDeviceTypeSortMode(value: DeviceTypeSortMode): void;
   setGeneratorValue<K extends keyof SettingsView["generator"]>(key: K, value: SettingsView["generator"][K]): void;
-  openStoragePath(kind: "installation" | "data"): void;
+  openStoragePath(kind: "installation" | "app-data"): void;
   openSnapshotsDialog(): void;
   openExportConfigDialog(): void;
   chooseConfigFile(): void;

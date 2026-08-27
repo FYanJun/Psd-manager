@@ -202,6 +202,7 @@ export type AppSettings = {
     startOnBoot: boolean;
     startupLock: boolean;
     autoLockMinutes: number;
+    lowMemoryBackground: boolean;
   };
   workspace: {
     rememberLayout: boolean;

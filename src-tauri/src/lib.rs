@@ -25,6 +25,7 @@ use tauri::Emitter;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
+    WebviewWindowBuilder,
 };
 
 #[cfg(target_os = "windows")]
@@ -38,13 +39,17 @@ const VAULT_PASSWORD_FILE_NAME: &str = "vault.lock.json";
 const APP_SETTINGS_FILE_NAME: &str = "settings.json";
 const DATA_CONTAINER_NAME: &str = "Psd Manager";
 const DATA_DIRECTORY_NAME: &str = "data";
+const CONFIG_DIRECTORY_NAME: &str = "config";
 const VAULT_AAD: &[u8] = b"com.fan.psd-manager:vault:1";
 const VAULT_PASSWORD_AAD: &[u8] = b"com.fan.psd-manager:vault-password:1";
 const VAULT_RECOVERY_AAD: &[u8] = b"com.fan.psd-manager:vault-recovery:1";
 const VAULT_SCHEMA_VERSION: u64 = 2;
 const BACKUP_RECOVERY_REQUIRED: &str = "BACKUP_RECOVERY_REQUIRED";
+const AUTOSTART_LAUNCH_ARGUMENT: &str = "--from-autostart";
 static VAULT_IO_LOCK: Mutex<()> = Mutex::new(());
 static APP_SETTINGS_IO_LOCK: Mutex<()> = Mutex::new(());
+#[cfg(desktop)]
+static MAIN_WINDOW_CREATE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Default)]
 struct ExitIntent(AtomicBool);
@@ -115,7 +120,7 @@ enum VaultSource {
 #[serde(rename_all = "camelCase")]
 struct StorageInfo {
     installation_path: String,
-    data_path: String,
+    app_data_path: String,
 }
 
 fn installation_directory() -> Result<PathBuf, String> {
@@ -139,10 +144,10 @@ fn installation_directory() -> Result<PathBuf, String> {
 }
 
 fn storage_info(app: &AppHandle) -> Result<StorageInfo, String> {
-    let data_directory = data_directory(app)?;
+    let app_data_directory = data_container_directory(app)?;
     Ok(StorageInfo {
         installation_path: installation_directory()?.to_string_lossy().into_owned(),
-        data_path: data_directory.to_string_lossy().into_owned(),
+        app_data_path: app_data_directory.to_string_lossy().into_owned(),
     })
 }
 
@@ -172,7 +177,7 @@ fn vault_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     ))
 }
 
-fn data_directory(app: &AppHandle) -> Result<PathBuf, String> {
+fn data_container_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let app_data_directory = app
         .path()
         .app_data_dir()
@@ -180,23 +185,95 @@ fn data_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let parent = app_data_directory
         .parent()
         .ok_or_else(|| "应用数据目录缺少父目录".to_string())?;
-    Ok(parent.join(DATA_CONTAINER_NAME).join(DATA_DIRECTORY_NAME))
+    Ok(parent.join(DATA_CONTAINER_NAME))
+}
+
+fn migrate_legacy_settings(data_directory: &Path, config_directory: &Path) -> Result<(), String> {
+    let mut legacy_files = vec!["settings.json".to_string(), "settings.json.tmp".to_string()];
+    let entries =
+        fs::read_dir(data_directory).map_err(|error| format!("无法检查旧应用设置文件：{error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("无法读取旧应用设置文件：{error}"))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(".settings.json.replace-backup-") && entry.path().is_file() {
+            legacy_files.push(name);
+        }
+    }
+
+    let mut pending_moves: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for file_name in legacy_files {
+        let source = data_directory.join(&file_name);
+        if !source.exists() {
+            continue;
+        }
+        let target = config_directory.join(&file_name);
+        if target.exists() {
+            return Err(format!(
+                "发现旧设置文件与新设置文件同时存在：{} 和 {}，已停止迁移以避免覆盖",
+                source.display(),
+                target.display()
+            ));
+        }
+        restrict_private_file(&source, "旧应用设置")?;
+        pending_moves.push((source, target));
+    }
+
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for (source, target) in pending_moves {
+        if let Err(error) = fs::rename(&source, &target) {
+            let rollback_errors = moved
+                .iter()
+                .rev()
+                .filter_map(|(old_path, new_path)| {
+                    fs::rename(new_path, old_path)
+                        .err()
+                        .map(|rollback_error| format!("{}：{rollback_error}", old_path.display()))
+                })
+                .collect::<Vec<_>>();
+            return if rollback_errors.is_empty() {
+                Err(format!("无法迁移旧设置文件 {}：{error}", source.display()))
+            } else {
+                Err(format!(
+                    "无法迁移旧设置文件 {}：{error}；回滚失败：{}",
+                    source.display(),
+                    rollback_errors.join("；")
+                ))
+            };
+        }
+        moved.push((source, target));
+    }
+
+    for (_, target) in moved {
+        restrict_private_file(&target, "应用设置")?;
+    }
+    Ok(())
+}
+
+fn ensure_storage_directories(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let container = data_container_directory(app)?;
+    fs::create_dir_all(&container).map_err(|error| format!("无法创建应用数据根目录：{error}"))?;
+    restrict_private_directory(&container, "应用数据根目录")?;
+
+    let data = container.join(DATA_DIRECTORY_NAME);
+    let config = container.join(CONFIG_DIRECTORY_NAME);
+    fs::create_dir_all(&data).map_err(|error| format!("无法创建资产库目录：{error}"))?;
+    fs::create_dir_all(&config).map_err(|error| format!("无法创建应用配置目录：{error}"))?;
+    restrict_private_directory(&data, "资产库目录")?;
+    restrict_private_directory(&config, "应用配置目录")?;
+    migrate_legacy_settings(&data, &config)?;
+    Ok((data, config))
 }
 
 fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
-    let directory = data_directory(app)?;
-    fs::create_dir_all(&directory).map_err(|error| format!("无法创建资产库目录：{error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("无法限制资产库目录权限：{error}"))?;
-    }
-    Ok(directory)
+    ensure_storage_directories(app).map(|(data, _)| data)
+}
+
+fn ensure_config_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    ensure_storage_directories(app).map(|(_, config)| config)
 }
 
 fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(ensure_vault_directory(app)?.join(APP_SETTINGS_FILE_NAME))
+    Ok(ensure_config_directory(app)?.join(APP_SETTINGS_FILE_NAME))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -207,6 +284,10 @@ struct AppSettingsFile {
     interface: AppInterfaceSettings,
     workspace: AppWorkspaceSettings,
     password_generator: AppGeneratorSettings,
+}
+
+fn default_low_memory_background() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize)]
@@ -220,6 +301,8 @@ struct AppInterfaceSettings {
     start_on_boot: bool,
     startup_lock: bool,
     auto_lock_minutes: u64,
+    #[serde(default = "default_low_memory_background")]
+    low_memory_background: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -897,6 +980,162 @@ fn sync_parent_directory(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+struct WindowsHandle(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(target_os = "windows")]
+impl Drop for WindowsHandle {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe {
+                windows_sys::Win32::Foundation::CloseHandle(self.0);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_last_error(description: &str) -> String {
+    let error = unsafe { windows_sys::Win32::Foundation::GetLastError() };
+    format!("{description}（Windows 错误码 {error}）")
+}
+
+#[cfg(target_os = "windows")]
+fn current_user_sid() -> Result<Vec<u8>, String> {
+    use std::{mem::size_of, ptr::null_mut, slice};
+    use windows_sys::Win32::{
+        Security::{
+            GetLengthSid, GetTokenInformation, IsValidSid, TokenUser, TOKEN_QUERY, TOKEN_USER,
+        },
+        System::Threading::{GetCurrentProcess, OpenProcessToken},
+    };
+
+    let mut token = null_mut();
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(windows_last_error("无法打开当前用户令牌"));
+    }
+    let _token_guard = WindowsHandle(token);
+
+    let mut required = 0u32;
+    let _ = unsafe { GetTokenInformation(token, TokenUser, null_mut(), 0, &mut required) };
+    if required == 0 {
+        return Err(windows_last_error("无法读取当前用户 SID 大小"));
+    }
+
+    let word_count = (required as usize + size_of::<usize>() - 1) / size_of::<usize>();
+    let mut buffer = vec![0usize; word_count];
+    let mut returned = 0u32;
+    if unsafe {
+        GetTokenInformation(
+            token,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            required,
+            &mut returned,
+        )
+    } == 0
+    {
+        return Err(windows_last_error("无法读取当前用户 SID"));
+    }
+
+    let token_user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
+    let sid = token_user.User.Sid;
+    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+        return Err("当前用户 SID 无效".to_string());
+    }
+    let sid_length = unsafe { GetLengthSid(sid) } as usize;
+    if sid_length == 0 {
+        return Err("当前用户 SID 长度无效".to_string());
+    }
+    Ok(unsafe { slice::from_raw_parts(sid.cast::<u8>(), sid_length) }.to_vec())
+}
+
+#[cfg(target_os = "windows")]
+fn restrict_windows_acl(path: &Path, description: &str, directory: bool) -> Result<(), String> {
+    use std::{mem::size_of, os::windows::ffi::OsStrExt, ptr::null_mut};
+    use windows_sys::Win32::{
+        Security::Authorization::{SetNamedSecurityInfoW, SE_FILE_OBJECT},
+        Security::{
+            AddAccessAllowedAceEx, InitializeAcl, ACL, ACL_REVISION, CONTAINER_INHERIT_ACE,
+            DACL_SECURITY_INFORMATION, OBJECT_INHERIT_ACE, PROTECTED_DACL_SECURITY_INFORMATION,
+            PSID,
+        },
+        Storage::FileSystem::FILE_ALL_ACCESS,
+    };
+
+    let sid = current_user_sid()?;
+    let acl_size = size_of::<ACL>()
+        .checked_add(size_of::<windows_sys::Win32::Security::ACCESS_ALLOWED_ACE>())
+        .and_then(|size| size.checked_sub(size_of::<u32>()))
+        .and_then(|size| size.checked_add(sid.len()))
+        .ok_or_else(|| format!("无法限制{description} ACL：访问控制列表过大"))?;
+    let acl_word_count = (acl_size + size_of::<u32>() - 1) / size_of::<u32>();
+    let mut acl_storage = vec![0u32; acl_word_count];
+    let acl = acl_storage.as_mut_ptr().cast::<ACL>();
+    if unsafe { InitializeAcl(acl, acl_size as u32, ACL_REVISION) } == 0 {
+        return Err(windows_last_error(&format!("无法初始化{description} ACL")));
+    }
+
+    let ace_flags = if directory {
+        OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
+    } else {
+        0
+    };
+    if unsafe {
+        AddAccessAllowedAceEx(
+            acl,
+            ACL_REVISION,
+            ace_flags,
+            FILE_ALL_ACCESS,
+            sid.as_ptr().cast::<core::ffi::c_void>() as PSID,
+        )
+    } == 0
+    {
+        return Err(windows_last_error(&format!("无法写入{description} ACL")));
+    }
+
+    let mut wide_path = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        SetNamedSecurityInfoW(
+            wide_path.as_mut_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            null_mut(),
+            null_mut(),
+            acl,
+            null_mut(),
+        )
+    };
+    if result != windows_sys::Win32::Foundation::ERROR_SUCCESS {
+        return Err(format!(
+            "无法设置{description} ACL（Windows 错误码 {result}）"
+        ));
+    }
+    Ok(())
+}
+
+fn restrict_private_directory(path: &Path, description: &str) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("无法限制{description}目录权限：{error}"))?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        restrict_windows_acl(path, description, true)?;
+    }
+    #[cfg(not(any(unix, target_os = "windows")))]
+    {
+        let _ = (path, description);
+    }
+    Ok(())
+}
+
 fn restrict_private_file(path: &Path, description: &str) -> Result<(), String> {
     #[cfg(unix)]
     {
@@ -904,7 +1143,11 @@ fn restrict_private_file(path: &Path, description: &str) -> Result<(), String> {
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))
             .map_err(|error| format!("无法限制{description}文件权限：{error}"))?;
     }
-    #[cfg(not(unix))]
+    #[cfg(target_os = "windows")]
+    {
+        restrict_windows_acl(path, description, false)?;
+    }
+    #[cfg(not(any(unix, target_os = "windows")))]
     {
         let _ = (path, description);
     }
@@ -961,6 +1204,7 @@ fn write_local_vault_key(app: &AppHandle, key: &[u8]) -> Result<(), String> {
     drop(file);
     fs::rename(&temporary_path, &key_path)
         .map_err(|error| format!("无法启用本地资产库密钥：{error}"))?;
+    restrict_private_file(&key_path, "资产库密钥")?;
     sync_parent_directory(&key_path)?;
     Ok(())
 }
@@ -1420,11 +1664,54 @@ fn validate_vault_payload(content: &str) -> Result<Value, String> {
 
 #[cfg(desktop)]
 fn restore_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+            return;
+        }
+
+        let _guard = match MAIN_WINDOW_CREATE_LOCK.lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                eprintln!("主窗口创建锁已损坏");
+                return;
+            }
+        };
+
+        // Multiple tray clicks can queue restore tasks while the WebView is
+        // being created. Check again after acquiring the lock so only one
+        // `main` window is ever rebuilt.
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+            return;
+        }
+
+        let Some(config) = app
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|window| window.label == "main")
+            .cloned()
+        else {
+            eprintln!("未找到 main 窗口配置，无法恢复主窗口");
+            return;
+        };
+
+        match WebviewWindowBuilder::from_config(&app, &config).and_then(|builder| builder.build()) {
+            Ok(window) => {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            Err(error) => eprintln!("恢复主窗口失败：{error}"),
+        }
+    });
 }
 
 fn vault_revision(value: &Value) -> u64 {
@@ -2016,7 +2303,7 @@ fn get_storage_info(app: AppHandle) -> Result<StorageInfo, String> {
 fn open_storage_path(app: AppHandle, kind: String) -> Result<(), String> {
     let path = match kind.as_str() {
         "installation" => installation_directory()?,
-        "data" => ensure_vault_directory(&app)?,
+        "app-data" => data_container_directory(&app)?,
         _ => return Err("不支持的目录类型".to_string()),
     };
     open_directory(&path)
@@ -2026,6 +2313,18 @@ fn open_storage_path(app: AppHandle, kind: String) -> Result<(), String> {
 fn exit_application(app: AppHandle) {
     app.state::<ExitIntent>().0.store(true, Ordering::SeqCst);
     app.exit(0);
+}
+
+#[cfg(desktop)]
+fn request_application_exit(app: &AppHandle) {
+    if app.get_webview_window("main").is_some() {
+        let _ = app.emit("tray-exit-requested", ());
+    } else {
+        // Low-memory background mode has already completed the save and
+        // cleanup sequence before destroying the main WebView, so there is no
+        // frontend listener left to perform the normal exit handshake.
+        exit_application(app.clone());
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2039,18 +2338,19 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             let _ = app.show();
 
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            restore_main_window(app);
         }));
-        builder = builder.plugin(tauri_plugin_autostart::Builder::new().build());
+        builder = builder.plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg(AUTOSTART_LAUNCH_ARGUMENT)
+                .build(),
+        );
         builder = builder.on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Prevent the native close action immediately. The frontend then
-                // flushes pending data, locks the vault when enabled, and hides
-                // the window so the process remains available from the tray.
+                // flushes pending data, locks the vault when enabled, and either
+                // hides or destroys the window so the process remains available
+                // from the tray.
                 api.prevent_close();
                 let _ = window.emit("window-close-requested", ());
             }
@@ -2063,7 +2363,20 @@ pub fn run() {
         .setup(|app| {
             use tauri::PhysicalSize;
 
-            if let Some(window) = app.get_webview_window("main") {
+            let launched_from_autostart =
+                std::env::args().any(|argument| argument == AUTOSTART_LAUNCH_ARGUMENT);
+            if !launched_from_autostart {
+                let Some(config) = app
+                    .config()
+                    .app
+                    .windows
+                    .iter()
+                    .find(|window| window.label == "main")
+                    .cloned()
+                else {
+                    return Err("未找到 main 窗口配置，无法启动应用".into());
+                };
+                let window = WebviewWindowBuilder::from_config(app.handle(), &config)?.build()?;
                 if let Ok(Some(monitor)) = window
                     .current_monitor()
                     .or_else(|_| window.primary_monitor())
@@ -2075,6 +2388,7 @@ pub fn run() {
                     let _ = window.set_size(PhysicalSize::new(width.max(1024), height.max(720)));
                     let _ = window.center();
                 }
+                let _ = window.show();
             }
 
             #[cfg(desktop)]
@@ -2095,7 +2409,7 @@ pub fn run() {
                         } else if event.id() == "lock" {
                             let _ = app.emit("tray-lock-requested", ());
                         } else if event.id() == "exit" {
-                            let _ = app.emit("tray-exit-requested", ());
+                            request_application_exit(app);
                         }
                     });
                 #[cfg(target_os = "windows")]
@@ -2151,13 +2465,14 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                // Only the tray's explicit `app.exit(0)` is allowed to terminate
-                // the process. Other native exit requests return to the tray.
-                if !app.state::<ExitIntent>().0.swap(false, Ordering::SeqCst) {
+                // A live main window still needs the frontend save/lock handshake;
+                // once low-memory mode has destroyed it, the native app is clean
+                // and can accept an external exit request directly.
+                if !app.state::<ExitIntent>().0.swap(false, Ordering::SeqCst)
+                    && app.get_webview_window("main").is_some()
+                {
                     api.prevent_exit();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.emit("window-exit-requested", ());
-                    }
+                    let _ = app.emit("window-exit-requested", ());
                 }
             }
         });

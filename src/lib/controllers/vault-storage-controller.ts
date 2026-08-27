@@ -31,6 +31,8 @@ type VaultStoragePort = {
   isLocked(): boolean;
   hasPendingRecoveryFile(): boolean;
   lock(): Promise<void>;
+  clearSensitiveState(): void;
+  isLowMemoryBackground(): boolean;
   writeViewState(state: VaultStorageViewState): void;
 };
 
@@ -315,6 +317,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
     if (exitInProgress || closeInProgress) return;
     closeInProgress = true;
     let lockAttempted = false;
+    let backgroundReleaseAttempted = false;
     try {
       if (storageState === "load-error") {
         throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
@@ -335,13 +338,25 @@ export function createVaultStorageController(port: VaultStoragePort) {
         lockAttempted = true;
         await port.lock();
       }
-      await appWindow.hide();
+      if (port.isLowMemoryBackground()) {
+        backgroundReleaseAttempted = true;
+        port.clearSensitiveState();
+        suspend();
+        await appWindow.destroy();
+      } else {
+        await appWindow.hide();
+      }
     } catch (error) {
       // Keep the window visible whenever the save or lock sequence fails so the
       // error remains actionable and the user can retry immediately.
+      if (backgroundReleaseAttempted && !port.isLockEnabled()) {
+        await initialize().catch(() => undefined);
+      }
       await appWindow.show().catch(() => undefined);
       const reason = error instanceof Error ? error.message : String(error ?? "");
-      if (lockAttempted) {
+      if (backgroundReleaseAttempted) {
+        port.showStatus(reason ? `释放后台窗口失败，窗口保持打开：${reason}` : "释放后台窗口失败，窗口保持打开", 7000);
+      } else if (lockAttempted) {
         port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000);
       } else {
         port.showStatus(reason ? `保存失败，窗口保持打开：${reason}` : "保存失败，窗口保持打开", 7000);

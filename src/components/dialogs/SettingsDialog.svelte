@@ -99,11 +99,15 @@
         <span class="settings-switch"><input type="checkbox" checked={view.tooltipEnabled} aria-label="显示 Tooltip" on:change={(event) => actions.setTooltipEnabled((event.currentTarget as HTMLInputElement).checked)} /><span class="settings-switch-track" aria-hidden="true"><span></span></span></span>
       </label>
       <label class="settings-switch-row" class:settings-switch-row-disabled={!view.autostartAvailable}>
-        <span><strong>开机自启</strong><small>{view.autostartAvailable ? "登录系统后自动启动密码管理器。" : "仅桌面应用支持，浏览器预览模式不可用。"}</small></span>
+        <span><strong>开机自启</strong><small>{view.autostartAvailable ? "登录系统后在系统托盘中运行，不主动打开主页面。" : "仅桌面应用支持，浏览器预览模式不可用。"}</small></span>
         <span class="settings-switch">
           <input type="checkbox" checked={view.startOnBoot} aria-label="开机自启" disabled={!view.autostartAvailable || view.autostartUpdating} on:change={(event) => actions.setStartOnBoot((event.currentTarget as HTMLInputElement).checked)} />
           <span class="settings-switch-track" aria-hidden="true"><span></span></span>
         </span>
+      </label>
+      <label class="settings-switch-row">
+        <span><strong>低内存后台运行</strong><small>{view.lowMemoryBackground ? "关闭窗口后释放主窗口和 WebView，保留托盘；再次打开时重新加载资产库。" : "关闭窗口后保留主窗口，托盘恢复更快但占用内存较多。"}</small></span>
+        <span class="settings-switch"><input type="checkbox" checked={view.lowMemoryBackground} aria-label="低内存后台运行" on:change={(event) => actions.setLowMemoryBackground((event.currentTarget as HTMLInputElement).checked)} /><span class="settings-switch-track" aria-hidden="true"><span></span></span></span>
       </label>
     {:else if view.activeSection === "security"}
       <div class="settings-heading"><h3>安全</h3><p>保护应用启动和托盘恢复时的资产库访问。</p></div>
@@ -220,22 +224,22 @@
         </dl>
       </section>
       <section class="settings-about-section settings-environment-paths" aria-labelledby="settings-paths-heading">
-        <div class="settings-about-section-heading" id="settings-paths-heading"><span class="settings-about-heading-icon"><FolderOpen size={16} /></span><strong>本地路径</strong></div>
+        <div class="settings-about-section-heading" id="settings-paths-heading"><span class="settings-about-heading-icon"><FolderOpen size={16} /></span><strong>路径信息</strong></div>
         <dl class="settings-about-list">
           <div>
-            <dt>安装路径</dt>
+            <dt>应用安装路径</dt>
             <dd class="settings-path-value">
               <span>{view.installationPath}</span>
-              <button class="settings-path-button" type="button" aria-label="打开安装路径" data-tooltip="打开安装路径" disabled={!isTauri() || view.installationPath === "当前环境不可用"} on:click={() => actions.openStoragePath("installation")}>
+              <button class="settings-path-button" type="button" aria-label="打开应用安装路径" data-tooltip="打开应用安装路径" disabled={!isTauri() || view.installationPath === "当前环境不可用"} on:click={() => actions.openStoragePath("installation")}>
                 <FolderOpen size={15} />
               </button>
             </dd>
           </div>
           <div>
-            <dt>数据存储路径</dt>
+            <dt>应用数据路径</dt>
             <dd class="settings-path-value">
-              <span>{view.dataPath}</span>
-              <button class="settings-path-button" type="button" aria-label="打开数据存储路径" data-tooltip="打开数据存储路径" disabled={!isTauri() || view.dataPath === "当前环境不可用"} on:click={() => actions.openStoragePath("data")}>
+              <span>{view.appDataPath}</span>
+              <button class="settings-path-button" type="button" aria-label="打开应用数据路径" data-tooltip="打开应用数据路径" disabled={!isTauri() || view.appDataPath === "当前环境不可用"} on:click={() => actions.openStoragePath("app-data")}>
                 <FolderOpen size={15} />
               </button>
             </dd>

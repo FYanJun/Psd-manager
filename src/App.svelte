@@ -175,7 +175,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   let appVersion = "0.1.17";
   let dataDialogReturnToSettings = false;
   let installationPath = "";
-  let dataPath = "";
+  let appDataPath = "";
   let vaultLockEnabled = false;
   let vaultLocked = false;
   let vaultUnlockBusy = false;
@@ -605,6 +605,8 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     isLocked: () => vaultLocked,
     hasPendingRecoveryFile: () => Boolean(recoveryKey && !recoveryFileSaved),
     lock: lockVaultSession,
+    clearSensitiveState: clearSensitiveVaultState,
+    isLowMemoryBackground: () => appSettings.interface.lowMemoryBackground,
     writeViewState: (state) => {
       vaultStorageState = state.state;
       vaultStorageError = state.error;
@@ -719,6 +721,15 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
       try {
         const enabled = await isAutostartEnabled();
         autostartAvailable = true;
+        if (enabled) {
+          // Refresh existing registrations so installations created before the
+          // tray-only launch marker was added receive the new startup argument.
+          try {
+            await enableAutostart();
+          } catch (error) {
+            showStatus(`开机自启配置更新失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+          }
+        }
         if (appSettings.interface.startOnBoot !== enabled) {
           appSettings = normalizeAppSettings({
             ...appSettings,
@@ -735,16 +746,16 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
         // Keep the package version fallback in browser preview or older runtimes.
       }
       try {
-        const storageInfo = await invoke<{ installationPath: string; dataPath: string }>("get_storage_info");
+        const storageInfo = await invoke<{ installationPath: string; appDataPath: string }>("get_storage_info");
         installationPath = storageInfo.installationPath;
-        dataPath = storageInfo.dataPath;
+        appDataPath = storageInfo.appDataPath;
       } catch (error) {
         showStatus(`存储路径读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
       }
     }
   }
 
-  async function openStoragePath(kind: "installation" | "data") {
+  async function openStoragePath(kind: "installation" | "app-data") {
     if (!isTauri()) {
       showStatus("浏览器预览模式不支持打开本地目录");
       return;
@@ -1546,6 +1557,13 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     });
   }
 
+  function setLowMemoryBackground(value: boolean) {
+    updateAppSettings({
+      ...appSettings,
+      interface: { ...appSettings.interface, lowMemoryBackground: value },
+    });
+  }
+
   async function setStartOnBootSetting(value: boolean) {
     if (!isTauri()) {
       showStatus("浏览器预览模式不支持开机自启");
@@ -2223,6 +2241,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   const settingsActions = {
     setSection: setSettingsSection,
     setTooltipEnabled: setTooltipSetting,
+    setLowMemoryBackground,
     setStartOnBoot: setStartOnBootSetting,
     setStartupLock,
     setAutoLockEnabled,
@@ -2359,6 +2378,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     startOnBoot: appSettings.interface.startOnBoot,
     startupLock: vaultLockEnabled,
     autoLockMinutes: appSettings.interface.autoLockMinutes,
+    lowMemoryBackground: appSettings.interface.lowMemoryBackground,
     autostartAvailable,
     autostartUpdating,
     theme: appSettings.interface.theme,
@@ -2371,7 +2391,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     deviceTypeSortMode: appSettings.workspace.deviceTypeSortMode,
     generator: appSettings.passwordGenerator,
     installationPath: installationPath || "当前环境不可用",
-    dataPath: dataPath || "当前环境不可用",
+    appDataPath: appDataPath || "当前环境不可用",
     version: appVersion,
   };
 
