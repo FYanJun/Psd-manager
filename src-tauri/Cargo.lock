@@ -2801,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "psd-manager"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "aes-gcm",
  "argon2",

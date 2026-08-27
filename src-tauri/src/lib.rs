@@ -1517,6 +1517,32 @@ fn validate_vault_payload(content: &str) -> Result<Value, String> {
 }
 
 #[cfg(desktop)]
+fn saved_window_bounds(app: &AppHandle) -> Option<AppWindowBounds> {
+    let content = load_app_settings_sync(app).ok().flatten()?;
+    let settings = serde_json::from_str::<AppSettingsFile>(&content).ok()?;
+    if !settings.workspace.remember_window_bounds {
+        return None;
+    }
+    settings.workspace.window_bounds
+}
+
+#[cfg(desktop)]
+fn apply_saved_window_bounds(window: &tauri::WebviewWindow, bounds: &AppWindowBounds) {
+    use tauri::{PhysicalPosition, PhysicalSize};
+
+    let (Ok(x), Ok(y), Ok(width), Ok(height)) = (
+        i32::try_from(bounds.x),
+        i32::try_from(bounds.y),
+        u32::try_from(bounds.width),
+        u32::try_from(bounds.height),
+    ) else {
+        return;
+    };
+    let _ = window.set_size(PhysicalSize::new(width, height));
+    let _ = window.set_position(PhysicalPosition::new(x, y));
+}
+
+#[cfg(desktop)]
 fn restore_main_window(app: &AppHandle) {
     #[cfg(target_os = "macos")]
     let _ = app.show();
@@ -1560,8 +1586,12 @@ fn restore_main_window(app: &AppHandle) {
             return;
         };
 
+        let saved_bounds = saved_window_bounds(&app);
         match WebviewWindowBuilder::from_config(&app, &config).and_then(|builder| builder.build()) {
             Ok(window) => {
+                if let Some(bounds) = saved_bounds.as_ref() {
+                    apply_saved_window_bounds(&window, bounds);
+                }
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
