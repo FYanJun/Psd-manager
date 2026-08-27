@@ -980,144 +980,6 @@ fn sync_parent_directory(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-struct WindowsHandle(windows_sys::Win32::Foundation::HANDLE);
-
-#[cfg(target_os = "windows")]
-impl Drop for WindowsHandle {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe {
-                windows_sys::Win32::Foundation::CloseHandle(self.0);
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_last_error(description: &str) -> String {
-    let error = unsafe { windows_sys::Win32::Foundation::GetLastError() };
-    format!("{description}（Windows 错误码 {error}）")
-}
-
-#[cfg(target_os = "windows")]
-fn current_user_sid() -> Result<Vec<u8>, String> {
-    use std::{mem::size_of, ptr::null_mut, slice};
-    use windows_sys::Win32::{
-        Security::{
-            GetLengthSid, GetTokenInformation, IsValidSid, TokenUser, TOKEN_QUERY, TOKEN_USER,
-        },
-        System::Threading::{GetCurrentProcess, OpenProcessToken},
-    };
-
-    let mut token = null_mut();
-    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
-        return Err(windows_last_error("无法打开当前用户令牌"));
-    }
-    let _token_guard = WindowsHandle(token);
-
-    let mut required = 0u32;
-    let _ = unsafe { GetTokenInformation(token, TokenUser, null_mut(), 0, &mut required) };
-    if required == 0 {
-        return Err(windows_last_error("无法读取当前用户 SID 大小"));
-    }
-
-    let word_count = (required as usize + size_of::<usize>() - 1) / size_of::<usize>();
-    let mut buffer = vec![0usize; word_count];
-    let mut returned = 0u32;
-    if unsafe {
-        GetTokenInformation(
-            token,
-            TokenUser,
-            buffer.as_mut_ptr().cast(),
-            required,
-            &mut returned,
-        )
-    } == 0
-    {
-        return Err(windows_last_error("无法读取当前用户 SID"));
-    }
-
-    let token_user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
-    let sid = token_user.User.Sid;
-    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
-        return Err("当前用户 SID 无效".to_string());
-    }
-    let sid_length = unsafe { GetLengthSid(sid) } as usize;
-    if sid_length == 0 {
-        return Err("当前用户 SID 长度无效".to_string());
-    }
-    Ok(unsafe { slice::from_raw_parts(sid.cast::<u8>(), sid_length) }.to_vec())
-}
-
-#[cfg(target_os = "windows")]
-fn restrict_windows_acl(path: &Path, description: &str, directory: bool) -> Result<(), String> {
-    use std::{mem::size_of, os::windows::ffi::OsStrExt, ptr::null_mut};
-    use windows_sys::Win32::{
-        Security::Authorization::{SetNamedSecurityInfoW, SE_FILE_OBJECT},
-        Security::{
-            AddAccessAllowedAceEx, InitializeAcl, ACL, ACL_REVISION, CONTAINER_INHERIT_ACE,
-            DACL_SECURITY_INFORMATION, OBJECT_INHERIT_ACE, PROTECTED_DACL_SECURITY_INFORMATION,
-            PSID,
-        },
-        Storage::FileSystem::FILE_ALL_ACCESS,
-    };
-
-    let sid = current_user_sid()?;
-    let acl_size = size_of::<ACL>()
-        .checked_add(size_of::<windows_sys::Win32::Security::ACCESS_ALLOWED_ACE>())
-        .and_then(|size| size.checked_sub(size_of::<u32>()))
-        .and_then(|size| size.checked_add(sid.len()))
-        .ok_or_else(|| format!("无法限制{description} ACL：访问控制列表过大"))?;
-    let acl_word_count = (acl_size + size_of::<u32>() - 1) / size_of::<u32>();
-    let mut acl_storage = vec![0u32; acl_word_count];
-    let acl = acl_storage.as_mut_ptr().cast::<ACL>();
-    if unsafe { InitializeAcl(acl, acl_size as u32, ACL_REVISION) } == 0 {
-        return Err(windows_last_error(&format!("无法初始化{description} ACL")));
-    }
-
-    let ace_flags = if directory {
-        OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
-    } else {
-        0
-    };
-    if unsafe {
-        AddAccessAllowedAceEx(
-            acl,
-            ACL_REVISION,
-            ace_flags,
-            FILE_ALL_ACCESS,
-            sid.as_ptr().cast::<core::ffi::c_void>() as PSID,
-        )
-    } == 0
-    {
-        return Err(windows_last_error(&format!("无法写入{description} ACL")));
-    }
-
-    let mut wide_path = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let result = unsafe {
-        SetNamedSecurityInfoW(
-            wide_path.as_mut_ptr(),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            null_mut(),
-            null_mut(),
-            acl,
-            null_mut(),
-        )
-    };
-    if result != windows_sys::Win32::Foundation::ERROR_SUCCESS {
-        return Err(format!(
-            "无法设置{description} ACL（Windows 错误码 {result}）"
-        ));
-    }
-    Ok(())
-}
-
 fn restrict_private_directory(path: &Path, description: &str) -> Result<(), String> {
     #[cfg(unix)]
     {
@@ -1125,11 +987,7 @@ fn restrict_private_directory(path: &Path, description: &str) -> Result<(), Stri
         fs::set_permissions(path, fs::Permissions::from_mode(0o700))
             .map_err(|error| format!("无法限制{description}目录权限：{error}"))?;
     }
-    #[cfg(target_os = "windows")]
-    {
-        restrict_windows_acl(path, description, true)?;
-    }
-    #[cfg(not(any(unix, target_os = "windows")))]
+    #[cfg(not(unix))]
     {
         let _ = (path, description);
     }
@@ -1143,11 +1001,7 @@ fn restrict_private_file(path: &Path, description: &str) -> Result<(), String> {
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))
             .map_err(|error| format!("无法限制{description}文件权限：{error}"))?;
     }
-    #[cfg(target_os = "windows")]
-    {
-        restrict_windows_acl(path, description, false)?;
-    }
-    #[cfg(not(any(unix, target_os = "windows")))]
+    #[cfg(not(unix))]
     {
         let _ = (path, description);
     }
