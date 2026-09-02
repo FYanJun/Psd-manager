@@ -288,11 +288,11 @@
   .settings-auto-lock-copy strong { color: var(--text-strong); font-size: var(--font-size-13); }
   .settings-auto-lock-copy small { color: var(--muted); font-size: var(--font-size-12); line-height: 1.5; }
   .settings-auto-lock-config > input { width: 100%; min-height: 40px; border: 1px solid var(--field-border); border-radius: 8px; padding: 0 11px; color: var(--app-text); background: var(--field); outline: 0; transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease; }
-  .settings-auto-lock-config > input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+  .settings-auto-lock-config > input:focus { border-color: var(--blue); }
   .settings-field { display: grid; gap: 8px; color: var(--text-strong); font-size: var(--font-size-13); font-weight: 800; }
   .settings-field > span:first-child { color: var(--text-secondary); font-size: var(--font-size-12); letter-spacing: .01em; }
   .settings-field input { min-height: 40px; border: 1px solid var(--field-border); border-radius: 8px; padding: 0 11px; color: var(--app-text); background: var(--field); outline: 0; transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease; }
-  .settings-field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+  .settings-field input:focus { border-color: var(--blue); }
   .settings-field input[type="range"] { padding: 0; accent-color: var(--blue); }
   .settings-segmented { display: flex; flex-wrap: wrap; width: 100%; min-height: 38px; padding: 2px; border: 1px solid var(--field-border); border-radius: 8px; background: var(--surface-subtle); }
   .settings-segmented button { flex: 1 1 0; min-width: 0; min-height: 34px; border: 1px solid transparent; border-radius: 6px; padding: 0 12px; color: var(--text-secondary); font-size: var(--font-size-13); font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }

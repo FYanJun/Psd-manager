@@ -120,7 +120,7 @@
   }
 
   .modal {
-    width: min(720px, calc(100vw - 48px));
+    width: min(680px, calc(100vw - 48px));
     height: auto;
     min-height: 360px;
     max-height: calc(100vh - 48px);
@@ -128,7 +128,7 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     background: var(--surface);
     box-shadow: var(--modal-shadow);
   }
@@ -138,12 +138,14 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 16px 18px;
+    padding: 18px 22px;
     border-bottom: 1px solid var(--border);
   }
 
   .modal-header h2 {
     margin: 0;
+    color: var(--text-strong);
     font-size: var(--font-size-20);
+    font-weight: 700;
   }
 </style>

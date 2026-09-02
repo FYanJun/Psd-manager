@@ -72,6 +72,12 @@ html[data-theme="dark"] {
   --tooltip-background: #10171f;
   --tooltip-border: #6e8194;
   --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --focus-ring: 0 0 0 3px #79b8ff;
+  --danger-subtle: #3f282d;
+  --danger-subtle-hover: #5b3034;
+  --danger-panel: #3f282d;
+  --danger-panel-border: #71413e;
+  --danger-panel-text: #ffaaa5;
   background: var(--app-background);
   color: var(--app-text);
 }
@@ -111,6 +117,12 @@ html[data-theme="dark"] {
     --tooltip-background: #10171f;
     --tooltip-border: #6e8194;
     --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --focus-ring: 0 0 0 3px #79b8ff;
+    --danger-subtle: #3f282d;
+    --danger-subtle-hover: #5b3034;
+    --danger-panel: #3f282d;
+    --danger-panel-border: #71413e;
+    --danger-panel-text: #ffaaa5;
   }
 }
 
@@ -368,11 +380,12 @@ html[data-theme="dark"] .danger-outline,
 html[data-theme="system"] .danger-outline {
   border-color: rgba(255, 170, 165, 0.55);
   color: #ffaaa5;
+  background: var(--danger-subtle);
 }
 
 html[data-theme="dark"] .danger-outline:hover,
 html[data-theme="system"] .danger-outline:hover {
-  background: rgba(196, 56, 43, 0.18);
+  background: var(--danger-subtle-hover);
 }
 
 html[data-theme="dark"] .drawer-scrim,
@@ -643,6 +656,7 @@ html[data-theme="system"] .detail-actions .update-password-action:not(:disabled)
 
 html[data-theme="dark"] .detail-actions .update-password-action:not(:disabled):hover,
 html[data-theme="system"] .detail-actions .update-password-action:not(:disabled):hover {
+  color: #fff;
   background: var(--primary-fill-hover);
 }
 
@@ -779,8 +793,8 @@ html[data-theme="system"] .history-row {
   border-color: var(--border);
 }
 
-html[data-theme="dark"] .account-checkbox,
-html[data-theme="system"] .account-checkbox {
+html[data-theme="dark"] .account-checkbox:not(.checked),
+html[data-theme="system"] .account-checkbox:not(.checked) {
   border-color: #8f9aa5;
 }
 
@@ -791,8 +805,8 @@ html[data-theme="system"] .panel-heading h2 {
   color: var(--text-strong);
 }
 
-html[data-theme="dark"] .account-checkbox,
-html[data-theme="system"] .account-checkbox {
+html[data-theme="dark"] .account-checkbox:not(.checked),
+html[data-theme="system"] .account-checkbox:not(.checked) {
   background: var(--field);
 }
 

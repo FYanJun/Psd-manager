@@ -30,11 +30,13 @@
     gap: 10px;
     max-width: clamp(32%, var(--toast-share), 92%);
     padding: 10px 10px 10px 16px;
+    border: 1px solid #465563;
     border-radius: 10px;
     color: #fff;
-    background: rgba(37, 41, 46, 0.92);
+    background: var(--tooltip-background);
     box-shadow: 0 18px 54px rgba(24, 28, 32, 0.26);
-    font-weight: 700;
+    font-size: var(--font-size-14);
+    font-weight: 600;
     transform: translateX(-50%);
   }
 

@@ -53,7 +53,7 @@
           <span>清空</span>
         </button>
       {/if}
-      <button class="secondary-button account-heading-action" on:click={() => openAddAccountDialog()}>
+      <button class="secondary-button account-heading-action account-add-action" on:click={() => openAddAccountDialog()}>
         <Plus size={15} />
         <span>新增账号</span>
       </button>

@@ -11,14 +11,12 @@
   }
 
   .topbar .primary-button span,
-  .topbar .tool-button span,
-  .detail-actions .tool-button span {
+  .topbar .tool-button span {
     display: none;
   }
 
   .topbar .primary-button,
-  .topbar .tool-button,
-  .detail-actions .tool-button {
+  .topbar .tool-button {
     width: 48px;
     height: 48px;
     padding: 0;
@@ -127,5 +125,88 @@
 
   .drawer-footer {
     padding-inline: 14px;
+  }
+}
+
+/* Preserve a usable detail surface when the desktop window is temporarily narrow. */
+@media (max-width: 820px) {
+  .sidebar-pane-title .pane-kicker {
+    display: none;
+  }
+
+  .sidebar-pane-header {
+    min-height: 78px;
+  }
+
+  .sidebar-pane-title h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-18);
+  }
+
+  .device-type-row {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 7px;
+    padding-inline: 6px;
+  }
+
+  .device-type-row > svg {
+    display: none;
+  }
+
+  .type-copy strong,
+  .type-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .detail-empty-state {
+    max-width: min(100%, 520px);
+    padding-inline: clamp(24px, 6vw, 56px);
+  }
+}
+
+@container sidebar (max-width: 130px) {
+  .device-type-row {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding-inline: 4px;
+  }
+
+  .device-type-row .type-icon {
+    display: none;
+  }
+
+  .type-copy small {
+    display: none;
+  }
+
+  .type-copy strong {
+    width: 100%;
+    overflow: hidden;
+    text-align: center;
+    font-size: var(--font-size-13);
+  }
+}
+
+@container device-list (max-width: 180px) {
+  .pane-list-toolbar {
+    gap: 2px;
+  }
+
+  .pane-list-toolbar .compact-action {
+    width: 30px;
+    height: 30px;
+  }
+
+  .list-context {
+    gap: 2px;
+    padding-inline: 2px;
+    font-size: var(--font-size-13);
+  }
+
+  .list-context > span,
+  .list-context > small {
+    display: none;
   }
 }

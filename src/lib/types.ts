@@ -2,6 +2,11 @@ export type DeviceType = string;
 export type ConfigImportMode = "replace" | "add-missing";
 export type ConfirmationSummaryItem = { label: string; value: string };
 export type ConfirmationChange = { label: string; from: string; to: string };
+export type ConfirmationTarget = {
+  label: string;
+  description: string;
+  icon: "device" | "device-type" | "account";
+};
 export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string };
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
@@ -45,6 +50,8 @@ export type PendingConfirmation = {
   detail: string;
   confirmLabel: string;
   summaryItems?: ConfirmationSummaryItem[];
+  target?: ConfirmationTarget;
+  impactItems?: ConfirmationSummaryItem[];
   changes?: ConfirmationChange[];
   importModeSummaries?: Record<ConfigImportMode, ConfirmationSummaryItem[]>;
   importModeDetails?: Record<ConfigImportMode, string>;

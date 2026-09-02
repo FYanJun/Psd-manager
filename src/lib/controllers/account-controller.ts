@@ -369,19 +369,32 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     }
     port.setActivePopover(null);
     port.setActiveDialog(null);
-    const targetLabel = selectedAccountTargets.length > 1
-      ? `${selectedAccountTargets.length} 个账号`
-      : `“${selectedAccountTargets[0].username || selectedAccountTargets[0].title || "当前账号"}”`;
+    const selectedAccountCount = selectedAccountTargets.length;
+    const currentPasswordCount = selectedAccountTargets.filter((account) => Boolean(account.password)).length;
+    const historyCount = selectedAccountTargets.reduce((count, account) => count + account.history.length, 0);
+    const targetLabel = selectedAccountCount > 1
+      ? `${selectedAccountCount} 个账号`
+      : `账号“${selectedAccountTargets[0].username || selectedAccountTargets[0].title || "当前账号"}”`;
+    const deviceDescription = [state.selectedItem.deviceName, state.selectedItem.deviceType]
+      .filter(Boolean)
+      .join(" · ") || "所属设备信息未设置";
+    const removingAllAccounts = selectedAccountCount >= selectedAccounts.length;
     port.setPendingConfirmation({
       action: "delete-account",
       title: "删除账号",
-      message: `确认删除${targetLabel}？`,
-      detail: selectedAccountTargets.length >= selectedAccounts.length
-        ? "选中账号的当前密码和历史密码记录都会移除，设备将显示为暂无账号。"
-        : selectedAccountTargets.length > 1
-          ? "选中账号的当前密码和历史密码记录都会从当前设备中移除。"
-          : "该账号的当前密码和历史密码记录都会从当前设备中移除。",
+      message: `确认删除${targetLabel}？账号资料、当前密码和密码历史记录都会移除。`,
+      detail: `删除前会创建加密快照。删除后可立即撤销；${removingAllAccounts ? "设备仍会保留，但会显示为暂无账号。" : "设备和其他账号不会受影响。"} 如果之后继续修改数据，可从“数据快照”恢复。`,
       confirmLabel: "删除账号",
+      target: {
+        label: targetLabel,
+        description: deviceDescription,
+        icon: "account",
+      },
+      impactItems: [
+        { label: "账号资料", value: `${selectedAccountCount} 个` },
+        { label: "当前密码", value: `${currentPasswordCount} 个` },
+        { label: "密码历史记录", value: `${historyCount} 条` },
+      ],
       itemUuid: state.selectedItem.uuid,
       accountUuids: selectedAccountTargets.map((account) => account.uuid),
     });

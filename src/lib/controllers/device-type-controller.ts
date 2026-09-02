@@ -130,9 +130,19 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       deviceType,
       deviceTypeUuid: typeMeta.uuid,
       title: "删除设备类型",
-      message: `确认删除“${deviceType}”？`,
-      detail: "这个类型会从侧边栏移除，之后仍可重新新增。",
-      confirmLabel: "删除类型",
+      message: `确认删除设备类型“${deviceType}”？该类型下没有设备。`,
+      detail: "只删除设备类型本身，不会删除设备、账号或密码。删除前会创建加密快照，删除后可立即撤销。",
+      confirmLabel: "删除设备类型",
+      target: {
+        label: deviceType,
+        description: "自定义设备类型",
+        icon: "device-type",
+      },
+      impactItems: [
+        { label: "设备类型", value: "1 个" },
+        { label: "关联设备", value: "0 台" },
+        { label: "设备、账号和密码", value: "不会删除" },
+      ],
     });
   }
 

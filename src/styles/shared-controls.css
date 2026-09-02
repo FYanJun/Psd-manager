@@ -6,9 +6,10 @@
   height: 38px;
   padding: 0 10px;
   border-radius: 8px;
-  color: #2e3135;
+  color: var(--text-secondary);
   font-size: var(--font-size-15);
-  font-weight: 700;
+  font-weight: 600;
+  transition: color 120ms ease, background 120ms ease;
 }
 
 
@@ -16,22 +17,30 @@
   height: 40px;
 }
 
+.topbar > .tool-button:not(.accent) {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.topbar > .tool-button:not(.accent):hover {
+  border-color: var(--gray-300);
+  background: var(--surface-subtle);
+}
+
 .tool-button.accent {
   color: var(--blue);
+  background: var(--accent-subtle);
+}
+
+.tool-button.accent:hover {
+  color: var(--blue-hover);
+  background: var(--blue-100);
 }
 
 .icon-button.inline {
   width: 36px;
   height: 36px;
-}
-
-.danger-outline {
-  border-color: #f0c5bf;
-  color: #c4382b;
-}
-
-.danger-outline:hover {
-  background: #fff4f2;
 }
 
 .quiet-text {
@@ -47,14 +56,30 @@
   gap: 7px;
   height: 40px;
   padding: 0 14px;
-  border: 1px solid #d7dbe0;
-  border-radius: 10px;
-  background: #fff;
-  font-weight: 800;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  color: var(--text-strong);
+  background: var(--surface);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
 .secondary-button:hover {
-  background: #f3f5f7;
+  border-color: var(--blue-300);
+  background: var(--surface-muted);
+}
+
+.secondary-button.danger-outline {
+  border-color: var(--red-200);
+  color: var(--red-500);
+  background: var(--red-50);
+}
+
+.secondary-button.danger-outline:hover {
+  border-color: var(--red-500);
+  color: var(--red-600);
+  background: var(--red-50);
 }
 
 button:disabled {
@@ -74,15 +99,21 @@ button:disabled {
   justify-content: center;
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid #b92f25;
+  border: 1px solid var(--red-600);
   border-radius: 8px;
   color: #fff;
-  background: #c4382b;
+  background: var(--red-500);
   font-weight: 800;
   line-height: 1.2;
   text-align: center;
 }
 
 .danger-button:hover {
-  background: #ad2b22;
+  color: #fff;
+  background: var(--red-600);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 2px;
 }

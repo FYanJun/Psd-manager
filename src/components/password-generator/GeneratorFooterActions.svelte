@@ -16,9 +16,9 @@
 {#if canUseGeneratorForCurrentAccount || canUseGeneratorForBulkUpdate}
   <footer class="drawer-footer">
     {#if canUseGeneratorForCurrentAccount}
-      <button class="drawer-action primary-action" aria-label="填入修改密码" data-tooltip="填入修改密码" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={() => useGeneratedPasswordForCurrentDevice()}>
+      <button class="drawer-action primary-action" aria-label="填入随机密码" data-tooltip="填入随机密码" disabled={!generatedPassword || !selectedItem.id || !selectedAccount.id} on:click={() => useGeneratedPasswordForCurrentDevice()}>
         <KeyRound size={18} />
-        <span>填入修改密码</span>
+        <span>填入随机密码</span>
       </button>
     {/if}
     {#if canUseGeneratorForBulkUpdate}

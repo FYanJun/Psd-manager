@@ -1,6 +1,6 @@
 [package]
 name = "psd-manager"
-version = "0.1.23"
+version = "0.1.24"
 description = "Psd Manager - 密码管理器"
 authors = ["FanYanJun"]
 edition = "2021"

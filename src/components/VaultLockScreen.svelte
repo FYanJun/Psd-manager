@@ -101,7 +101,7 @@
   .vault-lock-card form { display: grid; gap: 14px; width: 100%; margin-top: 2px; text-align: left; }
   .vault-lock-card label { display: grid; gap: 7px; color: var(--text-strong); font-size: var(--font-size-13); font-weight: 750; }
   .vault-lock-card :global(.clearable-input) :global(input) { width: 100%; min-height: 44px; border: 1px solid var(--field-border); border-radius: 8px; padding: 0 11px; outline: 0; color: var(--app-text); background: var(--field); transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease; }
-  .vault-lock-card :global(.clearable-input) :global(input:focus) { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+  .vault-lock-card :global(.clearable-input) :global(input:focus) { border-color: var(--blue); }
   .vault-lock-submit { width: 100%; min-height: 42px; }
   .vault-lock-error { margin: 0; color: #d45b4f; font-size: var(--font-size-12); text-align: left; }
   .vault-lock-card small { color: var(--muted); font-size: var(--font-size-11); line-height: 1.4; }

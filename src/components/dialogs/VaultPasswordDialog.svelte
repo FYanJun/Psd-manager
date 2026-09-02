@@ -88,7 +88,7 @@
   .vault-password-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; color: var(--blue); background: var(--accent-subtle); }
   .vault-password-field { display: grid; gap: 7px; color: var(--text-strong); font-size: var(--font-size-13); font-weight: 750; }
   .vault-password-body :global(.clearable-input) :global(input) { width: 100%; min-height: 42px; border: 1px solid var(--field-border); border-radius: 8px; padding: 0 11px; outline: 0; color: var(--app-text); background: var(--field); transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease; }
-  .vault-password-body :global(.clearable-input) :global(input:focus) { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+  .vault-password-body :global(.clearable-input) :global(input:focus) { border-color: var(--blue); }
   .vault-password-hint, .vault-password-error { margin: 0; font-size: var(--font-size-12); line-height: 1.5; }
   .vault-password-hint { color: var(--muted); }
   .vault-password-error { color: #d45b4f; }

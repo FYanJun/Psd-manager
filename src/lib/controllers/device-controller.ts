@@ -338,13 +338,29 @@ export function createDeviceController(port: DeviceControllerPort) {
   function requestDeleteSelected() {
     const state = port.read();
     if (!state.selectedItem.id) return;
+    const historyCount = state.selectedAccounts.reduce((count, account) => count + account.history.length, 0);
+    const deviceDescription = [
+      state.selectedItem.deviceType,
+      state.selectedItem.location,
+      state.selectedItem.ipAddress,
+    ].filter(Boolean).join(" · ") || "设备信息未设置";
     port.write({ activePopover: null, activeDialog: null });
     port.setPendingConfirmation({
       action: "delete-device",
       title: "删除设备",
-      message: `确认删除“${state.selectedItem.deviceName}”？`,
-      detail: `将删除这台设备下的 ${state.selectedAccounts.length} 个账号、当前密码和历史密码记录。`,
+      message: `确认删除“${state.selectedItem.deviceName}”？设备资料、账号和密码记录都会一起移除。`,
+      detail: "删除前会创建加密快照。删除后可立即撤销；如果之后继续修改数据，可从“数据快照”恢复。",
       confirmLabel: "删除设备",
+      target: {
+        label: state.selectedItem.deviceName,
+        description: deviceDescription,
+        icon: "device",
+      },
+      impactItems: [
+        { label: "设备资料", value: "1 台" },
+        { label: "账号及当前密码", value: `${state.selectedAccounts.length} 个` },
+        { label: "密码历史记录", value: `${historyCount} 条` },
+      ],
       itemUuid: state.selectedItem.uuid,
     });
   }
