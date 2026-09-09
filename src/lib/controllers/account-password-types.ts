@@ -22,6 +22,7 @@ export type PasswordUpdateForm = {
 
 export type AccountPasswordState = {
   items: VaultItem[];
+  deviceTypeOptionsLength: number;
   selectedItem: VaultItem;
   hasSelectedDevice: boolean;
   selectedDeviceType: "全部设备" | DeviceType;

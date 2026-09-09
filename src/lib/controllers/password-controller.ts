@@ -112,6 +112,10 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       port.showStatus("请从批量改密窗口打开随机密码生成器");
       return;
     }
+    if (!canOpenBulkPasswordDialog()) {
+      port.showStatus("请先新增设备类型、设备和账号后再使用批量改密");
+      return;
+    }
     const generatedPassword = ensureGeneratedPassword();
     if (!generatedPassword) return;
     const target = port.getGeneratorState().target;
@@ -208,6 +212,10 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
 
   function openBulkPasswordDialog(useGenerated = false) {
     const state = port.read();
+    if (!canOpenBulkPasswordDialog(state)) {
+      port.showStatus("请先新增设备类型、设备和账号后再使用批量改密");
+      return;
+    }
     port.setActivePopover(null);
     port.setOpenTypePicker(null);
     port.write({
@@ -223,6 +231,11 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       },
     });
     port.setActiveDialog("bulk-password");
+  }
+
+  function canOpenBulkPasswordDialog(state = port.read()) {
+    const accountCount = state.items.reduce((count, item) => count + getAccounts(item).length, 0);
+    return state.deviceTypeOptionsLength > 0 && state.items.length > 0 && accountCount > 0;
   }
 
   function setBulkPasswordDeviceType(deviceType: "全部设备" | DeviceType) {
@@ -527,6 +540,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     requestRestoreHistoryPassword,
     executeRestoreHistoryPassword,
     openBulkPasswordDialog,
+    canOpenBulkPasswordDialog,
     setBulkPasswordDeviceType,
     updateBulkUsernameSearch,
     selectBulkUsername,

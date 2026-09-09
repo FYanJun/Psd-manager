@@ -38,6 +38,7 @@
   <Topbar
     backDisabled={view.topbar.backDisabled}
     forwardDisabled={view.topbar.forwardDisabled}
+    bulkPasswordDisabled={view.topbar.bulkPasswordDisabled}
     bind:searchInput
     searchQuery={view.topbar.searchQuery}
     searchPlaceholder={view.topbar.searchPlaceholder}

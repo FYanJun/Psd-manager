@@ -5,6 +5,7 @@
 
   export let backDisabled = false;
   export let forwardDisabled = false;
+  export let bulkPasswordDisabled = false;
   export let searchInput: HTMLInputElement | null = null;
   export let searchQuery = "";
   export let searchPlaceholder = "";
@@ -42,7 +43,7 @@
     />
   </label>
 
-  <button class="tool-button topbar-tool" aria-label="批量改密" data-tooltip="批量改密" aria-keyshortcuts="Meta+B Control+B" on:click={() => openBulkPasswordDialog()}>
+  <button class="tool-button topbar-tool" aria-label="批量改密" data-tooltip={bulkPasswordDisabled ? "请先新增设备类型、设备和账号" : "批量改密"} aria-keyshortcuts="Meta+B Control+B" disabled={bulkPasswordDisabled} on:click={() => openBulkPasswordDialog()}>
     <UsersRound size={20} />
     <span>批量改密</span>
   </button>

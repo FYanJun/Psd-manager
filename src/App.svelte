@@ -163,6 +163,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   let passwordStrengthCacheValue = "";
   let canUseGeneratorForCurrentAccount = true;
   let canUseGeneratorForBulkUpdate = true;
+  let bulkPasswordDisabled = true;
   let appSettings: AppSettings = createDefaultAppSettings();
   let settingsActiveSection: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment" = "interface";
   let settingsLoaded = false;
@@ -468,6 +469,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
   const accountPasswordController = createAccountPasswordController({
     read: (): AccountPasswordState => ({
       items,
+      deviceTypeOptionsLength: deviceTypeOptions.length,
       selectedItem,
       hasSelectedDevice,
       selectedDeviceType,
@@ -921,6 +923,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
   $: {
     items;
+    deviceTypeOptions;
     selectedItem;
     hasSelectedDevice;
     selectedDeviceType;
@@ -936,6 +939,11 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     passwordVisible;
     visibleHistoryIds;
     accountPasswordDerived = accountPasswordController.derive();
+  }
+  $: {
+    items;
+    deviceTypeOptions;
+    bulkPasswordDisabled = !accountPasswordController.canOpenBulkPasswordDialog();
   }
   $: selectedAccounts = accountPasswordDerived.selectedAccounts;
   $: selectedAccount = accountPasswordDerived.selectedAccount;
@@ -2438,6 +2446,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
     topbar: {
       backDisabled: backStack.length === 0,
       forwardDisabled: forwardStack.length === 0,
+      bulkPasswordDisabled,
       searchQuery: searchDraft,
       searchPlaceholder,
     },

@@ -30,6 +30,7 @@ export type WorkspaceSidebarView = {
 export type WorkspaceTopbarView = {
   backDisabled: boolean;
   forwardDisabled: boolean;
+  bulkPasswordDisabled: boolean;
   searchQuery: string;
   searchPlaceholder: string;
 };
