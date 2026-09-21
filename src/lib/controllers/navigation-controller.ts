@@ -121,7 +121,9 @@ export function createNavigationController(port: NavigationPort) {
       selectedDeviceType: deviceType,
       searchQuery: searchValue,
       selectedId: firstMatch?.id ?? 0,
+      selectedAccountId: 0,
       selectedAccountIds: [],
+      passwordVisible: false,
       activePopover: null,
       visibleHistoryIds: [],
     });

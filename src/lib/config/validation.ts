@@ -9,7 +9,7 @@ import {
 } from "../input-validation";
 import type { ConfigData } from "../types";
 import { getAccounts } from "../vault";
-import { readString } from "../utils";
+import { getErrorMessage, readString } from "../utils";
 import { isUuid } from "../uuid";
 import { ConfigImportError, readRecordValue } from "./shared";
 
@@ -318,7 +318,7 @@ export function assertCsvConfigIdentities(records: Array<Record<string, string>>
     try {
       history = JSON.parse(historyText);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error ?? "无法解析");
+      const reason = getErrorMessage(error, "无法解析");
       throw new ConfigImportError(`${rowLabel}的密码历史不是有效 JSON：${reason}`);
     }
     if (!Array.isArray(history)) throw new ConfigImportError(`${rowLabel}的密码历史必须是数组`);

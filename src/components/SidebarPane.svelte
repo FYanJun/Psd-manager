@@ -50,6 +50,7 @@
       <button
         class:selected={selectedDeviceType === type.label}
         class="device-type-row"
+        data-tooltip={type.label}
         on:click={() => selectDeviceType(type.label)}
         on:contextmenu={(event) => openTypeContextMenu(type.label, event)}
       >

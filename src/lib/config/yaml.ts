@@ -6,6 +6,7 @@ import {
   parseStructuredConfigPayload,
 } from "./structured";
 import { ConfigImportError, stripUtf8Bom } from "./shared";
+import { getErrorMessage } from "../utils";
 
 export function createYamlConfigPayload(config: ConfigData) {
   const payload = stringifyYaml(createJsonConfigPayload(config), {
@@ -28,7 +29,7 @@ export function parseYamlConfigContent(content: string): ConfigData {
       schema: "core",
     });
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error ?? "无法解析");
+    const reason = getErrorMessage(error, "无法解析");
     throw new ConfigImportError(`YAML 配置语法错误：${reason}`);
   }
   if (isStructuredConfigPayload(parsed)) return parseStructuredConfigPayload(parsed);

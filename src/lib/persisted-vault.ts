@@ -1,3 +1,4 @@
+import { AppError } from "./app-error";
 import { VAULT_SCHEMA_VERSION } from "./constants";
 import {
   getTextInputValidationError,
@@ -8,16 +9,13 @@ import {
 } from "./input-validation";
 import type { DeviceAccount, DeviceTypeMeta, PasswordHistory, PersistedVaultState, VaultItem, VaultSnapshot } from "./types";
 import { isUuid } from "./uuid";
+import { isRecord } from "./utils";
 
-export class VaultSchemaError extends Error {
+export class VaultSchemaError extends AppError {
   constructor(message: string) {
-    super(message);
+    super(message, "validation");
     this.name = "VaultSchemaError";
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function requireRecord(value: unknown, path: string) {

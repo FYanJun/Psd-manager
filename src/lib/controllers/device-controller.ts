@@ -1,7 +1,7 @@
 import { formatDateTime } from "../utils";
 import {
   CONNECTION_ADDRESS_ERROR,
-  getTextInputValidationError,
+  getTextFieldsValidationError,
   INPUT_LIMITS,
   isValidConnectionAddress,
 } from "../input-validation";
@@ -17,7 +17,7 @@ import type {
   VaultItem,
 } from "../types";
 import { createUuid } from "../uuid";
-import { createEmptyDeviceForm, getAccounts, syncItemWithAccounts } from "../vault";
+import { countAccountHistory, createEmptyDeviceForm, getAccounts, syncItemWithAccounts } from "../vault";
 
 export type DeviceControllerState = {
   items: VaultItem[];
@@ -133,12 +133,10 @@ export function createDeviceController(port: DeviceControllerPort) {
       ["设备位置", form.location, INPUT_LIMITS.location, false],
       ["设备备注", form.notes, INPUT_LIMITS.notes, true],
     ];
-    for (const [label, value, maxLength, allowLineBreaks] of textFields) {
-      const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
-      if (error) {
-        port.showStatus(`${label}${error}`, 5000);
-        return null;
-      }
+    const error = getTextFieldsValidationError(textFields);
+    if (error) {
+      port.showStatus(error, 5000);
+      return null;
     }
     if (!isValidConnectionAddress(form.ipAddress)) {
       port.showStatus(CONNECTION_ADDRESS_ERROR, 5000);
@@ -338,7 +336,7 @@ export function createDeviceController(port: DeviceControllerPort) {
   function requestDeleteSelected() {
     const state = port.read();
     if (!state.selectedItem.id) return;
-    const historyCount = state.selectedAccounts.reduce((count, account) => count + account.history.length, 0);
+    const historyCount = countAccountHistory(state.selectedAccounts);
     const deviceDescription = [
       state.selectedItem.deviceType,
       state.selectedItem.location,

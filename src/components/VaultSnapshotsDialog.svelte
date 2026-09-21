@@ -2,16 +2,12 @@
   import { ArchiveRestore } from "@lucide/svelte";
   import ModalFrame from "./ModalFrame.svelte";
   import type { VaultSnapshot } from "../lib/types";
-  import { getAccounts } from "../lib/vault";
+  import { countVaultAccounts } from "../lib/vault";
 
   export let open = false;
   export let snapshots: VaultSnapshot[] = [];
   export let close: () => void;
   export let requestRestore: (snapshot: VaultSnapshot) => void;
-
-  function accountCount(snapshot: VaultSnapshot) {
-    return snapshot.items.reduce((count, item) => count + getAccounts(item).length, 0);
-  }
 
   function formatSnapshotTime(value: string) {
     const date = new Date(value);
@@ -29,7 +25,7 @@
             <div class="snapshot-row">
               <div>
                 <strong>{snapshot.reason}</strong>
-                <span>{formatSnapshotTime(snapshot.createdAt)} · {snapshot.items.length} 台设备 · {accountCount(snapshot)} 个账号</span>
+                <span>{formatSnapshotTime(snapshot.createdAt)} · {snapshot.items.length} 台设备 · {countVaultAccounts(snapshot.items)} 个账号</span>
               </div>
               <button class="secondary-button" on:click={() => requestRestore(snapshot)}><ArchiveRestore size={16} /><span>恢复</span></button>
             </div>

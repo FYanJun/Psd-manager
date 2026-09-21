@@ -1,7 +1,7 @@
 import { APP_TITLE, CONFIG_FORMAT_VERSION, DEFAULT_ACCOUNT_TAG } from "../constants";
 import type { ConfigData, DeviceAccount, PasswordHistory, VaultItem } from "../types";
 import { getAccounts, iconClassForColor } from "../vault";
-import { readString } from "../utils";
+import { getErrorMessage, readString } from "../utils";
 import { buildDeviceTypeGroups } from "./export-utils";
 import { normalizeVaultIdentityData } from "./normalization";
 import { assertAllowedFields, assertStructuredConfigIdentities } from "./validation";
@@ -73,7 +73,7 @@ export function parseJsonConfigContent(content: string): ConfigData {
   try {
     parsed = JSON.parse(stripUtf8Bom(content));
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error ?? "无法解析");
+    const reason = getErrorMessage(error, "无法解析");
     throw new ConfigImportError(`JSON 配置语法错误：${reason}`);
   }
   if (isStructuredConfigPayload(parsed)) return parseStructuredConfigPayload(parsed);

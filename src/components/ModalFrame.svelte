@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
+  import { removeModal, restoreModalFocus } from "../lib/modal-focus";
   import { X } from "@lucide/svelte";
 
   export let title: string;
@@ -33,7 +34,7 @@
 
   async function focusInitialElement() {
     await tick();
-    if (!dialogElement) return;
+    if (!dialogElement?.isConnected || modalStack[modalStack.length - 1] !== dialogElement) return;
     const initialElement = dialogElement.querySelector<HTMLElement>("[data-modal-autofocus]")
       ?? getFocusableElements()[0]
       ?? dialogElement;
@@ -80,13 +81,9 @@
   onDestroy(() => {
     dialogElement?.removeEventListener("keydown", handleDialogKeydown);
     document.removeEventListener("focusin", handleDocumentFocusIn, true);
-    const stackIndex = modalStack.indexOf(dialogElement);
-    if (stackIndex >= 0) modalStack.splice(stackIndex, 1);
-    if (restoreFocusElement?.isConnected) {
-      restoreFocusElement.focus({ preventScroll: true });
-      return;
+    if (removeModal(modalStack, dialogElement)) {
+      restoreModalFocus(modalStack[modalStack.length - 1], restoreFocusElement);
     }
-    modalStack[modalStack.length - 1]?.focus({ preventScroll: true });
   });
 </script>
 
@@ -128,8 +125,8 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 14px;
-    background: var(--surface);
+    border-radius: var(--radius-lg);
+    background: var(--surface-elevated);
     box-shadow: var(--modal-shadow);
   }
 
@@ -138,14 +135,15 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 18px 22px;
-    border-bottom: 1px solid var(--border);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--divider);
   }
 
   .modal-header h2 {
     margin: 0;
     color: var(--text-strong);
-    font-size: var(--font-size-20);
+    font-size: var(--type-title);
     font-weight: 700;
+    line-height: var(--leading-title);
   }
 </style>

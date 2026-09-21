@@ -1,5 +1,6 @@
 import type { DeviceTypeMeta, PendingConfirmation, VaultItem, VaultSnapshot } from "../types";
 import { createVaultSnapshot } from "../vault-recovery";
+import { getErrorMessage } from "../utils";
 
 type SnapshotState = {
   items: VaultItem[];
@@ -35,7 +36,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
     } catch (error) {
       port.writeSnapshots(previousSnapshots);
       port.refreshDirtyState();
-      const reason = error instanceof Error ? error.message : String(error ?? "未知错误");
+      const reason = getErrorMessage(error, "未知错误");
       port.showStatus(
         reason
           ? `安全快照保存失败，操作已取消：${reason}`
@@ -63,7 +64,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
       await port.persistImmediately();
       port.showStatus("数据快照已恢复");
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error ?? "未知错误");
+      const reason = getErrorMessage(error, "未知错误");
       // The restored state remains in memory and dirty so the storage retry path
       // can persist it without silently discarding the user's selected snapshot.
       port.showStatus(

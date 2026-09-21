@@ -196,33 +196,39 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     port.offerSnapshotUndo(snapshot.id, "设备类型已删除");
   }
 
+  function validateTypeForm(form: TypeForm, originalUuid: string | null) {
+    const label = form.label.trim();
+    if (!label) {
+      port.showStatus("请输入设备类型名称");
+      return false;
+    }
+    const labelError = getTextInputValidationError(form.label, INPUT_LIMITS.deviceTypeName);
+    if (labelError) {
+      port.showStatus(`设备类型名称${labelError}`, 5000);
+      return false;
+    }
+    const iconError = getTextInputValidationError(form.iconText, INPUT_LIMITS.deviceTypeIcon);
+    if (iconError || !isValidDeviceTypeIconText(form.iconText)) {
+      port.showStatus(`设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
+      return false;
+    }
+    if (!isValidDeviceTypeColor(form.color)) {
+      port.showStatus("请选择有效的设备类型颜色");
+      return false;
+    }
+    if (hasDuplicateLabel(label, originalUuid)) {
+      port.showStatus("设备类型已存在");
+      return false;
+    }
+    return true;
+  }
+
   function saveDeviceType() {
     const state = port.read();
     const { typeForm } = state;
     const label = typeForm.label.trim();
     const originalUuid = typeForm.originalUuid;
-    if (!label) {
-      port.showStatus("请输入设备类型名称");
-      return;
-    }
-    const labelError = getTextInputValidationError(typeForm.label, INPUT_LIMITS.deviceTypeName);
-    if (labelError) {
-      port.showStatus(`设备类型名称${labelError}`, 5000);
-      return;
-    }
-    const iconError = getTextInputValidationError(typeForm.iconText, INPUT_LIMITS.deviceTypeIcon);
-    if (iconError || !isValidDeviceTypeIconText(typeForm.iconText)) {
-      port.showStatus(`设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
-      return;
-    }
-    if (!isValidDeviceTypeColor(typeForm.color)) {
-      port.showStatus("请选择有效的设备类型颜色");
-      return;
-    }
-    if (hasDuplicateLabel(label, originalUuid)) {
-      port.showStatus("设备类型已存在");
-      return;
-    }
+    if (!validateTypeForm(typeForm, originalUuid)) return;
 
     if (originalUuid) {
       const originalMeta = getTypeMetaByUuid(originalUuid);
@@ -276,28 +282,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       port.showStatus("保存失败：待修改的设备类型已不存在", 5000);
       return;
     }
-    if (!label) {
-      port.showStatus("请输入设备类型名称");
-      return;
-    }
-    const labelError = getTextInputValidationError(form.label, INPUT_LIMITS.deviceTypeName);
-    if (labelError) {
-      port.showStatus(`设备类型名称${labelError}`, 5000);
-      return;
-    }
-    const iconError = getTextInputValidationError(form.iconText, INPUT_LIMITS.deviceTypeIcon);
-    if (iconError || !isValidDeviceTypeIconText(form.iconText)) {
-      port.showStatus(`设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
-      return;
-    }
-    if (!isValidDeviceTypeColor(form.color)) {
-      port.showStatus("请选择有效的设备类型颜色");
-      return;
-    }
-    if (hasDuplicateLabel(label, originalUuid)) {
-      port.showStatus("设备类型已存在");
-      return;
-    }
+    if (!validateTypeForm(form, originalUuid)) return;
 
     const nextMeta: DeviceTypeMeta = {
       uuid: originalUuid ?? createUuid(),

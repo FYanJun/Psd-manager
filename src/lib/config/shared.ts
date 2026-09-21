@@ -1,3 +1,4 @@
+import { AppError } from "../app-error";
 import type { ConfigFormat } from "../types";
 
 export const CSV_HEADERS = [
@@ -25,10 +26,17 @@ export const CSV_HEADERS = [
 
 export const CONFIG_FORMATS: ConfigFormat[] = ["json", "csv", "yaml"];
 
-export class ConfigImportError extends Error {
-  constructor(message: string) {
-    super(message);
+export class ConfigImportError extends AppError {
+  constructor(message: string, kind: "validation" | "conflict" = "validation") {
+    super(message, kind);
     this.name = "ConfigImportError";
+  }
+}
+
+export class ConfigConflictError extends ConfigImportError {
+  constructor(message: string) {
+    super(message, "conflict");
+    this.name = "ConfigConflictError";
   }
 }
 

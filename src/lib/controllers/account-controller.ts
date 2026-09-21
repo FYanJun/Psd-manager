@@ -1,13 +1,13 @@
 import { createAccountFromForm, formatDeviceAccountInfo, updateAccountPassword } from "../device-commands";
 import {
-  getTextInputValidationError,
+  getTextFieldsValidationError,
   hasValidPasswordCharacters,
   INPUT_LIMITS,
   PASSWORD_CHARACTER_ERROR,
 } from "../input-validation";
 import type { AccountForm, DeviceAccount, PendingConfirmation, VaultItem } from "../types";
 import { formatDateTime } from "../utils";
-import { createEmptyAccountForm, getAccounts, isBlankPlaceholderAccount, syncItemWithAccounts } from "../vault";
+import { countAccountHistory, createEmptyAccountForm, getAccounts, isBlankPlaceholderAccount, syncItemWithAccounts } from "../vault";
 import {
   getAccountSelectionState,
   type AccountPasswordControllerPort,
@@ -155,12 +155,10 @@ export function createAccountController(port: AccountPasswordControllerPort) {
       ["账号标签", form.tag, INPUT_LIMITS.accountTag, false],
       ["账号备注", form.notes, INPUT_LIMITS.notes, true],
     ];
-    for (const [label, value, maxLength, allowLineBreaks] of textFields) {
-      const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
-      if (error) {
-        port.showStatus(`${label}${error}`, 5000);
-        return false;
-      }
+    const error = getTextFieldsValidationError(textFields);
+    if (error) {
+      port.showStatus(error, 5000);
+      return false;
     }
     if (!hasValidPasswordCharacters(form.password)) {
       port.showStatus(PASSWORD_CHARACTER_ERROR, 5000);
@@ -371,7 +369,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     port.setActiveDialog(null);
     const selectedAccountCount = selectedAccountTargets.length;
     const currentPasswordCount = selectedAccountTargets.filter((account) => Boolean(account.password)).length;
-    const historyCount = selectedAccountTargets.reduce((count, account) => count + account.history.length, 0);
+    const historyCount = countAccountHistory(selectedAccountTargets);
     const targetLabel = selectedAccountCount > 1
       ? `${selectedAccountCount} 个账号`
       : `账号“${selectedAccountTargets[0].username || selectedAccountTargets[0].title || "当前账号"}”`;

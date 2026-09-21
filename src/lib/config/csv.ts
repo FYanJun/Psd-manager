@@ -1,7 +1,7 @@
 import { APP_TITLE, CONFIG_FORMAT_VERSION, DEFAULT_ACCOUNT_TAG } from "../constants";
 import type { ConfigData, DeviceAccount, PasswordHistory, VaultItem } from "../types";
 import { getAccounts, iconClassForColor } from "../vault";
-import { formatDateTime, readString } from "../utils";
+import { formatDateTime, getErrorMessage, readString } from "../utils";
 import { isUuid } from "../uuid";
 import { buildDeviceTypeGroups } from "./export-utils";
 import { normalizeVaultIdentityData } from "./normalization";
@@ -230,7 +230,7 @@ export function parseCsvHistory(value: string, rowNumber: number): PasswordHisto
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error ?? "无法解析");
+    const reason = getErrorMessage(error, "无法解析");
     throw new ConfigImportError(`CSV 第 ${rowNumber} 行的密码历史不是有效 JSON：${reason}`);
   }
   if (!Array.isArray(parsed)) {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { clampNumber } from "../lib/utils";
 
   type TooltipPlacement = "top" | "bottom";
 
@@ -32,10 +33,6 @@
     return (target.dataset.tooltip || target.dataset.valueTooltip || "").trim();
   }
 
-  function clamp(value: number, minimum: number, maximum: number) {
-    return Math.min(maximum, Math.max(minimum, value));
-  }
-
   function positionTooltip(target: HTMLElement) {
     const targetRect = target.getBoundingClientRect();
     const tooltipRect = tooltipElement.getBoundingClientRect();
@@ -53,9 +50,9 @@
 
     const targetCenter = targetRect.left + targetRect.width / 2;
     const maximumLeft = Math.max(viewportPadding, window.innerWidth - tooltipRect.width - viewportPadding);
-    left = clamp(targetCenter - tooltipRect.width / 2, viewportPadding, maximumLeft);
+    left = clampNumber(targetCenter - tooltipRect.width / 2, viewportPadding, maximumLeft);
     top = placement === "bottom" ? targetRect.bottom + gap : targetRect.top - tooltipRect.height - gap;
-    arrowLeft = clamp(targetCenter - left, 12, tooltipRect.width - 12);
+    arrowLeft = clampNumber(targetCenter - left, 12, tooltipRect.width - 12);
     positioned = true;
   }
 

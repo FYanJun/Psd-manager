@@ -1,8 +1,11 @@
+import { StorageError, normalizeStorageError } from "../storage-error";
+import { createMemoryVaultStore, type VaultContentStore } from "../vault-content-store";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { parsePersistedVaultContent, validatePersistedVaultState } from "../persisted-vault";
 import type { PersistedVaultState } from "../types";
+import { getErrorMessage } from "../utils";
 
 export type VaultStorageState = "loading" | "ready" | "load-error" | "save-error";
 
@@ -40,9 +43,30 @@ const BACKUP_RECOVERY_REQUIRED = "BACKUP_RECOVERY_REQUIRED:";
 
 // Browser preview is intentionally session-only. Plaintext localStorage is not a
 // security boundary, so the encrypted Tauri store remains the only persistent vault.
-let browserPreviewContent: string | null = null;
+const browserPreviewStore = createMemoryVaultStore();
+const defaultContentStore: VaultContentStore = {
+  get recoverBackup() {
+    return isTauri() ? () => invoke<void>("recover_vault_backup") : undefined;
+  },
+  read: () => isTauri() ? invoke<string | null>("load_secure_vault") : browserPreviewStore.read(),
+  write: (content, expectedRevision) => isTauri()
+    ? invoke<string>("save_secure_vault", { content, expectedRevision })
+    : browserPreviewStore.write(content, expectedRevision),
+};
 
-export function createVaultStorageController(port: VaultStoragePort) {
+export type VaultWindow = Pick<ReturnType<typeof getCurrentWindow>, "destroy" | "hide" | "show" | "onCloseRequested">;
+export type VaultClosePlatform = {
+  currentWindow(): VaultWindow | null;
+  listen(event: string, handler: () => void): Promise<() => void>;
+  exit(): Promise<void>;
+};
+const defaultClosePlatform: VaultClosePlatform = {
+  currentWindow: () => isTauri() ? getCurrentWindow() : null,
+  listen: (event, handler) => listen(event, handler),
+  exit: () => invoke<void>("exit_application"),
+};
+
+export function createVaultStorageController(port: VaultStoragePort, contentStore: VaultContentStore = defaultContentStore, closePlatform: VaultClosePlatform = defaultClosePlatform) {
   let revision = 0;
   let storageState: VaultStorageState = "loading";
   let storageError = "";
@@ -65,6 +89,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
   let removeTrayExitListener: (() => void) | null = null;
   let closeProtectionPromise: Promise<void> | null = null;
   let destroyed = false;
+  let loadGeneration = 0;
 
   function publish() {
     port.writeViewState({
@@ -97,23 +122,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
     const parsed = parsePersistedVaultContent(content);
     parsed.revision = expectedRevision;
     const normalizedContent = JSON.stringify(validatePersistedVaultState(parsed));
-    let persistedContent = normalizedContent;
-
-    if (isTauri()) {
-      persistedContent = await invoke<string>("save_secure_vault", {
-        content: normalizedContent,
-        expectedRevision,
-      });
-    } else {
-      const currentContent = browserPreviewContent;
-      const currentRevision = currentContent ? parsePersistedVaultContent(currentContent).revision : 0;
-      if (currentRevision !== expectedRevision) {
-        throw new Error(`资产库版本冲突：本地版本为 ${currentRevision}，当前操作基于版本 ${expectedRevision}`);
-      }
-      parsed.revision = expectedRevision + 1;
-      persistedContent = JSON.stringify(validatePersistedVaultState(parsed));
-      browserPreviewContent = persistedContent;
-    }
+    const persistedContent = await contentStore.write(normalizedContent, expectedRevision);
 
     const persisted = parsePersistedVaultContent(persistedContent);
     if (persisted.revision !== expectedRevision + 1) {
@@ -124,8 +133,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
   }
 
   async function readContent() {
-    if (isTauri()) return invoke<string | null>("load_secure_vault");
-    return browserPreviewContent;
+    return contentStore.read();
   }
 
   function resolveWaiters(generation: number) {
@@ -169,7 +177,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
           const persistedContent = await writeContent(batch.content);
           persistedDataSignature = getDataSignature(persistedContent);
         } catch (error) {
-          const saveError = error instanceof Error ? error : new Error(String(error ?? "未知错误"));
+          const saveError = normalizeStorageError(error);
           const newestUnsaved = pendingSave ?? batch;
           pendingSave = null;
           dirtyContent = newestUnsaved.content;
@@ -225,6 +233,9 @@ export function createVaultStorageController(port: VaultStoragePort) {
   }
 
   async function initialize() {
+    if (destroyed) return;
+    const generation = ++loadGeneration;
+    const stale = () => destroyed || generation !== loadGeneration;
     storageState = "loading";
     storageError = "";
     backupRecoveryRequired = false;
@@ -233,6 +244,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
     publish();
     try {
       const storedContent = await readContent();
+      if (stale()) return;
       let successfulContent = "";
       if (storedContent) {
         const parsed = parsePersistedVaultContent(storedContent);
@@ -241,8 +253,10 @@ export function createVaultStorageController(port: VaultStoragePort) {
         successfulContent = storedContent;
       } else {
         const persistedContent = await writeContent(captureContent());
+        if (stale()) return;
         successfulContent = persistedContent;
         const verifiedContent = await readContent();
+        if (stale()) return;
         if (verifiedContent !== persistedContent) throw new Error("新建资产库落盘校验失败");
       }
       port.clampLayout();
@@ -253,8 +267,10 @@ export function createVaultStorageController(port: VaultStoragePort) {
       hydrated = true;
       publish();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error ?? "未知错误");
-      backupRecoveryRequired = message.includes(BACKUP_RECOVERY_REQUIRED);
+      if (stale()) return;
+      const failure = normalizeStorageError(error);
+      const message = failure.message;
+      backupRecoveryRequired = failure instanceof StorageError && failure.code === "backup-recovery-required";
       storageError = message
         .replace(BACKUP_RECOVERY_REQUIRED, "");
       storageState = "load-error";
@@ -263,15 +279,20 @@ export function createVaultStorageController(port: VaultStoragePort) {
   }
 
   async function recoverBackup() {
-    if (!isTauri() || !backupRecoveryRequired) return;
+    const recover = contentStore.recoverBackup;
+    if (destroyed || !recover || !backupRecoveryRequired || storageState === "loading") return;
+    const generation = ++loadGeneration;
+    const stale = () => destroyed || generation !== loadGeneration;
     storageState = "loading";
     storageError = "";
     publish();
     try {
-      await invoke("recover_vault_backup");
+      await recover.call(contentStore);
+      if (stale()) return;
       await initialize();
     } catch (error) {
-      storageError = error instanceof Error ? error.message : String(error ?? "未知错误");
+      if (stale()) return;
+      storageError = getErrorMessage(error, "未知错误");
       storageState = "load-error";
       publish();
     }
@@ -300,6 +321,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
   }
 
   function suspend() {
+    loadGeneration += 1;
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = null;
     pendingSave = null;
@@ -313,27 +335,31 @@ export function createVaultStorageController(port: VaultStoragePort) {
     publish();
   }
 
-  async function handleCloseRequested(appWindow: ReturnType<typeof getCurrentWindow>) {
+  async function prepareClose() {
+    if (storageState === "load-error") {
+      throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
+    }
+    if (port.hasPendingRecoveryFile()) {
+      throw new Error("请先保存启动密码恢复文件，再关闭应用");
+    }
+    if (storageState === "save-error") {
+      throw new Error(storageError || "资产库尚未安全保存，请先重试保存");
+    }
+    if (storageState === "loading" && !port.isLocked()) {
+      throw new Error("资产库正在读取，请稍后再关闭");
+    }
+    if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+    await port.captureWindowBounds();
+    await port.persistAppSettings();
+  }
+
+  async function handleCloseRequested(appWindow: VaultWindow) {
     if (exitInProgress || closeInProgress) return;
     closeInProgress = true;
     let lockAttempted = false;
     let backgroundReleaseAttempted = false;
     try {
-      if (storageState === "load-error") {
-        throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
-      }
-      if (port.hasPendingRecoveryFile()) {
-        throw new Error("请先保存启动密码恢复文件，再关闭应用");
-      }
-      if (storageState === "save-error") {
-        throw new Error(storageError || "资产库尚未安全保存，请先重试保存");
-      }
-      if (storageState === "loading" && !port.isLocked()) {
-        throw new Error("资产库正在读取，请稍后再关闭");
-      }
-      if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
-      await port.captureWindowBounds();
-      await port.persistAppSettings();
+      await prepareClose();
       if (port.isLockEnabled()) {
         lockAttempted = true;
         await port.lock();
@@ -353,7 +379,7 @@ export function createVaultStorageController(port: VaultStoragePort) {
         await initialize().catch(() => undefined);
       }
       await appWindow.show().catch(() => undefined);
-      const reason = error instanceof Error ? error.message : String(error ?? "");
+      const reason = getErrorMessage(error);
       if (backgroundReleaseAttempted) {
         port.showStatus(reason ? `释放后台窗口失败，窗口保持打开：${reason}` : "释放后台窗口失败，窗口保持打开", 7000);
       } else if (lockAttempted) {
@@ -367,10 +393,10 @@ export function createVaultStorageController(port: VaultStoragePort) {
   }
 
   function mountCloseProtection() {
-    if (!isTauri()) return Promise.resolve();
     if (closeProtectionPromise) return closeProtectionPromise;
 
-    const appWindow = getCurrentWindow();
+    const appWindow = closePlatform.currentWindow();
+    if (!appWindow) return Promise.resolve();
     // The native Tauri window event is the single close entry point. Rust
     // already prevents the default close before emitting its compatibility
     // event. Keep a webview-level guard as well so packaged Windows builds
@@ -384,33 +410,19 @@ export function createVaultStorageController(port: VaultStoragePort) {
         // Rust prevents the native close immediately and emits this event as a
         // compatibility path for packaged environments where the webview-level
         // close-request listener is not delivered reliably.
-        listen("window-close-requested", () => {
+        closePlatform.listen("window-close-requested", () => {
           void handleCloseRequested(appWindow);
         }),
-        listen("window-exit-requested", () => {
+        closePlatform.listen("window-exit-requested", () => {
           void handleCloseRequested(appWindow);
         }),
-        listen("tray-exit-requested", () => {
+        closePlatform.listen("tray-exit-requested", () => {
           if (exitInProgress || closeInProgress) return;
           exitInProgress = true;
           void (async () => {
             let lockAttempted = false;
             try {
-              if (storageState === "load-error") {
-                throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
-              }
-              if (port.hasPendingRecoveryFile()) {
-                throw new Error("请先保存启动密码恢复文件，再关闭应用");
-              }
-              if (storageState === "save-error") {
-                throw new Error(storageError || "资产库尚未安全保存，请先重试保存");
-              }
-              if (storageState === "loading" && !port.isLocked()) {
-                throw new Error("资产库正在读取，请稍后再关闭");
-              }
-              if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
-              await port.captureWindowBounds();
-              await port.persistAppSettings();
+              await prepareClose();
               if (port.isLockEnabled()) {
                 lockAttempted = true;
                 await port.lock();
@@ -418,10 +430,10 @@ export function createVaultStorageController(port: VaultStoragePort) {
               // The Rust command exits the application, rather than destroying only
               // the main window. A rejected invoke can happen when the process exits
               // before the IPC response is delivered, so it is intentionally ignored.
-              await invoke("exit_application").catch(() => undefined);
+              await closePlatform.exit().catch(() => undefined);
             } catch (error) {
               await appWindow.show().catch(() => undefined);
-              const reason = error instanceof Error ? error.message : String(error ?? "");
+              const reason = getErrorMessage(error);
               const prefix = lockAttempted ? "锁定失败" : "关闭失败";
               port.showStatus(reason ? `${prefix}：${reason}` : `${prefix}：资产库尚未安全保存，请先重试保存`, 7000);
               exitInProgress = false;
@@ -449,12 +461,13 @@ export function createVaultStorageController(port: VaultStoragePort) {
       ] = removeListeners;
     })().catch((error) => {
       closeProtectionPromise = null;
-      port.showStatus(`窗口关闭保护初始化失败：${error instanceof Error ? error.message : String(error ?? "未知错误")}`, 7000);
+      port.showStatus(`窗口关闭保护初始化失败：${getErrorMessage(error, "未知错误")}`, 7000);
     });
     return closeProtectionPromise;
   }
 
   function destroy() {
+    loadGeneration += 1;
     destroyed = true;
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = null;

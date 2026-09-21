@@ -7,6 +7,7 @@ import type {
   PopoverPosition,
   TypePickerScope,
 } from "../types";
+import { clampNumber } from "../utils";
 
 const POPOVER_WIDTH = 236;
 const POINTER_POPOVER_HEIGHT = 330;
@@ -49,22 +50,16 @@ export function createOverlayController(port: OverlayControllerPort) {
   function getPopoverPosition(trigger: HTMLElement): PopoverPosition {
     const rect = trigger.getBoundingClientRect();
     const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING);
-    const left = Math.min(Math.max(rect.right - POPOVER_WIDTH, VIEWPORT_PADDING), maxLeft);
-    const top = Math.min(Math.max(rect.bottom + 8, VIEWPORT_PADDING), window.innerHeight - VIEWPORT_PADDING);
+    const left = clampNumber(rect.right - POPOVER_WIDTH, VIEWPORT_PADDING, maxLeft);
+    const top = clampNumber(rect.bottom + 8, VIEWPORT_PADDING, window.innerHeight - VIEWPORT_PADDING);
     return { top, left };
   }
 
   function getPointerPopoverPosition(event: MouseEvent): PopoverPosition {
     const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING);
     const maxTop = Math.max(VIEWPORT_PADDING, window.innerHeight - POINTER_POPOVER_HEIGHT - VIEWPORT_PADDING);
-    const left = Math.min(
-      Math.max(event.clientX, VIEWPORT_PADDING),
-      maxLeft,
-    );
-    const top = Math.min(
-      Math.max(event.clientY, VIEWPORT_PADDING),
-      maxTop,
-    );
+    const left = clampNumber(event.clientX, VIEWPORT_PADDING, maxLeft);
+    const top = clampNumber(event.clientY, VIEWPORT_PADDING, maxTop);
     return { top, left };
   }
 

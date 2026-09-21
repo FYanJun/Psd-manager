@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Trash2, UserRound } from "@lucide/svelte";
+  import { ListChecks, ListX, Plus, Trash2, UserRound } from "@lucide/svelte";
   import { tick } from "svelte";
   import type { DeviceAccount, VaultItem } from "../../lib/types";
   import type { DeviceDetailActions } from "../../lib/view-models";
@@ -39,26 +39,31 @@
 
 <section class="account-section" aria-label="设备账号">
   <div class="panel-heading account-heading">
-    <UserRound size={19} />
-    <h2>账号</h2>
-    {#if selectedAccountIds.length > 0}
-      <span class="account-selection-hint">已选 {selectedAccountIds.length} 个</span>
-    {/if}
+    <div class="account-heading-label">
+      <UserRound size={19} />
+      <h2>账号</h2>
+      {#if selectedAccountIds.length > 0}
+        <span class="account-selection-hint">已选 {selectedAccountIds.length} 个</span>
+      {/if}
+    </div>
     <div class="account-heading-actions">
       {#if selectedAccounts.length > 1}
-        <button class="secondary-button account-heading-action" on:click={() => selectAllCurrentAccounts()}>
+        <button class="secondary-button account-heading-action account-batch-action" aria-label="全选账号" data-tooltip="全选账号" on:click={() => selectAllCurrentAccounts()}>
+          <ListChecks class="account-action-compact-icon" size={15} />
           <span>全选</span>
         </button>
-        <button class="secondary-button account-heading-action" disabled={selectedAccountIds.length === 0} on:click={() => clearAccountBatchSelection()}>
+        <button class="secondary-button account-heading-action account-batch-action" aria-label="清空选择" data-tooltip="清空选择" disabled={selectedAccountIds.length === 0} on:click={() => clearAccountBatchSelection()}>
+          <ListX class="account-action-compact-icon" size={15} />
           <span>清空</span>
         </button>
       {/if}
-      <button class="secondary-button account-heading-action account-add-action" on:click={() => openAddAccountDialog()}>
+      <button class="secondary-button account-heading-action account-add-action" aria-label="新增账号" data-tooltip="新增账号" on:click={() => openAddAccountDialog()}>
         <Plus size={15} />
         <span>新增账号</span>
       </button>
       <button
         class="secondary-button account-heading-action danger-outline"
+        aria-label={canDeleteSelectedAccountTargets ? "删除选中账号" : "请先选择账号"}
         disabled={!canDeleteSelectedAccountTargets}
         data-tooltip={canDeleteSelectedAccountTargets ? "删除选中账号" : "请先选择账号"}
         on:click={() => requestDeleteSelectedAccount()}

@@ -1,6 +1,6 @@
 import { APP_TITLE, CONFIG_FORMAT_VERSION } from "./constants";
 import type { ConfigData, ConfigSummary, ConfigFormat, DeviceTypeMeta, VaultItem } from "./types";
-import { getAccounts } from "./vault";
+import { countVaultAccounts, countVaultHistory } from "./vault";
 import { padDatePart } from "./utils";
 import { createCsvConfigPayload, parseCsvConfigContent } from "./config/csv";
 import { createJsonConfigPayload, parseJsonConfigContent } from "./config/structured";
@@ -99,11 +99,8 @@ export function getConfigMimeType(format: ConfigFormat) {
 }
 
 export function getConfigSummary(config: ConfigData): ConfigSummary {
-  const accountCount = config.items.reduce((count, item) => count + getAccounts(item).length, 0);
-  const historyCount = config.items.reduce(
-    (count, item) => count + getAccounts(item).reduce((total, account) => total + account.history.length, 0),
-    0,
-  );
+  const accountCount = countVaultAccounts(config.items);
+  const historyCount = countVaultHistory(config.items);
   const itemTypeLabels = config.items.map((item) => item.deviceType.trim()).filter(Boolean);
   const customTypeLabels = config.customDeviceTypes.map((type) => type.label.trim()).filter(Boolean);
   return {

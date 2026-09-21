@@ -36,7 +36,8 @@ export type ConfirmationAction =
   | "save-device"
   | "save-device-type"
   | "save-account"
-  | "save-account-password";
+  | "save-account-password"
+  | "reset-settings";
 
 export type PopoverPosition = {
   top: number;

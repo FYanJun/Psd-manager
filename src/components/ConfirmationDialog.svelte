@@ -1,5 +1,6 @@
 <script lang="ts">
   import { AlertTriangle, Server, ShieldCheck, Tags, UserRound } from "@lucide/svelte";
+  import { importModeForKey } from "../lib/import-mode-keyboard";
   import ModalFrame from "./ModalFrame.svelte";
   import type { ConfigImportMode, PendingConfirmation } from "../lib/types";
 
@@ -18,6 +19,17 @@
     : pendingConfirmation?.action === "delete-account"
       ? "删除后将从当前设备中移除"
     : "删除后将从当前资产库中移除";
+
+  let addMissingButton: HTMLButtonElement;
+  let replaceButton: HTMLButtonElement;
+  function handleModeKeydown(event: KeyboardEvent) {
+    const next = importModeForKey(event.key, importConfigMode, Boolean(pendingConfirmation?.importModeErrors?.["add-missing"]));
+    if (!next) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setImportConfigMode(next);
+    (next === "replace" ? replaceButton : addMissingButton)?.focus();
+  }
 
   function displayChangeValue(value: string) {
     return value.trim() ? value : "未设置";
@@ -85,6 +97,9 @@
           {#if pendingConfirmation.action === "import-config"}
           <div class="import-mode-control" role="radiogroup" aria-label="选择配置导入方式">
             <button
+              bind:this={addMissingButton}
+              tabindex={importConfigMode === "add-missing" ? 0 : -1}
+              on:keydown={handleModeKeydown}
               class:selected={importConfigMode === "add-missing"}
               type="button"
               role="radio"
@@ -98,6 +113,9 @@
               <small>保留现有数据</small>
             </button>
             <button
+              bind:this={replaceButton}
+              tabindex={importConfigMode === "replace" || pendingConfirmation.importModeErrors?.["add-missing"] ? 0 : -1}
+              on:keydown={handleModeKeydown}
               class:selected={importConfigMode === "replace"}
               type="button"
               role="radio"

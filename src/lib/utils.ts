@@ -2,6 +2,19 @@ export function readString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
+export function getErrorMessage(error: unknown, fallback = "") {
+  if (error instanceof Error) return error.message;
+  return error == null ? fallback : String(error);
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+export function clampNumber(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
 export function readNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }

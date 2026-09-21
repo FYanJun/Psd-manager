@@ -1,3 +1,4 @@
+import { platformOperation } from "./platform-operation";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   APP_SETTINGS_SCHEMA_VERSION,
@@ -6,6 +7,7 @@ import {
 import { clampPaneRatio } from "./layout";
 import { INPUT_LIMITS, sanitizeGeneratorSymbols, sanitizePasswordInput } from "./input-validation";
 import { isUuid } from "./uuid";
+import { isRecord } from "./utils";
 import type {
   AppSettings,
   DensityPreference,
@@ -20,10 +22,6 @@ let browserSettingsContent: string | null = null;
 
 function cloneDefaults(): AppSettings {
   return JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS)) as AppSettings;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function rejectUnknownFields(value: Record<string, unknown>, path: string, allowed: readonly string[]) {
@@ -265,7 +263,7 @@ export function createDefaultAppSettings() {
 }
 
 export async function loadAppSettings() {
-  const content = isTauri() ? await invoke<string | null>("load_app_settings") : browserSettingsContent;
+  const content = isTauri() ? await platformOperation("storage", () => invoke<string | null>("load_app_settings")) : browserSettingsContent;
   if (!content) return createDefaultAppSettings();
   try {
     const parsed = JSON.parse(content) as unknown;
@@ -279,7 +277,7 @@ export async function loadAppSettings() {
 export async function saveAppSettings(settings: AppSettings) {
   const content = JSON.stringify(normalizeAppSettings(settings));
   if (isTauri()) {
-    await invoke<string>("save_app_settings", { content });
+    await platformOperation("storage", () => invoke<string>("save_app_settings", { content }));
   } else {
     browserSettingsContent = content;
   }
@@ -287,7 +285,7 @@ export async function saveAppSettings(settings: AppSettings) {
 
 export async function resetAppSettings() {
   if (isTauri()) {
-    await invoke("reset_app_settings");
+    await platformOperation("storage", () => invoke("reset_app_settings"));
   } else {
     browserSettingsContent = null;
   }

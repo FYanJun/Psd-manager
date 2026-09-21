@@ -1,4 +1,4 @@
-import type { DeviceTypeMeta, VaultItem } from "../types";
+import type { DeviceTypeMeta } from "../types";
 import { normalizeVaultItems } from "../vault";
 import { readString } from "../utils";
 import { createUuid, isUuid } from "../uuid";

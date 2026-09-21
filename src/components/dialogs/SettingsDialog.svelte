@@ -69,7 +69,7 @@
 <div class="settings-layout">
   <nav class="settings-nav" aria-label="设置分类">
     {#each sections as section}
-      <button class:active={view.activeSection === section.key} type="button" on:click={() => actions.setSection(section.key)}>
+      <button class:active={view.activeSection === section.key} type="button" aria-label={section.label} data-tooltip={section.label} on:click={() => actions.setSection(section.key)}>
         <svelte:component this={section.icon} size={17} />
         <span>{section.label}</span>
       </button>

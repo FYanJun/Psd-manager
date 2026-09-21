@@ -78,6 +78,13 @@ html[data-theme="dark"] {
   --danger-panel: #3f282d;
   --danger-panel-border: #71413e;
   --danger-panel-text: #ffaaa5;
+  --surface-elevated: #1f242a;
+  --surface-canvas: #171a1e;
+  --surface-list: #20252b;
+  --topbar-surface: #252b32;
+  --divider: #3a424b;
+  --text-placeholder: #929da8;
+  --accent-focus: #79b8ff;
   background: var(--app-background);
   color: var(--app-text);
 }
@@ -123,6 +130,13 @@ html[data-theme="dark"] {
     --danger-panel: #3f282d;
     --danger-panel-border: #71413e;
     --danger-panel-text: #ffaaa5;
+    --surface-elevated: #1f242a;
+    --surface-canvas: #171a1e;
+    --surface-list: #20252b;
+    --topbar-surface: #252b32;
+    --divider: #3a424b;
+    --text-placeholder: #929da8;
+    --accent-focus: #79b8ff;
   }
 }
 
@@ -978,12 +992,12 @@ html[data-density="compact"] .list-toolbar {
 }
 
 html[data-density="compact"] .item-row {
-  min-height: 46px;
+  min-height: 48px;
   padding-block: 5px;
 }
 
 html[data-density="compact"] .item-primary strong {
-  min-height: 32px;
+  min-height: 24px;
 }
 
 html[data-density="compact"] .account-row {

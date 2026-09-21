@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import type { AppSettings, ThemePreference } from "../types";
+import { clampNumber } from "../utils";
 
 type WindowBounds = NonNullable<AppSettings["workspace"]["windowBounds"]>;
 
@@ -8,10 +9,6 @@ type WindowSettingsPort = {
   read(): AppSettings;
   writeBounds(bounds: WindowBounds): void;
 };
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
 
 function visibleBounds(bounds: WindowBounds, monitors: Awaited<ReturnType<typeof availableMonitors>>): WindowBounds {
   if (monitors.length === 0) return bounds;
@@ -29,8 +26,8 @@ function visibleBounds(bounds: WindowBounds, monitors: Awaited<ReturnType<typeof
   return {
     width,
     height,
-    x: clamp(bounds.x, fitsMonitor.position.x, maximumX),
-    y: clamp(bounds.y, fitsMonitor.position.y, maximumY),
+    x: clampNumber(bounds.x, fitsMonitor.position.x, maximumX),
+    y: clampNumber(bounds.y, fitsMonitor.position.y, maximumY),
   };
 }
 

@@ -189,6 +189,18 @@ export function getAccounts(item: VaultItem) {
   return item.accounts.filter((account) => !isBlankPlaceholderAccount(account));
 }
 
+export function countVaultAccounts(items: VaultItem[]) {
+  return items.reduce((count, item) => count + getAccounts(item).length, 0);
+}
+
+export function countVaultHistory(items: VaultItem[]) {
+  return items.reduce((count, item) => count + countAccountHistory(getAccounts(item)), 0);
+}
+
+export function countAccountHistory(accounts: DeviceAccount[]) {
+  return accounts.reduce((count, account) => count + account.history.length, 0);
+}
+
 export function formatAccountTag(account: Pick<DeviceAccount, "tag">, deviceType = "", deviceTag = "") {
   const tag = account.tag.trim();
   if (!tag || tag === deviceType.trim() || tag === deviceTag.trim()) return DEFAULT_ACCOUNT_TAG;

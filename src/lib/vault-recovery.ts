@@ -1,5 +1,5 @@
 import type { ConfigData, ConfigDiffSummary, DeviceAccount, DeviceTypeMeta, PasswordHistory, VaultItem, VaultSnapshot } from "./types";
-import { ConfigImportError } from "./config";
+import { ConfigConflictError } from "./config/shared";
 import { getAccounts, normalizeVaultItems, syncItemWithAccounts } from "./vault";
 
 function cloneValue<T>(value: T): T {
@@ -168,13 +168,13 @@ export function mergeMissingImportedConfig(
     const label = type.label.trim();
     const localType = currentTypesByUuid.get(type.uuid);
     if (localType && localType.label.trim() !== label) {
-      throw new ConfigImportError(
+      throw new ConfigConflictError(
         `设备类型 UUID ${type.uuid} 已对应名称“${localType.label}”，不能导入为“${type.label}”`,
       );
     }
     const existingUuid = currentTypeLabels.get(label);
     if (existingUuid && existingUuid !== type.uuid) {
-      throw new ConfigImportError(`设备类型名称“${type.label}”已被另一个 UUID 使用`);
+      throw new ConfigConflictError(`设备类型名称“${type.label}”已被另一个 UUID 使用`);
     }
   });
   const currentDeviceNames = new Map(currentItems.map((item) => [
@@ -184,26 +184,26 @@ export function mergeMissingImportedConfig(
   incoming.items.forEach((item) => {
     const localType = currentTypesByUuid.get(item.deviceTypeUuid);
     if (localType && localType.label.trim() !== item.deviceType.trim()) {
-      throw new ConfigImportError(
+      throw new ConfigConflictError(
         `设备“${item.deviceName}”的设备类型 UUID ${item.deviceTypeUuid} 与名称不匹配：本地为“${localType.label}”，导入为“${item.deviceType}”`,
       );
     }
     const key = `${item.deviceTypeUuid}\u0000${item.deviceName.trim()}`;
     const existingUuid = currentDeviceNames.get(key);
     if (localType && existingUuid && existingUuid !== item.uuid) {
-      throw new ConfigImportError(`设备类型“${localType.label}”下的设备名称“${item.deviceName}”已被另一个 UUID 使用`);
+      throw new ConfigConflictError(`设备类型“${localType.label}”下的设备名称“${item.deviceName}”已被另一个 UUID 使用`);
     }
     getAccounts(item).forEach((account) => {
       const currentOwner = currentAccountOwners.get(account.uuid);
       if (currentOwner && currentOwner.item.uuid !== item.uuid) {
-        throw new ConfigImportError(
+        throw new ConfigConflictError(
           `账号 UUID ${account.uuid} 已属于设备“${currentOwner.item.deviceName}”，不能导入到设备“${item.deviceName}”`,
         );
       }
       account.history.forEach((history) => {
         const historyOwner = currentHistoryOwners.get(history.uuid);
         if (historyOwner && historyOwner.account.uuid !== account.uuid) {
-          throw new ConfigImportError(
+          throw new ConfigConflictError(
             `密码历史 UUID ${history.uuid} 已属于设备“${historyOwner.item.deviceName}”的账号“${historyOwner.account.username}”，不能导入到账号“${account.username}”`,
           );
         }
@@ -219,7 +219,7 @@ export function mergeMissingImportedConfig(
     importedAccounts.forEach((account) => {
       const existingUuid = existingUsernames.get(account.username.trim());
       if (existingUuid && existingUuid !== account.uuid) {
-        throw new ConfigImportError(`设备“${item.deviceName}”下的账号名“${account.username}”已被另一个 UUID 使用`);
+        throw new ConfigConflictError(`设备“${item.deviceName}”下的账号名“${account.username}”已被另一个 UUID 使用`);
       }
     });
     const mergedAccounts = existingAccounts.map((account) => {
@@ -231,7 +231,7 @@ export function mergeMissingImportedConfig(
           const localEntry = localHistoryByUuid.get(entry.uuid);
           if (!localEntry) return true;
           if (canonicalHistory(localEntry) !== canonicalHistory(entry)) {
-            throw new ConfigImportError(
+            throw new ConfigConflictError(
               `密码历史 UUID ${entry.uuid} 在设备“${item.deviceName}”的账号“${account.username}”中内容不一致`,
             );
           }

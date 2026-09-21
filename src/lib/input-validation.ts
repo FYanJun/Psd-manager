@@ -92,6 +92,16 @@ export function hasValidTextInput(value: string, maxLength: number, allowLineBre
   return getTextInputValidationError(value, maxLength, allowLineBreaks) === null;
 }
 
+export function getTextFieldsValidationError(
+  fields: ReadonlyArray<readonly [label: string, value: string, maxLength: number, allowLineBreaks: boolean]>,
+) {
+  for (const [label, value, maxLength, allowLineBreaks] of fields) {
+    const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
+    if (error) return `${label}${error}`;
+  }
+  return null;
+}
+
 export function sanitizePasswordInput(value: string) {
   return sanitizeTextInput(value);
 }

@@ -3,10 +3,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-content: start;
-  gap: 16px;
+  gap: var(--space-4);
   min-height: 0;
   overflow: auto;
-  padding: 22px;
+  padding: var(--space-6);
 }
 
 .bulk-password-form {
@@ -29,9 +29,9 @@
 .form-grid textarea,
 .type-editor-fields input {
   width: 100%;
-  min-height: 42px;
+  min-height: var(--control-height-lg);
   border: 1px solid var(--field-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 10px;
   outline: 0;
   color: var(--app-text);
@@ -48,7 +48,8 @@
 .form-grid input:focus,
 .form-grid textarea:focus,
 .type-editor-fields input:focus {
-  border-color: var(--blue-500);
+  border-color: var(--accent-focus);
+  box-shadow: var(--focus-ring);
 }
 
 .readonly-field strong {
@@ -611,9 +612,9 @@
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 18px 18px;
-  border-top: 1px solid #eceef0;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) var(--space-5);
+  border-top: 1px solid var(--divider);
 }
 
 .export-config-grid {

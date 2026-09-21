@@ -17,8 +17,8 @@
 
   .topbar .primary-button,
   .topbar .tool-button {
-    width: 48px;
-    height: 48px;
+    width: var(--icon-button-size);
+    height: var(--icon-button-size);
     padding: 0;
     justify-content: center;
   }
@@ -27,9 +27,13 @@
     padding-inline: 28px;
   }
 
+  .detail-topline {
+    padding-inline: 18px;
+  }
+
   .compact-action {
-    width: 34px;
-    height: 34px;
+    width: var(--icon-button-size-compact);
+    height: var(--icon-button-size-compact);
   }
 }
 
@@ -44,6 +48,14 @@
 
   .pane-actions {
     gap: 0;
+  }
+
+  .detail-scroll {
+    padding-inline: 22px;
+  }
+
+  .device-info-grid:has(.device-info-item:nth-child(3)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .device-type-row {
@@ -126,6 +138,40 @@
   .drawer-footer {
     padding-inline: 14px;
   }
+
+  .detail-scroll {
+    padding-inline: 16px;
+  }
+
+  .detail-empty-state {
+    padding-inline: 24px;
+  }
+
+  .field-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .field-tools {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .history-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  .history-actions {
+    justify-content: flex-start;
+  }
+
+  .history-row time {
+    grid-column: auto;
+    margin-top: 0;
+  }
 }
 
 /* Preserve a usable detail surface when the desktop window is temporarily narrow. */
@@ -167,25 +213,39 @@
 }
 
 @container sidebar (max-width: 130px) {
+  .sidebar-pane-header {
+    display: none;
+  }
+
+  .sidebar-pane-title {
+    display: none;
+  }
+
+  .sidebar-pane-header .pane-actions {
+    display: none;
+  }
+
+  .device-type-list {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
   .device-type-row {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
-    padding-inline: 4px;
+    min-height: 44px;
+    padding: 6px 4px;
   }
 
   .device-type-row .type-icon {
-    display: none;
+    display: inline-flex;
+    width: var(--type-icon-size);
+    height: var(--type-icon-size);
   }
 
-  .type-copy small {
+  .device-type-row .type-copy,
+  .device-type-row > svg {
     display: none;
-  }
-
-  .type-copy strong {
-    width: 100%;
-    overflow: hidden;
-    text-align: center;
-    font-size: var(--font-size-13);
   }
 }
 
@@ -195,8 +255,8 @@
   }
 
   .pane-list-toolbar .compact-action {
-    width: 30px;
-    height: 30px;
+    width: var(--space-7);
+    height: var(--space-7);
   }
 
   .list-context {
@@ -207,6 +267,60 @@
 
   .list-context > span,
   .list-context > small {
+    display: none;
+  }
+}
+
+@container device-detail (max-width: 520px) {
+  .device-info-grid:has(.device-info-item:nth-child(2):last-child),
+  .device-info-grid:has(.device-info-item:nth-child(3)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-heading {
+    min-width: 0;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .account-heading-label {
+    min-width: 0;
+  }
+
+  .account-heading-actions {
+    margin-left: auto;
+    justify-content: flex-start;
+  }
+}
+
+@container device-detail (max-width: 380px) {
+  .account-heading {
+    gap: 4px;
+  }
+
+  .account-heading-actions {
+    gap: 4px;
+  }
+
+  .account-heading-actions .account-add-action,
+  .account-heading-actions .danger-outline,
+  .account-heading-actions .account-batch-action {
+    width: var(--icon-button-size-compact);
+    min-width: var(--icon-button-size-compact);
+    padding-inline: 0;
+  }
+
+  .account-heading-actions .account-add-action span,
+  .account-heading-actions .danger-outline span,
+  .account-heading-actions .account-batch-action span {
+    display: none;
+  }
+
+  .account-heading-actions .account-action-compact-icon {
+    display: block;
+  }
+
+  .account-selection-hint {
     display: none;
   }
 }
