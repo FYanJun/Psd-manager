@@ -2,7 +2,6 @@ import { APP_TITLE, CONFIG_FORMAT_VERSION } from "./constants";
 import type { ConfigData, ConfigSummary, ConfigFormat, DeviceTypeMeta, VaultItem } from "./types";
 import { countVaultAccounts, countVaultHistory } from "./vault";
 import { padDatePart } from "./utils";
-import { createCsvConfigPayload, parseCsvConfigContent } from "./config/csv";
 import { createJsonConfigPayload, parseJsonConfigContent } from "./config/structured";
 import { createYamlConfigPayload, parseYamlConfigContent } from "./config/yaml";
 import { CONFIG_FORMATS, ConfigImportError } from "./config/shared";
@@ -33,7 +32,6 @@ export function createConfigPayload(
   format: ConfigFormat,
 ) {
   const config = createConfigData(items, customDeviceTypes);
-  if (format === "csv") return createCsvConfigPayload(config);
   if (format === "yaml") return createYamlConfigPayload(config);
   return JSON.stringify(createJsonConfigPayload(config), null, 2);
 }
@@ -51,9 +49,7 @@ export function createConfigFilename(format: ConfigFormat) {
 }
 
 export function parseConfigContent(content: string, format: ConfigFormat): ConfigData {
-  const config = format === "csv"
-    ? parseCsvConfigContent(content)
-    : format === "yaml"
+  const config = format === "yaml"
       ? parseYamlConfigContent(content)
       : parseJsonConfigContent(content);
   if (config.meta.formatVersion !== CONFIG_FORMAT_VERSION) {
@@ -87,13 +83,11 @@ export function parseConfigContentWithFallback(
 
 export function inferConfigFormat(pathOrName: string): ConfigFormat {
   const normalized = pathOrName.toLowerCase();
-  if (normalized.endsWith(".csv")) return "csv";
   if (normalized.endsWith(".yaml") || normalized.endsWith(".yml")) return "yaml";
   return "json";
 }
 
 export function getConfigMimeType(format: ConfigFormat) {
-  if (format === "csv") return "text/csv;charset=utf-8";
   if (format === "yaml") return "application/yaml;charset=utf-8";
   return "application/json";
 }

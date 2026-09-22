@@ -197,7 +197,7 @@ export type BulkUsernameSuggestion = {
 export type GeneratorTarget = "current-account" | "bulk-password" | null;
 export type TypePickerScope = "device" | "bulk";
 export type ResizePane = "sidebar" | "list" | "generator";
-export type ConfigFormat = "json" | "csv" | "yaml";
+export type ConfigFormat = "json" | "yaml";
 export type VaultPasswordDialogMode = "set" | "change" | "disable";
 
 export type AppSettings = {

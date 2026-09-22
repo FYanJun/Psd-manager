@@ -192,12 +192,12 @@
           <span class="settings-action-copy"><strong>数据快照</strong><small>查看、恢复或管理本地数据快照。</small></span>
         </button>
         <button class="settings-action-row" type="button" on:click={actions.openExportConfigDialog}>
-          <span class="settings-action-icon"><Download size={17} /></span>
+          <span class="settings-action-icon"><Upload size={17} /></span>
           <span class="settings-action-copy"><strong>导出配置</strong><small>选择格式，将当前资产库导出到文件。</small></span>
         </button>
         <button class="settings-action-row" type="button" on:click={actions.chooseConfigFile}>
-          <span class="settings-action-icon"><Upload size={17} /></span>
-          <span class="settings-action-copy"><strong>导入配置</strong><small>从 JSON、CSV 或 YAML 文件导入资产库。</small></span>
+          <span class="settings-action-icon"><Download size={17} /></span>
+          <span class="settings-action-copy"><strong>导入配置</strong><small>从 JSON 或 YAML 文件导入资产库。</small></span>
         </button>
       </div>
     {:else if view.activeSection === "about"}

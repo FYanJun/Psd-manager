@@ -9,9 +9,9 @@ import {
 } from "../input-validation";
 import type { ConfigData } from "../types";
 import { getAccounts } from "../vault";
-import { getErrorMessage, readString } from "../utils";
+import { readString } from "../utils";
 import { isUuid } from "../uuid";
-import { ConfigImportError, readRecordValue } from "./shared";
+import { ConfigImportError } from "./shared";
 
 function assertValidTextField(
   value: string,
@@ -33,6 +33,18 @@ export function assertAllowedFields(
   if (unsupported.length > 0) {
     throw new ConfigImportError(`${label}包含当前格式不支持的字段：${unsupported.join("、")}`);
   }
+}
+
+function assertStringFields(
+  record: Record<string, unknown>,
+  label: string,
+  fields: readonly string[],
+) {
+  fields.forEach((field) => {
+    if (field in record && typeof record[field] !== "string") {
+      throw new ConfigImportError(`${label}的“${field}”必须是字符串`);
+    }
+  });
 }
 
 export function assertValidConfigNames(items: ConfigData["items"]) {
@@ -176,6 +188,15 @@ export function assertStructuredConfigIdentities(rawTypes: unknown[]) {
       "颜色",
       "设备",
     ]);
+    if (!readString(typeRecord["设备类型"]).trim()) {
+      throw new ConfigImportError(`第 ${typeIndex + 1} 个设备类型缺少设备类型名称`);
+    }
+    assertStringFields(typeRecord, `设备类型“${typeLabel}”`, [
+      "设备类型UUID",
+      "设备类型",
+      "图标文字",
+      "颜色",
+    ]);
     if (typeLabels.has(typeLabel)) {
       throw new ConfigImportError(`设备类型名称重复：${typeLabel}`);
     }
@@ -213,6 +234,17 @@ export function assertStructuredConfigIdentities(rawTypes: unknown[]) {
         "设备备注",
         "图标文字",
       ]);
+      assertStringFields(deviceRecord, `设备“${deviceName}”`, [
+        "设备UUID",
+        "设备名称",
+        "设备类型UUID",
+        "更新时间",
+        "资产编号",
+        "设备位置",
+        "连接地址",
+        "设备备注",
+        "图标文字",
+      ]);
       requireImportedUuid(deviceRecord["设备UUID"], `设备“${deviceName}”`, deviceUuids);
       if (readString(deviceRecord["设备类型UUID"], typeUuid).trim().toLowerCase() !== typeUuid) {
         throw new ConfigImportError(`设备“${deviceName}”的设备类型 UUID 不匹配`);
@@ -237,6 +269,15 @@ export function assertStructuredConfigIdentities(rawTypes: unknown[]) {
           "账号备注",
           "密码更新时间",
         ]);
+        assertStringFields(accountRecord, `账号“${username}”`, [
+          "账号UUID",
+          "用户名",
+          "密码",
+          "更新时间",
+          "账号标签",
+          "账号备注",
+          "密码更新时间",
+        ]);
         requireImportedUuid(accountRecord["账号UUID"], `账号“${username}”`, accountUuids);
         if (!Array.isArray(accountRecord["密码历史"])) {
           throw new ConfigImportError(`账号“${username}”的“密码历史”必须是数组`);
@@ -254,87 +295,16 @@ export function assertStructuredConfigIdentities(rawTypes: unknown[]) {
             "修改时间",
             "修改原因",
           ]);
+          assertStringFields(record, `账号“${username}”的第 ${historyIndex + 1} 条密码历史`, [
+            "历史UUID",
+            "旧密码",
+            "新密码",
+            "修改时间",
+            "修改原因",
+          ]);
           requireImportedUuid(record["历史UUID"], `账号“${username}”的第 ${historyIndex + 1} 条密码历史`, historyUuids);
         });
       });
-    });
-  });
-}
-
-export function assertCsvConfigIdentities(records: Array<Record<string, string>>) {
-  const typeLabelsByUuid = new Map<string, string>();
-  const typeUuidsByLabel = new Map<string, string>();
-  const typeMetadataByUuid = new Map<string, string>();
-  const devicesByUuid = new Map<string, string>();
-  const accountUuids = new Set<string>();
-  const historyUuids = new Set<string>();
-  records.forEach((record, index) => {
-    const rowLabel = `CSV 第 ${index + 2} 行`;
-    const typeUuid = readRecordValue(record, "设备类型UUID").trim().toLowerCase();
-    const typeLabel = readRecordValue(record, "设备类型").trim();
-    if (!isUuid(typeUuid)) throw new ConfigImportError(`${rowLabel}的设备类型缺少有效 UUID`);
-    const knownTypeLabel = typeLabelsByUuid.get(typeUuid);
-    if (knownTypeLabel && knownTypeLabel !== typeLabel) throw new ConfigImportError(`${rowLabel}的设备类型 UUID 对应了不同名称`);
-    const knownTypeUuid = typeUuidsByLabel.get(typeLabel);
-    if (knownTypeUuid && knownTypeUuid !== typeUuid) throw new ConfigImportError(`${rowLabel}的设备类型名称对应了不同 UUID`);
-    typeLabelsByUuid.set(typeUuid, typeLabel);
-    typeUuidsByLabel.set(typeLabel, typeUuid);
-    const typeMetadata = JSON.stringify({
-      label: typeLabel,
-      icon: readRecordValue(record, "类型图标", "设备图标").trim() || typeLabel.slice(0, 1),
-      color: readRecordValue(record, "类型颜色").trim().toLowerCase() || "cyan",
-    });
-    const knownTypeMetadata = typeMetadataByUuid.get(typeUuid);
-    if (knownTypeMetadata && knownTypeMetadata !== typeMetadata) {
-      throw new ConfigImportError(`${rowLabel}的设备类型 UUID 对应了不同的名称、图标或颜色`);
-    }
-    typeMetadataByUuid.set(typeUuid, typeMetadata);
-
-    const deviceName = readRecordValue(record, "设备名称").trim();
-    if (!deviceName) return;
-    const deviceUuid = readRecordValue(record, "设备UUID").trim().toLowerCase();
-    if (!isUuid(deviceUuid)) throw new ConfigImportError(`${rowLabel}的设备缺少有效 UUID`);
-    const canonicalDevice = JSON.stringify({
-      typeUuid,
-      deviceName,
-      assetCode: readRecordValue(record, "资产编号"),
-      location: readRecordValue(record, "设备位置"),
-      info: readRecordValue(record, "连接地址").trim(),
-      notes: readRecordValue(record, "设备备注"),
-      icon: readRecordValue(record, "设备图标"),
-      updatedAt: readRecordValue(record, "设备更新时间"),
-    });
-    const knownDevice = devicesByUuid.get(deviceUuid);
-    if (knownDevice && knownDevice !== canonicalDevice) throw new ConfigImportError(`${rowLabel}的设备 UUID 对应了不同设备内容`);
-    devicesByUuid.set(deviceUuid, canonicalDevice);
-
-    const hasAccount = ["用户名", "密码", "账号标签", "账号备注", "密码历史"]
-      .some((key) => readRecordValue(record, key).trim() && readRecordValue(record, key).trim() !== "[]");
-    if (!hasAccount) return;
-    requireImportedUuid(readRecordValue(record, "账号UUID"), `${rowLabel}的账号`, accountUuids);
-    const historyText = readRecordValue(record, "密码历史").trim();
-    if (!historyText) return;
-    let history: unknown;
-    try {
-      history = JSON.parse(historyText);
-    } catch (error) {
-      const reason = getErrorMessage(error, "无法解析");
-      throw new ConfigImportError(`${rowLabel}的密码历史不是有效 JSON：${reason}`);
-    }
-    if (!Array.isArray(history)) throw new ConfigImportError(`${rowLabel}的密码历史必须是数组`);
-    history.forEach((entry, historyIndex) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        throw new ConfigImportError(`${rowLabel}的第 ${historyIndex + 1} 条密码历史必须是对象`);
-      }
-      const historyRecord = entry as Record<string, unknown>;
-      assertAllowedFields(historyRecord, `${rowLabel}的第 ${historyIndex + 1} 条密码历史`, [
-        "历史UUID",
-        "旧密码",
-        "新密码",
-        "修改时间",
-        "修改原因",
-      ]);
-      requireImportedUuid(historyRecord["历史UUID"], `${rowLabel}的第 ${historyIndex + 1} 条密码历史`, historyUuids);
     });
   });
 }

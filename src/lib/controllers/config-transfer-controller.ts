@@ -109,7 +109,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
         const path = await openFileDialog({
           title: "选择要导入的配置文件",
           multiple: false,
-          filters: [{ name: "配置文件", extensions: ["json", "csv", "yaml", "yml"] }],
+          filters: [{ name: "配置文件", extensions: ["json", "yaml", "yml"] }],
         });
         if (!path || Array.isArray(path)) {
           port.showStatus("已取消导入");

@@ -2399,7 +2399,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 {/if}
 
 <main class="app-shell" class:storage-blocked={vaultStorageState !== "ready"} style={layoutStyle} aria-hidden={vaultStorageState !== "ready"} inert={vaultStorageState !== "ready"}>
-  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.csv,.yaml,.yml,application/json,text/csv,application/yaml,text/yaml" on:change={selectConfigFileFromBrowser} />
+  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml" on:change={selectConfigFileFromBrowser} />
   <WorkspaceContent
     view={workspaceView}
     actions={workspaceActions}
