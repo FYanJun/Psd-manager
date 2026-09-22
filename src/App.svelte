@@ -191,6 +191,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let dataDialogReturnToSettings = false;
   let installationPath = "";
   let appDataPath = "";
+  let storageMode: "portable" | "installed" = "installed";
   let vaultLockEnabled = false;
   let vaultLocked = false;
   let vaultUnlockBusy = false;
@@ -765,9 +766,10 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
         // Keep the package version fallback in browser preview or older runtimes.
       }
       try {
-        const storageInfo = await platformOperation("system", () => invoke<{ installationPath: string; appDataPath: string }>("get_storage_info"));
+        const storageInfo = await platformOperation("system", () => invoke<{ installationPath: string; appDataPath: string; storageMode: "portable" | "installed" }>("get_storage_info"));
         installationPath = storageInfo.installationPath;
         appDataPath = storageInfo.appDataPath;
+        storageMode = storageInfo.storageMode;
       } catch (error) {
         showStatus(`存储路径读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
       }
@@ -2313,6 +2315,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     generator: appSettings.passwordGenerator,
     installationPath: installationPath || "当前环境不可用",
     appDataPath: appDataPath || "当前环境不可用",
+    storageMode,
     version: appVersion,
   };
 

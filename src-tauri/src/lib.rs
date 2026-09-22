@@ -64,6 +64,7 @@ struct EncryptedVaultFile {
 struct StorageInfo {
     installation_path: String,
     app_data_path: String,
+    storage_mode: &'static str,
 }
 
 fn installation_directory() -> Result<PathBuf, String> {
@@ -91,6 +92,11 @@ fn storage_info(app: &AppHandle) -> Result<StorageInfo, String> {
     Ok(StorageInfo {
         installation_path: installation_directory()?.to_string_lossy().into_owned(),
         app_data_path: app_data_directory.to_string_lossy().into_owned(),
+        storage_mode: if cfg!(psd_manager_portable) {
+            "portable"
+        } else {
+            "installed"
+        },
     })
 }
 

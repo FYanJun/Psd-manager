@@ -104,6 +104,7 @@ export type SettingsView = {
   };
   installationPath: string;
   appDataPath: string;
+  storageMode: "portable" | "installed";
   version: string;
 };
 

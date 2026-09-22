@@ -219,7 +219,7 @@
           <div><dt>应用名称</dt><dd>Psd Manager / 密码管理器</dd></div>
           <div><dt>应用版本</dt><dd>{view.version}</dd></div>
           <div><dt>应用标识</dt><dd>com.fan.psd-manager</dd></div>
-          <div><dt>运行模式</dt><dd>{runtimeLabel}</dd></div>
+          <div><dt>运行模式</dt><dd>{runtimeLabel}{view.storageMode === "portable" ? " · 免安装数据" : view.storageMode === "installed" && isTauri() ? " · 安装版数据" : ""}</dd></div>
           <div><dt>当前平台</dt><dd>{platformLabel}</dd></div>
         </dl>
       </section>

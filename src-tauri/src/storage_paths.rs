@@ -7,7 +7,9 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+#[cfg(not(psd_manager_portable))]
+use tauri::Manager;
 
 pub(crate) fn vault_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     let directory = ensure_vault_directory(app)?;
@@ -17,6 +19,19 @@ pub(crate) fn vault_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String>
     ))
 }
 
+#[cfg(psd_manager_portable)]
+fn portable_data_container_directory(executable_directory: &Path) -> PathBuf {
+    executable_directory.join(DATA_CONTAINER_NAME)
+}
+
+#[cfg(psd_manager_portable)]
+pub(crate) fn data_container_directory(_app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(portable_data_container_directory(
+        &crate::installation_directory()?,
+    ))
+}
+
+#[cfg(not(psd_manager_portable))]
 pub(crate) fn data_container_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let app_data_directory = app
         .path()
@@ -189,5 +204,19 @@ mod settings_migration_tests {
             "new-temp"
         );
         assert!(!config.join("settings.json").exists());
+    }
+}
+
+#[cfg(all(test, psd_manager_portable))]
+mod portable_path_tests {
+    use super::*;
+
+    #[test]
+    fn portable_container_is_created_below_the_executable_directory() {
+        let executable_directory = PathBuf::from("/tmp/PsdManager");
+        assert_eq!(
+            portable_data_container_directory(&executable_directory),
+            PathBuf::from("/tmp/PsdManager/Psd Manager")
+        );
     }
 }

@@ -36,7 +36,7 @@ jobs:
             arch: x64
             kind: portable
             extension: exe
-            tauri_args: --no-bundle
+            tauri_args: --no-bundle --config src-tauri/tauri.portable.conf.json
 
     runs-on: ${{ matrix.os }}
 
@@ -76,6 +76,8 @@ jobs:
         run: npm ci
 
       - name: Build package
+        env:
+          PSD_MANAGER_PORTABLE: ${{ matrix.kind == 'portable' && '1' || '0' }}
         run: npm run tauri -- build ${{ matrix.tauri_args }}
 
       - name: Prepare release artifact
