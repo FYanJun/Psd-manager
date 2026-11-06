@@ -1,110 +1,82 @@
 <script context="module" lang="ts">
-  const modalStack: HTMLDivElement[] = [];
+  let nextModalId = 0;
 </script>
 
 <script lang="ts">
-  import { onDestroy, onMount, tick } from "svelte";
-  import { removeModal, restoreModalFocus } from "../lib/modal-focus";
+  import { Dialog } from "bits-ui";
   import { X } from "@lucide/svelte";
 
   export let title: string;
+  export let description = "";
   export let titleId = "app-modal-title";
   export let close: () => void;
+  export let canClose = true;
 
-  let dialogElement: HTMLDivElement;
-  let restoreFocusElement: HTMLElement | null = null;
+  let dialogElement: HTMLDivElement | null = null;
+  const modalId = `modal-${nextModalId++}`;
 
-  const focusableSelector = [
-    "a[href]",
-    "area[href]",
-    "button:not([disabled])",
-    "input:not([disabled]):not([type='hidden'])",
-    "select:not([disabled])",
-    "textarea:not([disabled])",
-    "summary",
-    "[contenteditable='true']",
-    "[tabindex]:not([tabindex='-1'])",
-  ].join(",");
-
-  function getFocusableElements() {
-    if (!dialogElement) return [];
-    return Array.from(dialogElement.querySelectorAll<HTMLElement>(focusableSelector))
-      .filter((element) => element.getClientRects().length > 0 || element === document.activeElement);
-  }
-
-  async function focusInitialElement() {
-    await tick();
-    if (!dialogElement?.isConnected || modalStack[modalStack.length - 1] !== dialogElement) return;
-    const initialElement = dialogElement.querySelector<HTMLElement>("[data-modal-autofocus]")
-      ?? getFocusableElements()[0]
-      ?? dialogElement;
-    initialElement.focus({ preventScroll: true });
-  }
-
-  function handleDialogKeydown(event: KeyboardEvent) {
-    if (event.key !== "Tab" || !dialogElement) return;
-    const focusableElements = getFocusableElements();
-    if (focusableElements.length === 0) {
+  function handleOpenAutoFocus(event: Event) {
+    const initialElement = dialogElement?.querySelector<HTMLElement>("[data-modal-autofocus]");
+    if (initialElement) {
       event.preventDefault();
-      dialogElement.focus({ preventScroll: true });
-      return;
-    }
-
-    const firstElement = focusableElements[0];
-    const lastElement = focusableElements[focusableElements.length - 1];
-    const activeElement = document.activeElement;
-    if (event.shiftKey && (activeElement === firstElement || !dialogElement.contains(activeElement))) {
-      event.preventDefault();
-      lastElement.focus({ preventScroll: true });
-    } else if (!event.shiftKey && (activeElement === lastElement || !dialogElement.contains(activeElement))) {
-      event.preventDefault();
-      firstElement.focus({ preventScroll: true });
+      initialElement.focus({ preventScroll: true });
     }
   }
 
-  function handleDocumentFocusIn(event: FocusEvent) {
-    if (modalStack[modalStack.length - 1] !== dialogElement) return;
+  function handleEscapeKeydown(event: KeyboardEvent) {
+    event.preventDefault();
+    if (document.querySelector(`[data-modal-owner="${modalId}"][role="menu"]`)) return;
+    requestClose();
+  }
+
+  function requestClose() {
+    if (canClose) close();
+  }
+
+  function allowOwnedEditingMenuFocus(event: FocusEvent) {
     const target = event.target;
-    if (target instanceof Node && !dialogElement.contains(target)) {
-      void focusInitialElement();
-    }
+    if (!(target instanceof Element) || !target.closest(`[data-modal-owner="${modalId}"]`)) return;
+    const modals = document.querySelectorAll("[data-modal-id][data-state='open']");
+    if (modals[modals.length - 1] !== dialogElement) return;
+    event.stopImmediatePropagation();
   }
-
-  onMount(() => {
-    restoreFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    modalStack.push(dialogElement);
-    dialogElement.addEventListener("keydown", handleDialogKeydown);
-    document.addEventListener("focusin", handleDocumentFocusIn, true);
-    void focusInitialElement();
-  });
-
-  onDestroy(() => {
-    dialogElement?.removeEventListener("keydown", handleDialogKeydown);
-    document.removeEventListener("focusin", handleDocumentFocusIn, true);
-    if (removeModal(modalStack, dialogElement)) {
-      restoreModalFocus(modalStack[modalStack.length - 1], restoreFocusElement);
-    }
-  });
 </script>
 
-<div class="modal-backdrop">
-  <div
-    bind:this={dialogElement}
-    class="modal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby={titleId}
-    tabindex="-1"
-  >
-    <header class="modal-header">
-      <h2 id={titleId}>{title}</h2>
-      <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" on:click={() => close()}>
-        <X size={20} />
-      </button>
-    </header>
-    <slot></slot>
-  </div>
-</div>
+<svelte:document on:focusin|capture={allowOwnedEditingMenuFocus} />
+
+<Dialog.Root open={true}>
+  <Dialog.Overlay>
+    {#snippet child({ props })}
+      <div {...props} class="modal-backdrop">
+        <Dialog.Content
+          bind:ref={dialogElement}
+          onOpenAutoFocus={handleOpenAutoFocus}
+          onEscapeKeydown={handleEscapeKeydown}
+          interactOutsideBehavior="ignore"
+        >
+          {#snippet child({ props })}
+            <div {...props} class="modal" data-modal-id={modalId} tabindex="-1">
+              <header class="modal-header">
+                <div class="modal-heading-copy">
+                  <Dialog.Title id={titleId}>
+                    {#snippet child({ props })}
+                      <h2 {...props}>{title}</h2>
+                    {/snippet}
+                  </Dialog.Title>
+                  {#if description}<Dialog.Description class="modal-description">{description}</Dialog.Description>{/if}
+                </div>
+                <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" type="button" disabled={!canClose} on:click={requestClose}>
+                  <X size={20} />
+                </button>
+              </header>
+              <slot></slot>
+            </div>
+          {/snippet}
+        </Dialog.Content>
+      </div>
+    {/snippet}
+  </Dialog.Overlay>
+</Dialog.Root>
 
 <style>
   .modal-backdrop {
@@ -119,7 +91,7 @@
   .modal {
     width: min(680px, calc(100vw - 48px));
     height: auto;
-    min-height: 360px;
+    min-height: 0;
     max-height: calc(100vh - 48px);
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -135,7 +107,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: var(--space-4) var(--space-5);
+    padding: var(--space-5) var(--space-6);
     border-bottom: 1px solid var(--divider);
   }
 
@@ -143,7 +115,25 @@
     margin: 0;
     color: var(--text-strong);
     font-size: var(--type-title);
-    font-weight: 700;
+    font-weight: var(--weight-semibold);
     line-height: var(--leading-title);
+  }
+
+  .modal-heading-copy {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .modal-heading-copy :global(.modal-description) {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    line-height: var(--leading-body);
+  }
+
+  .modal:has(:global(.settings-layout)) {
+    width: min(1000px, calc(100vw - 48px));
+    height: min(760px, calc(100vh - 48px));
   }
 </style>

@@ -16,7 +16,7 @@
 </script>
 
 {#if open}
-  <ModalFrame title="数据快照" titleId="snapshots-title" {close}>
+  <ModalFrame title="数据快照" description="查看安全快照，必要时恢复先前的设备与账号数据。" titleId="snapshots-title" {close}>
       <div class="snapshot-list">
         {#if snapshots.length === 0}
           <div class="snapshot-empty"><ArchiveRestore size={26} /><strong>暂无安全快照</strong><span>删除或配置导入前会自动保存。</span></div>
@@ -39,11 +39,12 @@
 <style>
   .snapshot-list {
     display: grid;
-    gap: 0;
+    gap: 12px;
     min-height: 0;
     max-height: min(52vh, 520px);
     overflow: auto;
-    padding: 4px 22px 18px;
+    padding: var(--panel-padding);
+    background: var(--surface-canvas);
   }
 
   .snapshot-row {
@@ -51,14 +52,22 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 14px;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--border);
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
   }
 
   .snapshot-row > div {
     display: grid;
     gap: 4px;
     min-width: 0;
+  }
+
+  .snapshot-row strong {
+    font-size: var(--type-control);
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
   }
 
   .snapshot-row span,

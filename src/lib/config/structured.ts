@@ -1,4 +1,4 @@
-import { APP_TITLE, CONFIG_FORMAT_VERSION, DEFAULT_ACCOUNT_TAG } from "../constants";
+import { APP_TITLE, DEFAULT_ACCOUNT_TAG } from "../constants";
 import type { ConfigData, DeviceAccount, PasswordHistory, VaultItem } from "../types";
 import { getAccounts, iconClassForColor } from "../vault";
 import { getErrorMessage, readString } from "../utils";
@@ -111,7 +111,6 @@ export function parseStructuredConfigPayload(parsed: Record<string, unknown>): C
   return {
     meta: {
       appName: APP_TITLE,
-      formatVersion: CONFIG_FORMAT_VERSION,
       exportedAt: "",
     },
     items: normalized.items,

@@ -2,6 +2,7 @@
   import { ArrowDownUp, ChevronDown, ChevronRight, Clock3, Copy, Eye, EyeOff, History, RotateCcwKey } from "@lucide/svelte";
   import type { DeviceAccount, PasswordHistory } from "../../lib/types";
   import type { DeviceDetailActions } from "../../lib/view-models";
+  import { Tabs } from "bits-ui";
 
   export let passwordVisible = false;
   export let historyOpen = false;
@@ -15,14 +16,46 @@
   export let toggleHistoryPassword: DeviceDetailActions["toggleHistoryPassword"];
   export let requestRestoreHistoryPassword: DeviceDetailActions["requestRestoreHistoryPassword"];
   export let toggleHistorySort: DeviceDetailActions["toggleHistorySort"];
+
+  function historyPasswordTooltip(element: HTMLElement, password: string | undefined) {
+    let visiblePassword = password;
+    let frame: number | null = null;
+    function refresh() {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (visiblePassword && element.scrollWidth > element.clientWidth) {
+          element.dataset.valueTooltip = visiblePassword;
+        } else {
+          delete element.dataset.valueTooltip;
+        }
+      });
+    }
+    const observer = new ResizeObserver(refresh);
+    observer.observe(element);
+    refresh();
+    return {
+      update(password: string | undefined) {
+        visiblePassword = password;
+        delete element.dataset.valueTooltip;
+        refresh();
+      },
+      destroy() {
+        observer.disconnect();
+        if (frame !== null) cancelAnimationFrame(frame);
+        delete element.dataset.valueTooltip;
+      },
+    };
+  }
 </script>
 
 {#if selectedAccount.id}
-  <div class="field-group" id="selected-account-detail" role="tabpanel" aria-label="当前账号详情">
+  <Tabs.Content value={String(selectedAccount.id)} class="field-group" id="selected-account-detail" aria-label="当前账号详情">
+
     <div class="field-row">
       <div>
         <span class="field-label">用户名</span>
-        <p>{selectedAccount.username}</p>
+        <p data-value-tooltip={selectedAccount.username}>{selectedAccount.username}</p>
       </div>
       <button class="icon-button inline" aria-label="复制用户名" data-tooltip="复制用户名" on:click={() => copyText(selectedAccount.username, "用户名")}>
         <Copy size={18} />
@@ -31,7 +64,7 @@
     <div class="field-row">
       <div>
         <span class="field-label">密码</span>
-        <p class="password-value" class:empty={!selectedAccount.password}>{selectedAccount.password ? (passwordVisible ? selectedAccount.password : "••••••••••") : "未设置密码"}</p>
+        <div role="textbox" aria-readonly="true" aria-multiline="true" class="password-value" class:revealed={passwordVisible && Boolean(selectedAccount.password)} class:empty={!selectedAccount.password} tabindex={passwordVisible && selectedAccount.password ? 0 : undefined} aria-label={passwordVisible && selectedAccount.password ? "已显示的当前密码" : "当前密码"}>{selectedAccount.password ? (passwordVisible ? selectedAccount.password : "••••••••••") : "未设置密码"}</div>
       </div>
       {#if selectedAccount.password}
         <div class="field-tools">
@@ -53,20 +86,20 @@
       <div class="field-row">
         <div>
           <span class="field-label">备注</span>
-          <p>{selectedAccount.notes}</p>
+          <p class="notes-value">{selectedAccount.notes}</p>
         </div>
       </div>
     {/if}
-  </div>
+  </Tabs.Content>
 
-  <button class="meta-row" on:click={() => (historyOpen = !historyOpen)}>
+  <button class="meta-row" aria-expanded={historyOpen} on:click={() => (historyOpen = !historyOpen)}>
     {#if historyOpen}
       <ChevronDown size={19} />
     {:else}
       <ChevronRight size={19} />
     {/if}
     <Clock3 size={18} />
-    <span>当前账号最后编辑 {selectedAccount.updatedAt}</span>
+    <span class="history-toggle-copy"><strong>密码历史 · {selectedAccount.history.length} 条</strong><span>最后编辑 {selectedAccount.updatedAt}</span></span>
   </button>
 
   {#if historyOpen}
@@ -93,12 +126,12 @@
             <div>
               <div class="history-password-pair">
                 <span>旧密码</span>
-                <strong class:masked={!visibleHistoryIds.includes(history.id)}>
+                <strong class:masked={!visibleHistoryIds.includes(history.id)} use:historyPasswordTooltip={visibleHistoryIds.includes(history.id) ? history.password : undefined}>
                   {visibleHistoryIds.includes(history.id) ? history.password : maskPassword(history.password)}
                 </strong>
                 {#if history.newPassword}
                   <span>新密码</span>
-                  <strong class:masked={!visibleHistoryIds.includes(history.id)}>
+                  <strong class:masked={!visibleHistoryIds.includes(history.id)} use:historyPasswordTooltip={visibleHistoryIds.includes(history.id) ? history.newPassword : undefined}>
                     {visibleHistoryIds.includes(history.id) ? history.newPassword : maskPassword(history.newPassword)}
                   </strong>
                 {/if}

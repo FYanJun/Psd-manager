@@ -1,51 +1,15 @@
-/* User-selectable application appearance. Component styles keep their local
-   structure; these selectors provide a consistent surface/text treatment. */
-html[data-font-size="small"] {
-  font-size: 14px;
-  --font-size-11: 10px;
-  --font-size-12: 10px;
-  --font-size-13: 11px;
-  --font-size-14: 12px;
-  --font-size-15: 13px;
-  --font-size-16: 14px;
-  --font-size-17: 15px;
-  --font-size-18: 16px;
-  --font-size-19: 17px;
-  --font-size-20: 18px;
-  --font-size-21: 19px;
-  --font-size-22: 20px;
-  --font-size-28: 24px;
-}
-
-html[data-font-size="large"] {
-  font-size: 18px;
-  --font-size-11: 13px;
-  --font-size-12: 14px;
-  --font-size-13: 15px;
-  --font-size-14: 16px;
-  --font-size-15: 17px;
-  --font-size-16: 18px;
-  --font-size-17: 19px;
-  --font-size-18: 21px;
-  --font-size-19: 22px;
-  --font-size-20: 24px;
-  --font-size-21: 25px;
-  --font-size-22: 26px;
-  --font-size-28: 34px;
-}
-
-html[data-font-size="standard"] {
-  font-size: 16px;
-}
-
+/* User-selectable application appearance. Typography tokens live in tokens.css. */
 html[data-theme="dark"] {
   color-scheme: dark;
+  --weight-medium: 400;
+  --weight-semibold: 500;
+  --weight-bold: 600;
   --app-text: #eef2f5;
   --app-background: #171a1e;
-  --sidebar: #252a30;
-  --sidebar-hover: #30363d;
-  --sidebar-active: #39414a;
-  --border: #3a424b;
+  --sidebar: #1b2027;
+  --sidebar-hover: #272e38;
+  --sidebar-active: #303c4d;
+  --border: #353e49;
   --muted: #b7c0ca;
   --quiet: #929da8;
   --blue: #5aa2ff;
@@ -57,16 +21,31 @@ html[data-theme="dark"] {
   --field: #272d34;
   --field-border: #46505b;
   --surface-muted: #252b32;
-  --surface-subtle: #2a3037;
+  --surface-subtle: #2b333f;
+  --type-blue-text: #a6d2ff;
+  --type-blue-fill: #203a54;
+  --type-green-text: #a2d9b8;
+  --type-green-fill: #203d32;
+  --type-rose-text: #f2b4be;
+  --type-rose-fill: #482c36;
+  --type-indigo-text: #cdc0f6;
+  --type-indigo-fill: #36304e;
+  --type-sand-text: #efc09b;
+  --type-sand-fill: #493426;
+  --type-gold-text: #e4d099;
+  --type-gold-fill: #423a23;
+  --type-neutral-text: #ccd4de;
+  --type-neutral-fill: #343d48;
   --text-strong: #f0f3f6;
   --text-secondary: #b7c0ca;
   --text-quiet: #929da8;
-  --control-hover: rgba(255, 255, 255, 0.08);
+  --control-hover: rgba(255, 255, 255, 0.07);
   --accent-subtle: rgba(90, 162, 255, 0.16);
-  --selection-fill: rgba(90, 162, 255, 0.26);
-  --selection-border: #79b8ff;
+  --selection-fill: rgba(90, 162, 255, 0.16);
+  --selection-border: #526d8c;
   --selection-text: #f4f8ff;
-  --selection-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.28);
+  --selection-shadow: none;
+  --popover-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
   --overlay: rgba(0, 0, 0, 0.58);
   --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
   --tooltip-background: #10171f;
@@ -80,9 +59,11 @@ html[data-theme="dark"] {
   --danger-panel-text: #ffaaa5;
   --surface-elevated: #1f242a;
   --surface-canvas: #171a1e;
+  --surface-step-1: rgb(32 37 43);
+  --surface-step-2: rgb(34 39 45);
   --surface-list: #20252b;
   --topbar-surface: #252b32;
-  --divider: #3a424b;
+  --divider: #303943;
   --text-placeholder: #929da8;
   --accent-focus: #79b8ff;
   background: var(--app-background);
@@ -92,12 +73,15 @@ html[data-theme="dark"] {
 @media (prefers-color-scheme: dark) {
   html[data-theme="system"] {
     color-scheme: dark;
+    --weight-medium: 400;
+    --weight-semibold: 500;
+    --weight-bold: 600;
     --app-text: #eef2f5;
     --app-background: #171a1e;
-    --sidebar: #252a30;
-    --sidebar-hover: #30363d;
-    --sidebar-active: #39414a;
-    --border: #3a424b;
+    --sidebar: #1b2027;
+    --sidebar-hover: #272e38;
+    --sidebar-active: #303c4d;
+    --border: #353e49;
     --muted: #b7c0ca;
     --quiet: #929da8;
     --blue: #5aa2ff;
@@ -109,16 +93,31 @@ html[data-theme="dark"] {
     --field: #272d34;
     --field-border: #46505b;
     --surface-muted: #252b32;
-    --surface-subtle: #2a3037;
+    --surface-subtle: #2b333f;
+    --type-blue-text: #a6d2ff;
+    --type-blue-fill: #203a54;
+    --type-green-text: #a2d9b8;
+    --type-green-fill: #203d32;
+    --type-rose-text: #f2b4be;
+    --type-rose-fill: #482c36;
+    --type-indigo-text: #cdc0f6;
+    --type-indigo-fill: #36304e;
+    --type-sand-text: #efc09b;
+    --type-sand-fill: #493426;
+    --type-gold-text: #e4d099;
+    --type-gold-fill: #423a23;
+    --type-neutral-text: #ccd4de;
+    --type-neutral-fill: #343d48;
     --text-strong: #f0f3f6;
     --text-secondary: #b7c0ca;
     --text-quiet: #929da8;
-    --control-hover: rgba(255, 255, 255, 0.08);
+    --control-hover: rgba(255, 255, 255, 0.07);
     --accent-subtle: rgba(90, 162, 255, 0.16);
-    --selection-fill: rgba(90, 162, 255, 0.26);
-    --selection-border: #79b8ff;
+    --selection-fill: rgba(90, 162, 255, 0.16);
+    --selection-border: #526d8c;
     --selection-text: #f4f8ff;
-    --selection-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.28);
+    --selection-shadow: none;
+    --popover-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
     --overlay: rgba(0, 0, 0, 0.58);
     --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
     --tooltip-background: #10171f;
@@ -134,7 +133,7 @@ html[data-theme="dark"] {
     --surface-canvas: #171a1e;
     --surface-list: #20252b;
     --topbar-surface: #252b32;
-    --divider: #3a424b;
+    --divider: #303943;
     --text-placeholder: #929da8;
     --accent-focus: #79b8ff;
   }
@@ -175,22 +174,11 @@ html[data-theme="system"] .sidebar {
 
 html[data-theme="dark"] .pane-kicker,
 html[data-theme="system"] .pane-kicker,
-html[data-theme="dark"] .type-copy small,
-html[data-theme="system"] .type-copy small {
+html[data-theme="dark"] .type-count,
+html[data-theme="system"] .type-count {
   color: var(--text-secondary);
 }
 
-html[data-theme="dark"] .pane-resizer,
-html[data-theme="system"] .pane-resizer {
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.08));
-}
-
-html[data-theme="dark"] .pane-resizer:hover::after,
-html[data-theme="system"] .pane-resizer:hover::after,
-html[data-theme="dark"] .pane-resizer.active::after,
-html[data-theme="system"] .pane-resizer.active::after {
-  background: rgba(90, 162, 255, 0.62);
-}
 
 html[data-theme="dark"] .icon-button,
 html[data-theme="system"] .icon-button,
@@ -207,13 +195,7 @@ html[data-theme="system"] .tool-button:hover {
 }
 
 html[data-theme="dark"] .search-box,
-html[data-theme="system"] .search-box,
-html[data-theme="dark"] .field-group,
-html[data-theme="system"] .field-group,
-html[data-theme="dark"] .device-info-card,
-html[data-theme="system"] .device-info-card,
-html[data-theme="dark"] .account-row,
-html[data-theme="system"] .account-row {
+html[data-theme="system"] .search-box {
   background: var(--field);
   border-color: var(--field-border);
   color: var(--app-text);
@@ -260,7 +242,7 @@ html[data-theme="system"] .secondary-button:hover {
 
 html[data-theme="dark"] .item-row.selected,
 html[data-theme="system"] .item-row.selected {
-  background: var(--selected);
+  background: var(--selection-fill);
 }
 
 html[data-theme="dark"] .item-list,
@@ -268,8 +250,8 @@ html[data-theme="system"] .item-list {
   background: var(--surface);
 }
 
-html[data-theme="dark"] .item-row:hover,
-html[data-theme="system"] .item-row:hover {
+html[data-theme="dark"] .item-row:hover:not(.selected),
+html[data-theme="system"] .item-row:hover:not(.selected) {
   background: var(--control-hover);
 }
 
@@ -277,8 +259,6 @@ html[data-theme="dark"] .pane-kicker,
 html[data-theme="system"] .pane-kicker,
 html[data-theme="dark"] .item-secondary small,
 html[data-theme="system"] .item-secondary small,
-html[data-theme="dark"] .type-copy small,
-html[data-theme="system"] .type-copy small,
 html[data-theme="dark"] .muted,
 html[data-theme="system"] .muted {
   color: var(--text-secondary);
@@ -344,10 +324,20 @@ html[data-theme="system"] .settings-nav {
 html[data-theme="dark"] .settings-nav,
 html[data-theme="system"] .settings-nav {
   background: var(--surface-muted);
+  box-shadow: none;
 }
 
-html[data-theme="dark"] .settings-nav button:hover,
-html[data-theme="system"] .settings-nav button:hover,
+html[data-theme="dark"] .action-popover,
+html[data-theme="system"] .action-popover {
+  box-shadow: var(--popover-shadow);
+}
+
+html[data-theme="dark"] .settings-nav button:hover:not(.active),
+html[data-theme="system"] .settings-nav button:hover:not(.active) {
+  background: var(--control-hover);
+  color: var(--text-strong);
+}
+
 html[data-theme="dark"] .settings-nav button.active,
 html[data-theme="system"] .settings-nav button.active {
   background: var(--selected);
@@ -762,20 +752,6 @@ html[data-theme="system"] .account-select-box {
   border-color: var(--border);
 }
 
-html[data-theme="dark"] .device-info-card,
-html[data-theme="system"] .device-info-card,
-html[data-theme="dark"] .field-group,
-html[data-theme="system"] .field-group,
-html[data-theme="dark"] .account-row,
-html[data-theme="system"] .account-row {
-  background: var(--field);
-}
-
-html[data-theme="dark"] .device-info-card,
-html[data-theme="system"] .device-info-card {
-  background: transparent;
-}
-
 html[data-theme="dark"] .device-info-card .icon-button,
 html[data-theme="system"] .device-info-card .icon-button {
   color: var(--text-secondary);
@@ -787,15 +763,10 @@ html[data-theme="system"] .device-info-card .icon-button:hover {
   background: var(--control-hover);
 }
 
-html[data-theme="dark"] .account-row,
-html[data-theme="system"] .account-row {
-  border-color: var(--field-border);
-}
-
 html[data-theme="dark"] .account-row.selected,
 html[data-theme="system"] .account-row.selected {
-  border-color: #5a84b5;
-  background: #293d52;
+  border-color: var(--selection-border);
+  background: var(--selection-fill);
 }
 
 html[data-theme="dark"] .account-select-box,
@@ -954,75 +925,101 @@ html[data-theme="system"] textarea::placeholder {
   opacity: 1;
 }
 
-html[data-density="compact"] .topbar {
-  grid-template-rows: 50px;
-  gap: 8px;
-}
+@media (prefers-color-scheme: light) {
+  html[data-theme="system"] {
+    color-scheme: light;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+    --app-text: #1e293b;
+    --app-background: #f8fafc;
+    --sidebar: #f8fafc;
+    --sidebar-hover: #f0f3f7;
+    --sidebar-active: #e8eef6;
+    --border: #d9e0e6;
+    --muted: #5b6875;
+    --quiet: #5b6875;
+    --blue: #0f62c2;
+    --blue-hover: #0b4c99;
+    --primary-fill: #1976d2;
+    --primary-fill-hover: #0f62c2;
+    --surface: #ffffff;
+    --selected: #edf4fc;
+    --field: #ffffff;
+    --field-border: #d8dfe8;
+    --surface-muted: #f8fafc;
+    --surface-subtle: #f1f5f9;
+    --surface-step-1: rgb(251 252 253);
+    --surface-step-2: rgb(247 249 251);
+    --type-blue-text: #0f5da8;
+    --type-blue-fill: #cde5ff;
+    --type-green-text: #256044;
+    --type-green-fill: #c9ecd5;
+    --type-rose-text: #913b35;
+    --type-rose-fill: #f2c5c1;
+    --type-indigo-text: #59428d;
+    --type-indigo-fill: #d8cdf0;
+    --type-sand-text: #8e4e22;
+    --type-sand-fill: #f5d0ae;
+    --type-gold-text: #755a18;
+    --type-gold-fill: #f2dfad;
+    --type-neutral-text: #ffffff;
+    --type-neutral-fill: #4b5563;
+    --text-strong: #0f172a;
+    --text-secondary: #5b6875;
+    --text-quiet: #5b6875;
+    --control-hover: #eef2f5;
+    --accent-subtle: #edf6ff;
+    --selection-fill: #e8f2fd;
+    --selection-border: #b8d3ef;
+    --selection-text: #0f62c2;
+    --popover-shadow: 0 4px 16px rgba(24, 38, 52, 0.1);
+    --overlay: rgba(28, 39, 50, 0.28);
+    --modal-shadow: 0 24px 70px rgba(24, 38, 52, 0.24);
+    --tooltip-background: #1d2935;
+    --tooltip-border: #4c5b6a;
+    --tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    --focus-ring: 0 0 0 3px #b9dcff;
+    --danger-subtle: transparent;
+    --danger-subtle-hover: #fff2f0;
+    --danger-panel: #fff2f0;
+    --danger-panel-border: #f2c3bd;
+    --danger-panel-text: #ab3027;
+    --surface-elevated: #ffffff;
+    --surface-canvas: #f8fafc;
+    --surface-list: #ffffff;
+    --topbar-surface: #ffffff;
+    --divider: #dfe5ea;
+    --text-placeholder: #5b6875;
+    --accent-focus: #2f8ce6;
+  }
 
-html[data-density="compact"] .workspace {
-  grid-template-rows: 50px minmax(0, 1fr);
-}
-
-html[data-density="compact"] .pane-header {
-  min-height: 50px;
-  padding-block: 6px;
-}
-
-html[data-density="compact"] .sidebar-pane-header {
-  min-height: 82px;
-  gap: 5px;
-}
-
-html[data-density="compact"] .device-type-row {
-  min-height: 42px;
-  padding-block: 4px;
-}
-
-html[data-density="compact"] .device-type-list {
-  gap: 2px;
-  padding-top: 8px;
-}
-
-html[data-density="compact"] .item-list {
-  grid-template-rows: 48px minmax(0, 1fr);
-}
-
-html[data-density="compact"] .list-toolbar {
-  min-height: 48px;
-}
-
-html[data-density="compact"] .item-row {
-  min-height: 48px;
-  padding-block: 5px;
-}
-
-html[data-density="compact"] .item-primary strong {
-  min-height: 24px;
-}
-
-html[data-density="compact"] .account-row {
-  min-height: 42px;
-  padding-block: 5px;
-}
-
-html[data-density="compact"] .detail-scroll {
-  padding-block: 14px;
-}
-
-html[data-density="compact"] .device-info-card,
-html[data-density="compact"] .field-group,
-html[data-density="compact"] .account-section {
-  margin-bottom: 12px;
-}
-
-html[data-density="compact"] .icon-button,
-html[data-density="compact"] .tool-button,
-html[data-density="compact"] .compact-action {
-  min-height: 34px;
-  height: 34px;
-}
-
-html[data-density="compact"] .primary-button,
-html[data-density="compact"] .secondary-button {
-  height: 36px;
+  html[data-theme="system"] .type-blue {
+    color: #0f5da8;
+    background: #cde5ff;
+  }
+  html[data-theme="system"] .type-green {
+    color: #256044;
+    background: #c9ecd5;
+  }
+  html[data-theme="system"] .type-rose {
+    color: #913b35;
+    background: #f2c5c1;
+  }
+  html[data-theme="system"] .type-indigo {
+    color: #59428d;
+    background: #d8cdf0;
+  }
+  html[data-theme="system"] .type-sand {
+    color: #8e4e22;
+    background: #f5d0ae;
+  }
+  html[data-theme="system"] .type-gold {
+    color: #755a18;
+    background: #f2dfad;
+  }
+  html[data-theme="system"] .type-neutral {
+    color: #ffffff;
+    background: #4b5563;
+  }
 }

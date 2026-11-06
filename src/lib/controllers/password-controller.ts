@@ -102,7 +102,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     }
     const generatedPassword = ensureGeneratedPassword();
     if (!generatedPassword) return;
-    port.write({ passwordForm: { password: generatedPassword, reason: "" } });
+    port.write({ passwordForm: { ...port.read().passwordForm, password: generatedPassword } });
     port.closeGeneratorPanel(true);
     port.setActiveDialog("password");
   }
@@ -176,16 +176,16 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const history = account?.history.find((candidate) => candidate.uuid === confirmation.historyUuid);
     if (!item || !account || !history) {
       port.showStatus("要恢复的密码历史已经不存在", 5000);
-      return;
+      return false;
     }
     const password = confirmation.passwordValue ?? "";
     if (!hasValidPasswordCharacters(password)) {
       port.showStatus(`这条历史${PASSWORD_CHARACTER_ERROR}`, 5000);
-      return;
+      return false;
     }
     if (account.password === password) {
       port.showStatus("当前密码已经与这条历史记录相同");
-      return;
+      return false;
     }
     const changedAt = formatDateTime(new Date());
     const nextAccounts = getAccounts(item).map((candidate) =>
@@ -208,6 +208,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       visibleHistoryIds: [],
     });
     port.showStatus("历史密码已恢复");
+    return true;
   }
 
   function openBulkPasswordDialog(useGenerated = false) {
@@ -360,15 +361,15 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const password = confirmation.passwordValue ?? "";
     if (!item || accountUuids.length === 0) {
       port.showStatus("更新失败：密码目标已不存在", 5000);
-      return;
+      return false;
     }
-    if (!validateNewPassword(password)) return;
-    if (!validatePasswordReason(confirmation.reasonValue ?? "")) return;
+    if (!validateNewPassword(password)) return false;
+    if (!validatePasswordReason(confirmation.reasonValue ?? "")) return false;
     const selectedAccounts = getAccounts(item);
     const selectedAccountTargets = selectedAccounts.filter((account) => accountUuids.includes(account.uuid));
     if (selectedAccountTargets.length !== accountUuids.length) {
       port.showStatus("更新失败：部分账号已不存在，请重新选择", 5000);
-      return;
+      return false;
     }
     const changedAccountUuids = new Set(
       selectedAccountTargets
@@ -377,7 +378,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     );
     if (changedAccountUuids.size === 0) {
       port.showStatus("新密码与当前密码相同，没有可保存的修改");
-      return;
+      return false;
     }
     const changedAt = formatDateTime(new Date());
     const reason = (confirmation.reasonValue ?? "").trim();
@@ -402,6 +403,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
         ? `${changedAccountUuids.size} 个账号密码已更新`
         : `${selectedAccount.username || selectedAccount.title || "当前账号"}密码已更新`,
     );
+    return true;
   }
 
   function validateBulkPasswordUpdate(state: AccountPasswordState) {
@@ -468,11 +470,11 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const state = port.read();
     const targets = confirmation.accountTargets ?? [];
     const password = confirmation.passwordValue ?? "";
-    if (!validateNewPassword(password)) return;
-    if (!validatePasswordReason(confirmation.reasonValue ?? "")) return;
+    if (!validateNewPassword(password)) return false;
+    if (!validatePasswordReason(confirmation.reasonValue ?? "")) return false;
     if (targets.length === 0) {
       port.showStatus("更新失败：批量改密目标不完整", 5000);
-      return;
+      return false;
     }
     const targetAccountUuidsByItem = new Map<string, Set<string>>();
     targets.forEach((target) => {
@@ -487,7 +489,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     }, 0);
     if (existingTargetCount !== targets.length) {
       port.showStatus("更新失败：部分批量改密目标已不存在，请重新选择", 5000);
-      return;
+      return false;
     }
     const reason = (confirmation.reasonValue ?? "").trim();
     const changedAt = formatDateTime(new Date());
@@ -504,26 +506,24 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     });
     if (changedCount === 0) {
       port.showStatus("新密码与所选账号的当前密码相同，没有可保存的修改");
-      return;
+      return false;
     }
     port.write({ items: nextItems });
     port.setActiveDialog(null);
     port.write({ passwordVisible: false, visibleHistoryIds: [] });
     port.showStatus(`已更新 ${changedCount} 个账号`);
+    return true;
   }
 
   function executePasswordConfirmation(confirmation: PendingConfirmation) {
     if (confirmation.action === "update-password") {
-      executePasswordUpdate(confirmation);
-      return true;
+      return executePasswordUpdate(confirmation);
     }
     if (confirmation.action === "bulk-update-password") {
-      executeBulkPasswordUpdate(confirmation);
-      return true;
+      return executeBulkPasswordUpdate(confirmation);
     }
     if (confirmation.action === "restore-history") {
-      executeRestoreHistoryPassword(confirmation);
-      return true;
+      return executeRestoreHistoryPassword(confirmation);
     }
     return false;
   }

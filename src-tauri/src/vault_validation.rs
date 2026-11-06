@@ -1,7 +1,5 @@
 use serde_json::Value;
 
-const VAULT_SCHEMA_VERSION: u64 = 2;
-
 pub(crate) fn is_valid_uuid(value: &str) -> bool {
     let bytes = value.as_bytes();
     bytes.len() == 36
@@ -19,6 +17,15 @@ fn require_object<'a>(
     path: &str,
 ) -> Result<&'a serde_json::Map<String, Value>, String> {
     value.as_object().ok_or_else(|| format!("{path}必须是对象"))
+}
+
+fn require_object_mut<'a>(
+    value: &'a mut Value,
+    path: &str,
+) -> Result<&'a mut serde_json::Map<String, Value>, String> {
+    value
+        .as_object_mut()
+        .ok_or_else(|| format!("{path}必须是对象"))
 }
 
 fn reject_unknown_fields(
@@ -393,26 +400,15 @@ fn validate_items_payload(
 }
 
 pub(crate) fn validate_vault_payload(content: &str) -> Result<Value, String> {
-    let value: Value =
+    let mut value: Value =
         serde_json::from_str(content).map_err(|error| format!("资产库内容格式不正确：{error}"))?;
-    let object = require_object(&value, "资产库")?;
+    let object = require_object_mut(&mut value, "资产库")?;
+    object.remove("schemaVersion");
     reject_unknown_fields(
         object,
         "资产库",
-        &[
-            "schemaVersion",
-            "revision",
-            "items",
-            "customDeviceTypes",
-            "snapshots",
-        ],
+        &["revision", "items", "customDeviceTypes", "snapshots"],
     )?;
-    let version = require_integer_field(object, "schemaVersion", "资产库")?;
-    if version != VAULT_SCHEMA_VERSION {
-        return Err(format!(
-            "不支持资产库数据版本 {version}，当前仅支持 {VAULT_SCHEMA_VERSION}"
-        ));
-    }
     let _ = require_integer_field(object, "revision", "资产库")?;
     let device_types = validate_device_types_payload(
         require_value(object, "customDeviceTypes", "资产库")?,
@@ -461,7 +457,7 @@ mod vault_validation_tests {
     use serde_json::json;
 
     fn empty_vault() -> Value {
-        json!({"schemaVersion": 2, "revision": 0, "items": [], "customDeviceTypes": [], "snapshots": []})
+        json!({"revision": 0, "items": [], "customDeviceTypes": [], "snapshots": []})
     }
 
     #[test]
@@ -481,11 +477,16 @@ mod vault_validation_tests {
     }
 
     #[test]
-    fn schema_revision_and_snapshot_limits_are_enforced() {
+    fn legacy_schema_marker_is_removed_before_validation() {
         let mut value = empty_vault();
-        value["schemaVersion"] = json!(1);
-        assert!(validate_vault_payload(&value.to_string()).is_err());
-        value = empty_vault();
+        value["schemaVersion"] = json!(2);
+        let normalized = validate_vault_payload(&value.to_string()).unwrap();
+        assert_eq!(normalized, empty_vault());
+    }
+
+    #[test]
+    fn revision_and_snapshot_limits_are_enforced() {
+        let mut value = empty_vault();
         value["revision"] = json!(9007199254740992_u64);
         assert!(validate_vault_payload(&value.to_string())
             .unwrap_err()

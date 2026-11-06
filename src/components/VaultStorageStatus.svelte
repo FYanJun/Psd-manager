@@ -1,11 +1,15 @@
 <script lang="ts">
-  import { AlertTriangle, LoaderCircle, RefreshCw, RotateCcw } from "@lucide/svelte";
+  import { AlertTriangle, LoaderCircle, LogOut, RefreshCw, RotateCcw } from "@lucide/svelte";
 
   export let state: "loading" | "load-error" | "save-error" = "loading";
   export let error = "";
   export let retry: () => void | Promise<void>;
   export let canRecoverBackup = false;
   export let recoverBackup: () => void | Promise<void>;
+  export let canExit = false;
+  export let exitError = "";
+  export let exiting = false;
+  export let exitApplication: () => void | Promise<void> = () => {};
 
   type CriticalStorageAction = "recover-backup";
 
@@ -45,18 +49,27 @@
         <strong id="vault-storage-confirm-title">{confirmation.title}</strong>
         <p id="vault-storage-confirm-detail">{confirmation.detail}</p>
         <div class="vault-storage-actions">
-          <button class="danger-button" on:click={() => confirmCriticalAction()}>{confirmation.confirmLabel}</button>
-          <button class="secondary-button" on:click={() => (pendingCriticalAction = null)}>取消</button>
+          <button class="danger-button" disabled={exiting} on:click={() => confirmCriticalAction()}>{confirmation.confirmLabel}</button>
+          <button class="secondary-button" disabled={exiting} on:click={() => (pendingCriticalAction = null)}>取消</button>
         </div>
       </div>
     {:else if state !== "loading"}
       <div class="vault-storage-actions">
         {#if state === "load-error" && canRecoverBackup}
-          <button class="primary-button" on:click={() => (pendingCriticalAction = "recover-backup")}><RotateCcw size={17} /><span>恢复安全备份</span></button>
+          <button class="primary-button" disabled={exiting} on:click={() => (pendingCriticalAction = "recover-backup")}><RotateCcw size={17} /><span>恢复安全备份</span></button>
         {:else}
-          <button class="secondary-button" on:click={() => retry()}><RefreshCw size={17} /><span>{state === "save-error" ? "重试保存" : "重新读取"}</span></button>
+          <button class="secondary-button" disabled={exiting} on:click={() => retry()}><RefreshCw size={17} /><span>{state === "save-error" ? "重试保存" : "重新读取"}</span></button>
+        {/if}
+        {#if state === "load-error"}
+          <button class="secondary-button" disabled={!canExit || exiting} on:click={() => exitApplication()}><LogOut size={17} /><span>{exiting ? "正在退出…" : exitError ? "重试退出" : "退出应用"}</span></button>
         {/if}
       </div>
+    {/if}
+    {#if state === "load-error" && !canExit}
+      <p class="vault-storage-exit-detail">退出仅适用于桌面应用中尚未加载资产且无待保存内容的读取失败；浏览器预览请关闭当前标签页。</p>
+    {/if}
+    {#if state !== "loading" && exitError}
+      <p class="vault-storage-exit-error" role="alert">{exitError}</p>
     {/if}
   </section>
 </div>
@@ -80,10 +93,10 @@
     width: min(560px, 100%);
     padding: 20px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     color: var(--app-text);
     background: var(--surface);
-    box-shadow: var(--modal-shadow);
+    box-shadow: var(--popover-shadow);
   }
 
   .vault-storage-actions {
@@ -104,6 +117,15 @@
     grid-column: 2;
     display: grid;
     gap: 8px;
+  }
+
+  .vault-storage-exit-detail,
+  .vault-storage-exit-error {
+    grid-column: 2;
+  }
+
+  .vault-storage-status .vault-storage-exit-error {
+    color: var(--danger-panel-text);
   }
 
   .vault-storage-confirmation > strong {
@@ -131,14 +153,14 @@
     place-items: center;
     width: 42px;
     height: 42px;
-    border-radius: 8px;
-    color: #1769aa;
-    background: #e8f3fb;
+    border-radius: var(--radius-lg);
+    color: var(--blue);
+    background: var(--accent-subtle);
   }
 
   .vault-storage-icon.error {
-    color: #a82d2d;
-    background: #fbecec;
+    color: var(--danger-panel-text);
+    background: var(--danger-panel);
   }
 
   .spin {

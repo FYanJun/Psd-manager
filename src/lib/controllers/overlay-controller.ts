@@ -6,12 +6,11 @@ import type {
   PendingConfirmation,
   PopoverPosition,
   TypePickerScope,
+  EditableContextKind,
 } from "../types";
-import { clampNumber } from "../utils";
+import { captureEditableSelection, restoreEditableSelection, type EditableSelection } from "../editable-context";
 
-const POPOVER_WIDTH = 236;
-const POINTER_POPOVER_HEIGHT = 330;
-const VIEWPORT_PADDING = 12;
+const EDITABLE_CONTEXT_SELECTOR = "input:not([type]), input[type='text'], input[type='search'], input[type='password'], input[type='email'], input[type='url'], input[type='tel'], input[type='number'], textarea";
 
 export type OverlayState = {
   activeDialog: ActiveDialog;
@@ -27,6 +26,14 @@ export type OverlayState = {
   visibleHistoryIds: number[];
   openTypePicker: TypePickerScope | null;
   bulkUsernameSuggestionsOpen: boolean;
+  editableContext: {
+    kind: EditableContextKind;
+    canCopy: boolean;
+    canCut: boolean;
+    canPaste: boolean;
+    canSelectAll: boolean;
+    canClearSearch: boolean;
+  } | null;
 };
 
 type OverlayPatch = Partial<OverlayState>;
@@ -38,29 +45,45 @@ type OverlayControllerPort = {
   hasAccount(id: number): boolean;
   selectDevice(id: number): void;
   selectAccount(id: number): void;
+  setEditableContextTarget(target: Element | null): void;
+  hasClipboardText(): Promise<boolean>;
 };
 
-function isHtmlElement(target: EventTarget | null): target is HTMLElement {
-  return typeof HTMLElement !== "undefined" && target instanceof HTMLElement;
+function isDomElement(target: EventTarget | null): target is Element {
+  return typeof Element !== "undefined" && target instanceof Element;
+}
+
+export function isContextMenuControlTarget(target: EventTarget | null) {
+  if (!isDomElement(target)) return false;
+  return Boolean(target.closest("button, a, input, textarea, select, [role='button']"));
+}
+
+function isAccountSelectionTarget(target: EventTarget | null) {
+  if (!isDomElement(target)) return false;
+  return Boolean(target.closest(".account-select-box, input[type='checkbox']"));
+}
+
+function getEditableContextKind(target: Element): EditableContextKind | null {
+  if (target.getAttribute("data-editable-context") === "search") return "search";
+  if (target.getAttribute("data-editable-context") === "password") return "password";
+  if (target.matches("input[type='search']")) return "search";
+  if (target.matches("input[type='password']")) return "password";
+  if (target.matches("input[type='number']")) return "number";
+  if (target.matches("input, textarea")) return "text";
+  return null;
 }
 
 export function createOverlayController(port: OverlayControllerPort) {
   let mounted = false;
+  let pendingRightClick: { target: Element; x: number; y: number; selection: EditableSelection } | null = null;
 
   function getPopoverPosition(trigger: HTMLElement): PopoverPosition {
     const rect = trigger.getBoundingClientRect();
-    const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING);
-    const left = clampNumber(rect.right - POPOVER_WIDTH, VIEWPORT_PADDING, maxLeft);
-    const top = clampNumber(rect.bottom + 8, VIEWPORT_PADDING, window.innerHeight - VIEWPORT_PADDING);
-    return { top, left };
+    return { top: rect.bottom, left: rect.left, reference: trigger };
   }
 
   function getPointerPopoverPosition(event: MouseEvent): PopoverPosition {
-    const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING);
-    const maxTop = Math.max(VIEWPORT_PADDING, window.innerHeight - POINTER_POPOVER_HEIGHT - VIEWPORT_PADDING);
-    const left = clampNumber(event.clientX, VIEWPORT_PADDING, maxLeft);
-    const top = clampNumber(event.clientY, VIEWPORT_PADDING, maxTop);
-    return { top, left };
+    return { top: event.clientY, left: event.clientX, contextElement: isDomElement(event.target) ? event.target : undefined };
   }
 
   function openPopover(popover: ActivePopover, event: MouseEvent) {
@@ -102,6 +125,7 @@ export function createOverlayController(port: OverlayControllerPort) {
   function openAccountContextMenu(id: number, event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
+    if (isAccountSelectionTarget(event.target)) return;
     if (!port.hasAccount(id)) return;
     port.selectAccount(id);
     port.write({
@@ -113,11 +137,6 @@ export function createOverlayController(port: OverlayControllerPort) {
       popoverPosition: getPointerPopoverPosition(event),
       activePopover: "account-context",
     });
-  }
-
-  function isContextMenuControlTarget(target: EventTarget | null) {
-    if (!isHtmlElement(target)) return false;
-    return Boolean(target.closest("button, a, input, textarea, select, [role='button']"));
   }
 
   function openTypeBlankContextMenu(event: MouseEvent) {
@@ -157,8 +176,8 @@ export function createOverlayController(port: OverlayControllerPort) {
   }
 
   function closePopoverWhenPointerLeavesMenu(event: Event) {
-    if (!port.read().activePopover) return;
-    if (isHtmlElement(event.target) && event.target.closest(".action-popover")) return;
+    if (port.read().activePopover !== "editable-context") return;
+    if (isDomElement(event.target) && event.target.closest(".action-popover")) return;
     port.write({ activePopover: null });
   }
 
@@ -185,33 +204,84 @@ export function createOverlayController(port: OverlayControllerPort) {
     });
   }
 
-  function handleGlobalPointerDown(event: PointerEvent) {
-    closePopoverWhenPointerLeavesMenu(event);
-    const target = event.target;
-    if (!isHtmlElement(target)) return;
-    const state = port.read();
-    const patch: OverlayPatch = {};
-    if (state.openTypePicker && !target.closest(".type-combo")) patch.openTypePicker = null;
-    if (state.bulkUsernameSuggestionsOpen && !target.closest(".bulk-username-field")) {
-      patch.bulkUsernameSuggestionsOpen = false;
+  function handleEditableMouseDown(event: MouseEvent) {
+    if (pendingRightClick) return;
+    const pointerTarget = isDomElement(event.target) ? event.target : null;
+    const contextPress = event.button === 2 || (event.button === 0 && event.ctrlKey);
+    const editableTarget = contextPress
+      ? pointerTarget?.closest(EDITABLE_CONTEXT_SELECTOR)
+      : null;
+    const editableKind = editableTarget ? getEditableContextKind(editableTarget) : null;
+    if (editableTarget && editableKind) {
+      const input = editableTarget as HTMLInputElement;
+      const selection = captureEditableSelection(input);
+      pendingRightClick = {
+        target: editableTarget,
+        x: event.clientX,
+        y: event.clientY,
+        selection,
+      };
+      port.setEditableContextTarget(editableTarget);
     }
-    if (Object.keys(patch).length > 0) port.write(patch);
+  }
+
+  function handleGlobalPointerDown(event: PointerEvent) {
+    pendingRightClick = null;
+    handleEditableMouseDown(event);
+    closePopoverWhenPointerLeavesMenu(event);
   }
 
   function handleGlobalContextMenu(event: MouseEvent) {
     const target = event.target;
-    const targetElement = isHtmlElement(target) ? target : null;
-    const isEditableControl = Boolean(targetElement?.closest(
-      "input:not([type]), input[type='text'], input[type='search'], input[type='password'], input[type='email'], input[type='url'], input[type='tel'], input[type='number'], textarea, select, [contenteditable='true']",
-    ));
+    const targetElement = isDomElement(target) ? target : null;
+    const pressed = pendingRightClick;
+    pendingRightClick = null;
+    const editableTarget = targetElement?.closest(EDITABLE_CONTEXT_SELECTOR);
+    const editableKind = editableTarget ? getEditableContextKind(editableTarget) : null;
     const state = port.read();
 
-    if (isEditableControl) {
-      if (state.activePopover) port.write({ activePopover: null });
+    if (editableTarget && editableKind) {
+      event.preventDefault();
+      const preservedSelection = pressed?.target === editableTarget && pressed.x === event.clientX && pressed.y === event.clientY;
+      const input = editableTarget as HTMLInputElement;
+      if (preservedSelection) restoreEditableSelection(input, pressed.selection);
+      else port.setEditableContextTarget(editableTarget);
+      const isHiddenPassword = editableKind === "password" && input.type === "password";
+      const hasSelection = preservedSelection ? pressed.selection.start !== pressed.selection.end
+        : editableKind === "number" ? Boolean(input.value) : input.selectionStart !== input.selectionEnd;
+      const editableContext = {
+        kind: editableKind,
+        canCopy: !input.disabled && !isHiddenPassword && hasSelection,
+        canCut: !input.disabled && !isHiddenPassword && hasSelection && !input.readOnly,
+        canPaste: false,
+        canSelectAll: !input.disabled && Boolean(input.value),
+        canClearSearch: editableKind === "search" && !input.disabled && !input.readOnly && Boolean(input.value),
+      };
+      port.write({
+        popoverPosition: getPointerPopoverPosition(event),
+        activePopover: "editable-context",
+        editableContext,
+      });
+      if (!input.readOnly && !input.disabled) {
+        void port.hasClipboardText().then((hasText) => {
+          const current = port.read();
+          if (current.activePopover !== "editable-context" || current.editableContext !== editableContext
+            || !input.isConnected || input.readOnly || input.disabled) return;
+          port.write({ editableContext: { ...editableContext, canPaste: hasText } });
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    if (targetElement?.closest("select, [contenteditable='true'], input[type='date'], input[type='datetime-local'], input[type='month'], input[type='week'], input[type='time'], input[type='color']")) {
+      event.preventDefault();
+      port.write({ activePopover: null, editableContext: null });
       return;
     }
 
     event.preventDefault();
+    port.setEditableContextTarget(null);
+    if (state.editableContext) port.write({ editableContext: null });
     if (!state.activePopover || targetElement?.closest(".action-popover")) return;
     const hasContextMenuOwner = targetElement?.closest(".sidebar, .list-scroll, .detail-pane");
     if (!hasContextMenuOwner) port.write({ activePopover: null });
@@ -221,13 +291,16 @@ export function createOverlayController(port: OverlayControllerPort) {
     if (mounted) return;
     mounted = true;
     window.addEventListener("pointerdown", handleGlobalPointerDown, true);
+    window.addEventListener("mousedown", handleEditableMouseDown, true);
     window.addEventListener("contextmenu", handleGlobalContextMenu, true);
   }
 
   function destroy() {
     if (!mounted) return;
     mounted = false;
+    pendingRightClick = null;
     window.removeEventListener("pointerdown", handleGlobalPointerDown, true);
+    window.removeEventListener("mousedown", handleEditableMouseDown, true);
     window.removeEventListener("contextmenu", handleGlobalContextMenu, true);
   }
 
@@ -246,6 +319,7 @@ export function createOverlayController(port: OverlayControllerPort) {
     closeOverlays,
     cancelPendingConfirmation,
     handleGlobalPointerDown,
+    handleEditableMouseDown,
     handleGlobalContextMenu,
     mount,
     destroy,

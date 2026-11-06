@@ -1,0 +1,86 @@
+/* Shared visual contracts applied after component and theme styles. */
+:where(body, p, li, dd, dt, label, .toast span) {
+  widows: 2;
+  orphans: 2;
+  text-wrap: pretty;
+}
+
+:where(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
+  border-color: transparent !important;
+  background-color: var(--surface-step-1) !important;
+}
+
+:where(button:not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)) {
+  border-color: transparent !important;
+}
+
+:where(.generator-result, .drawer-section, .password-target-card, .readonly-field strong, .type-readonly-value) {
+  border-color: transparent !important;
+  background-color: var(--surface-step-1);
+}
+
+:where(.field-group, .history-section, .account-list, .bulk-preview, .type-preview-card,
+  .type-combo-empty-state, .export-config-note) {
+  border-color: transparent !important;
+  background-color: var(--surface-step-1);
+}
+
+:where(.form-grid input, .form-grid textarea, .type-editor-fields input, .settings-auto-lock-config > input,
+  .vault-password-body input, .vault-lock-card input, .vault-lock-card textarea,
+  .type-combo-trigger, .type-combo-option, .app-select-trigger, .username-combobox input):focus {
+  outline: 0 !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
+}
+
+:where(button, input, textarea, select, [role="button"], [role="option"]):focus-visible {
+  outline: 0 !important;
+  box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
+}
+
+:where(.settings-switch:has(button:focus-visible), .settings-action-row:focus-visible,
+  .settings-reset:focus-visible, .settings-path-button:focus-visible) {
+  outline: 0 !important;
+  box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
+}
+
+:where(button:not(:disabled):not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):hover {
+  background-color: var(--surface-step-1) !important;
+}
+
+:where(button:not(:disabled):not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):active {
+  animation: button-press-spring 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
+  background-color: var(--surface-step-2) !important;
+}
+
+:where(button.selected, [role="option"].selected, [role="option"][aria-selected="true"],
+  [role="menuitemradio"][aria-checked="true"], [role="tab"][aria-selected="true"],
+  input[type="checkbox"]:checked + *, input[type="radio"]:checked + *) {
+  animation: selection-settle 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
+  background-color: var(--surface-step-2);
+}
+
+@keyframes button-press-spring {
+  0% { scale: 1; }
+  38% { scale: 0.97; }
+  72% { scale: 1.015; }
+  100% { scale: 1; }
+}
+
+@keyframes selection-settle {
+  0% { filter: brightness(0.98); box-shadow: inset 0 0 0 0 transparent; }
+  62% { filter: brightness(1.04); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-focus) 18%, transparent); }
+  100% { filter: brightness(1); box-shadow: inset 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(button.selected, [role="option"].selected, [role="option"][aria-selected="true"],
+    [role="menuitemradio"][aria-checked="true"], [role="tab"][aria-selected="true"],
+    input[type="checkbox"]:checked + *, input[type="radio"]:checked + *) {
+    animation: none !important;
+  }
+}

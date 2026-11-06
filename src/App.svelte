@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import type { FormValidationFeedback, ReportFormValidationError } from "./lib/form-validation";
+  import { version as packageVersion } from "../package.json";
+  import type { SettingsView, StorageInfo } from "./lib/view-models";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
-import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./lib/platform-files";
   import OverlayLayer from "./components/OverlayLayer.svelte";
   import VaultLockScreen from "./components/VaultLockScreen.svelte";
   import VaultStorageStatus from "./components/VaultStorageStatus.svelte";
@@ -14,7 +16,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     GENERATOR_DEFAULT_RATIO,
     LIST_DEFAULT_RATIO,
     SIDEBAR_DEFAULT_RATIO,
-    VAULT_SCHEMA_VERSION,
     initialItems,
   } from "./lib/constants";
   import { createDefaultAppSettings, loadAppSettings, normalizeAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
@@ -29,9 +30,12 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   import { createConfigTransferController, type ConfigTransferState } from "./lib/controllers/config-transfer-controller";
   import { createDeviceController, type DeviceControllerState } from "./lib/controllers/device-controller";
   import { createDeviceTypeController, type DeviceTypeControllerState } from "./lib/controllers/device-type-controller";
+  import { createEditableContextController } from "./lib/controllers/editable-context-controller";
+  import { createRecoveryFileController } from "./lib/controllers/recovery-file-controller";
   import { createKeyboardController, type KeyboardState } from "./lib/controllers/keyboard-controller";
   import { createNavigationController, type NavigationState } from "./lib/controllers/navigation-controller";
   import { createOverlayController, type OverlayState } from "./lib/controllers/overlay-controller";
+import { captureEditableSelection, type EditableSelection, type EditableTarget } from "./lib/editable-context";
   import { createPasswordGeneratorController, type PasswordGeneratorState } from "./lib/controllers/password-generator-controller";
   import { createSnapshotController } from "./lib/controllers/snapshot-controller";
   import { createStatusController } from "./lib/controllers/status-controller";
@@ -48,7 +52,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     BulkPasswordMatch,
     BulkUsernameSuggestion,
     ConfigData,
-    ConfigFormat,
+    ConfigTransferFormat,
     ConfigImportMode,
     ConfirmationAction,
     DeviceForm,
@@ -91,6 +95,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   import { createSearchSession } from "./lib/search-session";
   import { createStartupSession } from "./lib/startup-session";
   import { createAutoLockSession } from "./lib/auto-lock-session";
+import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/clipboard";
 
   const vaultSecurity = createVaultSecurityApi(invoke);
   let items: VaultItem[] = initialItems;
@@ -99,6 +104,9 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let vaultStorageState: VaultStorageState = "loading";
   let vaultStorageError = "";
   let vaultBackupRecoveryRequired = false;
+  let vaultCanExit = false;
+  let vaultExitError = "";
+  let vaultExiting = false;
   let hydrated = false;
   let searchQuery = "";
   let searchDraft = "";
@@ -113,11 +121,28 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let historySortDesc = true;
   let activeDialog: ActiveDialog = null;
   let activePopover: ActivePopover = null;
+  let editableContextTarget: EditableTarget | null = null;
+  let editableSelection: EditableSelection = { start: 0, end: 0 };
+  let editableContext: OverlayState["editableContext"] = null;
   let pendingConfirmation: PendingConfirmation | null = null;
+  let confirmationBusy = false;
+  let confirmationError = "";
+  let confirmationReportedStatus = "";
+  let formValidationFeedback: FormValidationFeedback | null = null;
+  let formValidationRevision = 0;
+  const reportValidationError: ReportFormValidationError = (form, field, message) => {
+    if (confirmationBusy || activeDialog !== form) {
+      showStatus(message);
+      return;
+    }
+    formValidationFeedback = { form, field, message, revision: ++formValidationRevision };
+  };
+  $: if (formValidationFeedback && activeDialog !== formValidationFeedback.form) formValidationFeedback = null;
+  $: if (!pendingConfirmation) confirmationError = "";
   let pendingImportedConfig: ConfigData | null = null;
-  let pendingConfigFormat: ConfigFormat = "json";
+  let pendingConfigFormat: ConfigTransferFormat = "json";
   let importConfigMode: ConfigImportMode = "add-missing";
-  let exportConfigFormat: ConfigFormat = "json";
+  let exportConfigFormat: ConfigTransferFormat = "json";
   let contextDeviceType: "全部设备" | DeviceType = "全部设备";
   let popoverPosition: PopoverPosition = { top: 72, left: 22 };
   let deviceForm: DeviceForm = createEmptyDeviceForm();
@@ -160,6 +185,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let restoringView = false;
   let searchInput: HTMLInputElement | null = null;
   let sidebarRatio = SIDEBAR_DEFAULT_RATIO;
+  let sidebarCollapsed = false;
   let listRatio = LIST_DEFAULT_RATIO;
   let generatorRatio = GENERATOR_DEFAULT_RATIO;
   let resizingPane: ResizePane | null = null;
@@ -175,11 +201,12 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let canUseGeneratorForBulkUpdate = true;
   let bulkPasswordDisabled = true;
   let appSettings: AppSettings = createDefaultAppSettings();
-  let settingsActiveSection: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment" = "interface";
+  let settingsActiveSection: SettingsView["activeSection"] = "interface";
   let settingsLoaded = false;
+  let settingsReadFailed = false;
   const settingsSaveSession = createSettingsSaveSession({
     read: () => appSettings,
-    ready: () => settingsLoaded,
+    ready: () => settingsLoaded && !settingsReadFailed,
     save: saveAppSettings,
     onError: reportSettingsSaveError,
   }, { setTimeout: (callback, delay) => window.setTimeout(callback, delay), clearTimeout: timer => window.clearTimeout(timer) });
@@ -187,11 +214,14 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let tooltipEnabled = true;
   let autostartAvailable = false;
   let autostartUpdating = false;
-  let appVersion = "0.1.17";
+  let appVersion = packageVersion;
   let dataDialogReturnToSettings = false;
   let installationPath = "";
   let appDataPath = "";
-  let storageMode: "portable" | "installed" = "installed";
+  let storageMode: StorageInfo["storageMode"] | null = null;
+  let environmentStatus: SettingsView["environmentStatus"] = isTauri() ? "loading" : "preview";
+  let operatingSystem = "";
+  let applicationArch = "";
   let vaultLockEnabled = false;
   let vaultLocked = false;
   let vaultUnlockBusy = false;
@@ -210,8 +240,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   let recoveryFileSaved = false;
   let recoveryFileBusy = false;
   let recoveryFileError = "";
-
-  const recoveryFileNameDefault = "PsdManager-Recovery.psdm-recovery";
 
   const autoLockSession = createAutoLockSession({
     read: () => ({
@@ -285,6 +313,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   function persistAppSettings() {
+    if (settingsReadFailed) return Promise.reject(new Error("原应用设置尚未恢复，已阻止覆盖设置文件"));
     return settingsSaveSession.persist();
   }
 
@@ -299,6 +328,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   const layoutController = createWorkspaceLayoutController({
+    isSidebarCollapsed: () => sidebarCollapsed,
     read: () => ({ sidebarRatio, listRatio, generatorRatio }),
     write: (layout) => {
       sidebarRatio = layout.sidebarRatio;
@@ -439,6 +469,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     setActivePopover: (popover) => (activePopover = popover),
     setPendingConfirmation: (confirmation) => (pendingConfirmation = confirmation),
     showStatus,
+    reportValidationError,
     createSafetySnapshot,
     offerSnapshotUndo,
     pushNavigationState,
@@ -479,6 +510,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     iconClassForType,
     openAddTypeDialog,
     showStatus,
+    reportValidationError,
     pushNavigationState,
     createSafetySnapshot,
     offerSnapshotUndo,
@@ -500,6 +532,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       bulkPasswordForm,
       bulkUsernameSearch,
       bulkUsernameSuggestionsOpen,
+      editableContext,
       bulkPasswordDeselectedKeys,
       bulkTypeSearch,
       passwordVisible,
@@ -515,12 +548,14 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       if (patch.bulkPasswordForm !== undefined) bulkPasswordForm = patch.bulkPasswordForm;
       if (patch.bulkUsernameSearch !== undefined) bulkUsernameSearch = patch.bulkUsernameSearch;
       if (patch.bulkUsernameSuggestionsOpen !== undefined) bulkUsernameSuggestionsOpen = patch.bulkUsernameSuggestionsOpen;
+      if ("editableContext" in patch) editableContext = patch.editableContext ?? null;
       if (patch.bulkPasswordDeselectedKeys !== undefined) bulkPasswordDeselectedKeys = patch.bulkPasswordDeselectedKeys;
       if (patch.bulkTypeSearch !== undefined) bulkTypeSearch = patch.bulkTypeSearch;
       if (patch.passwordVisible !== undefined) passwordVisible = patch.passwordVisible;
       if (patch.visibleHistoryIds !== undefined) visibleHistoryIds = patch.visibleHistoryIds;
     },
     showStatus,
+    reportValidationError,
     copyText,
     createSafetySnapshot,
     offerSnapshotUndo,
@@ -549,6 +584,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       visibleHistoryIds,
       openTypePicker,
       bulkUsernameSuggestionsOpen,
+      editableContext,
     }),
     write: (patch) => {
       if ("activeDialog" in patch) activeDialog = patch.activeDialog ?? null;
@@ -564,11 +600,17 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       if (patch.visibleHistoryIds) visibleHistoryIds = patch.visibleHistoryIds;
       if ("openTypePicker" in patch) openTypePicker = patch.openTypePicker ?? null;
       if (patch.bulkUsernameSuggestionsOpen !== undefined) bulkUsernameSuggestionsOpen = patch.bulkUsernameSuggestionsOpen;
+      if ("editableContext" in patch) editableContext = patch.editableContext ?? null;
     },
     hasSelectedDevice: () => hasSelectedDevice,
     hasAccount: (id) => selectedAccounts.some((account) => account.id === id),
     selectDevice,
     selectAccount,
+    setEditableContextTarget: (target) => {
+      editableContextTarget = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
+      if (editableContextTarget) editableSelection = captureEditableSelection(editableContextTarget);
+    },
+    hasClipboardText,
   });
 
   const keyboardController = createKeyboardController({
@@ -596,6 +638,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       if ("activePopover" in patch) activePopover = patch.activePopover ?? null;
     },
     actions: {
+      cancelPaneResize: () => layoutController.cancelResize(),
       closeGenerator: () => closeGeneratorPanel(),
       closeOverlays,
       cancelPendingConfirmation,
@@ -624,14 +667,17 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     captureWindowBounds: () => windowSettingsController.capture(),
     isLockEnabled: () => vaultLockEnabled,
     isLocked: () => vaultLocked,
-    hasPendingRecoveryFile: () => Boolean(recoveryKey && !recoveryFileSaved),
+    hasPendingRecoveryFile: () => Boolean(recoveryKey && (!recoveryFileSaved || !recoveryAcknowledged)),
+    isSecurityOperationBusy: () => vaultPasswordBusy || recoveryBusy || recoveryFileBusy || confirmationBusy,
     lock: lockVaultSession,
     clearSensitiveState: clearSensitiveVaultState,
-    isLowMemoryBackground: () => appSettings.interface.lowMemoryBackground,
     writeViewState: (state) => {
       vaultStorageState = state.state;
       vaultStorageError = state.error;
       vaultBackupRecoveryRequired = state.canRecoverBackup;
+      vaultCanExit = state.canExit;
+      vaultExitError = state.exitError;
+      vaultExiting = state.exiting;
       hydrated = state.hydrated;
     },
   });
@@ -641,7 +687,9 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     writeSnapshots: (snapshots) => (vaultSnapshots = snapshots),
     applySnapshot: applySnapshotData,
     setActiveDialog: (dialog) => (activeDialog = dialog),
-    setPendingConfirmation: (confirmation) => (pendingConfirmation = confirmation),
+    setPendingConfirmation: (confirmation) => {
+      if (!confirmationBusy || confirmation !== null) pendingConfirmation = confirmation;
+    },
     showStatus,
     persistImmediately: () => vaultStorageController.persistImmediately(),
     refreshDirtyState: () => vaultStorageController.refreshDirtyState(),
@@ -673,6 +721,8 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     resetWorkspaceAfterReplace: (nextItems) => {
       resetWorkspaceForDataset(nextItems);
     },
+    isExportPasswordConfigured: () => vaultLockEnabled,
+    verifyExportPassword: (password) => vaultSecurity.verify(password),
   });
 
   function applyPersistedVaultState(parsed: PersistedVaultState) {
@@ -695,7 +745,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 
   function createPersistedVaultState(revision: number): PersistedVaultState {
     return {
-      schemaVersion: VAULT_SCHEMA_VERSION,
       revision,
       items,
       customDeviceTypes,
@@ -731,6 +780,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       await windowSettingsController.restore();
       await windowSettingsController.mount();
     } catch (error) {
+      settingsReadFailed = true;
       appSettings = createDefaultAppSettings();
       applyAppSettings(appSettings, true);
       settingsLoaded = true;
@@ -750,7 +800,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
             showStatus(`开机自启配置更新失败：${error instanceof Error ? error.message : String(error)}`, 6000);
           }
         }
-        if (appSettings.interface.startOnBoot !== enabled) {
+        if (!settingsReadFailed && appSettings.interface.startOnBoot !== enabled) {
           appSettings = normalizeAppSettings({
             ...appSettings,
             interface: { ...appSettings.interface, startOnBoot: enabled },
@@ -766,12 +816,16 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
         // Keep the package version fallback in browser preview or older runtimes.
       }
       try {
-        const storageInfo = await platformOperation("system", () => invoke<{ installationPath: string; appDataPath: string; storageMode: "portable" | "installed" }>("get_storage_info"));
+        const storageInfo = await platformOperation("system", () => invoke<StorageInfo>("get_storage_info"));
         installationPath = storageInfo.installationPath;
         appDataPath = storageInfo.appDataPath;
         storageMode = storageInfo.storageMode;
+        operatingSystem = storageInfo.operatingSystem;
+        applicationArch = storageInfo.applicationArch;
+        environmentStatus = "ready";
       } catch (error) {
-        showStatus(`存储路径读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+        environmentStatus = "failed";
+        showStatus(`运行环境读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
       }
     }
   }
@@ -781,6 +835,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       showStatus("浏览器预览模式不支持打开本地目录");
       return;
     }
+    if (environmentStatus !== "ready") return;
     try {
       await platformOperation("system", () => invoke("open_storage_path", { kind }));
     } catch (error) {
@@ -794,8 +849,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       : settings.interface.theme;
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.themePreference = settings.interface.theme;
-    document.documentElement.dataset.density = settings.interface.density;
-    document.documentElement.dataset.fontSize = settings.interface.fontSize;
     void windowSettingsController.applyTheme(settings.interface.theme);
   }
 
@@ -805,12 +858,14 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 
   async function restoreSnapshot(snapshotId: string, createCurrentBackup: boolean) {
     const returnToSettings = dataDialogReturnToSettings;
+    const applied = await snapshotController.restoreSnapshot(snapshotId, createCurrentBackup);
+    if (!applied) return false;
     dataDialogReturnToSettings = false;
-    await snapshotController.restoreSnapshot(snapshotId, createCurrentBackup);
     if (returnToSettings && activeDialog === null) {
       settingsActiveSection = "data";
       activeDialog = "settings";
     }
+    return true;
   }
 
   function offerSnapshotUndo(snapshotId: string, message: string) {
@@ -875,7 +930,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       systemThemeMediaQuery?.removeEventListener("change", handleSystemThemeChange);
       systemThemeMediaQuery = null;
       statusController.destroy();
-      stopPaneResize();
+      layoutController.destroy();
       searchSession.cancel();
       passwordStrengthSession.reset();
       autoLockSession.clear();
@@ -891,6 +946,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   $: {
+    sidebarCollapsed;
     sidebarRatio;
     listRatio;
     generatorRatio;
@@ -1053,15 +1109,30 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   async function copyText(text: string, label: string) {
     if (!text) {
       showStatus(`${label}没有可复制的内容`);
-      return;
+      return false;
     }
     try {
-      await navigator.clipboard.writeText(text);
+      await writeClipboardText(text);
       showStatus(`${label}已复制`);
+      return true;
     } catch {
       showStatus("复制失败");
+      return false;
     }
   }
+
+  const { editCopy, editCut, editPaste, editSelectAll, editClearSearch } = createEditableContextController({
+    read: () => ({ activePopover, editableContext, editableContextTarget, editableSelection }),
+    write: (patch) => {
+      if (patch.editableSelection) editableSelection = patch.editableSelection;
+      if ("activePopover" in patch) activePopover = patch.activePopover ?? null;
+      if ("editableContext" in patch) editableContext = patch.editableContext ?? null;
+    },
+    copyText,
+    readClipboardText,
+    showStatus,
+    clearSearch,
+  });
 
   function handleWindowBlur() {
     passwordStrengthSession.reset();
@@ -1092,7 +1163,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     activeDialog = "settings";
   }
 
-  function setSettingsSection(section: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment") {
+  function setSettingsSection(section: SettingsView["activeSection"]) {
     settingsActiveSection = section;
   }
 
@@ -1155,6 +1226,10 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   async function lockVaultNow() {
+    if (confirmationBusy) {
+      autoLockSession.schedule();
+      return;
+    }
     if (!vaultLockEnabled) {
       showStatus("请先开启启动密码");
       return;
@@ -1170,6 +1245,10 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       }
       if (vaultStorageState === "ready" && vaultStorageController.hasUnsavedChanges()) {
         await vaultStorageController.persistImmediately();
+      }
+      if (confirmationBusy) {
+        autoLockSession.schedule();
+        return;
       }
       await lockVaultSession();
     } catch (error) {
@@ -1294,87 +1373,19 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     }
   }
 
-  function fileNameFromPath(path: string) {
-    return path.split(/[\\/]/).filter(Boolean).pop() || recoveryFileNameDefault;
-  }
-
-  async function saveRecoveryFile() {
-    if (!recoveryKey || recoveryFileBusy) return;
-    recoveryFileBusy = true;
-    recoveryFileError = "";
-    try {
-      const content = recoveryKey;
-      if (isTauri()) {
-        const path = await saveFileDialog({
-          title: "保存恢复文件",
-          defaultPath: recoveryFileNameDefault,
-          filters: [{ name: "Psd Manager 恢复文件", extensions: ["psdm-recovery"] }],
-        });
-        if (!path) {
-          recoveryFileError = "已取消保存恢复文件";
-          return;
-        }
-        await writeTextFile(path, content);
-        recoveryFileName = fileNameFromPath(path);
-      } else {
-        const blob = new Blob([content], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = recoveryFileNameDefault;
-        anchor.click();
-        URL.revokeObjectURL(url);
-        recoveryFileName = recoveryFileNameDefault;
-      }
-      recoveryFileSaved = true;
-      recoveryAcknowledged = false;
-      showStatus("恢复文件已保存");
-    } catch (error) {
-      recoveryFileSaved = false;
-      recoveryFileError = error instanceof Error ? error.message : String(error ?? "恢复文件保存失败");
-    } finally {
-      recoveryFileBusy = false;
-    }
-  }
-
-  async function chooseRecoveryFile() {
-    recoveryError = "";
-    try {
-      if (isTauri()) {
-        const path = await openFileDialog({
-          title: "选择恢复文件",
-          multiple: false,
-          filters: [{ name: "Psd Manager 恢复文件", extensions: ["psdm-recovery"] }],
-        });
-        if (!path || Array.isArray(path)) return;
-        recoveryFileContent = await readTextFile(path);
-        if (!recoveryFileContent.trim()) throw new Error("恢复文件为空");
-        recoveryFileName = fileNameFromPath(path);
-        recoveryFileSaved = false;
-      } else {
-        const content = await new Promise<{ content: string; name: string } | null>((resolve) => {
-          const input = document.createElement("input");
-          input.type = "file";
-          input.accept = ".psdm-recovery,application/json";
-          input.onchange = async () => {
-            const file = input.files?.[0];
-            resolve(file ? { content: await file.text(), name: file.name } : null);
-          };
-          input.click();
-        });
-        if (!content) return;
-        if (!content.content.trim()) throw new Error("恢复文件为空");
-        recoveryFileContent = content.content;
-        recoveryFileName = content.name;
-        recoveryFileSaved = false;
-      }
-      showStatus(`已选择恢复文件：${recoveryFileName}`);
-    } catch (error) {
-      recoveryFileContent = "";
-      recoveryFileName = "";
-      recoveryError = error instanceof Error ? error.message : String(error ?? "恢复文件读取失败");
-    }
-  }
+  const { saveRecoveryFile, chooseRecoveryFile } = createRecoveryFileController({
+    read: () => ({ recoveryKey, recoveryFileBusy }),
+    write: (patch) => {
+      if (patch.recoveryAcknowledged !== undefined) recoveryAcknowledged = patch.recoveryAcknowledged;
+      if (patch.recoveryFileBusy !== undefined) recoveryFileBusy = patch.recoveryFileBusy;
+      if (patch.recoveryFileError !== undefined) recoveryFileError = patch.recoveryFileError;
+      if (patch.recoveryFileName !== undefined) recoveryFileName = patch.recoveryFileName;
+      if (patch.recoveryFileSaved !== undefined) recoveryFileSaved = patch.recoveryFileSaved;
+      if (patch.recoveryFileContent !== undefined) recoveryFileContent = patch.recoveryFileContent;
+      if (patch.recoveryError !== undefined) recoveryError = patch.recoveryError;
+    },
+    showStatus,
+  });
 
   function finishRecoveryKeyDisplay() {
     if (!recoveryKey || !recoveryFileSaved || !recoveryAcknowledged) return;
@@ -1480,10 +1491,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     updateInterfaceSettings({ tooltipEnabled: value });
   }
 
-  function setLowMemoryBackground(value: boolean) {
-    updateInterfaceSettings({ lowMemoryBackground: value });
-  }
-
   async function setStartOnBootSetting(value: boolean) {
     if (!isTauri()) {
       showStatus("浏览器预览模式不支持开机自启");
@@ -1532,77 +1539,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     updateInterfaceSettings({ theme: value });
   }
 
-  function setDensitySetting(value: AppSettings["interface"]["density"]) {
-    updateInterfaceSettings({ density: value });
-  }
-
-  function setFontSizeSetting(value: AppSettings["interface"]["fontSize"]) {
-    updateInterfaceSettings({ fontSize: value });
-  }
-
-  function setRememberLayout(value: boolean) {
-    updateAppSettings({
-      ...appSettings,
-      workspace: {
-        ...appSettings.workspace,
-        rememberLayout: value,
-        paneLayout: { sidebarRatio, listRatio, generatorRatio },
-      },
-    });
-  }
-
-  function setRememberLastView(value: boolean) {
-    updateAppSettings({
-      ...appSettings,
-      workspace: {
-        ...appSettings.workspace,
-        rememberLastView: value,
-        lastView: value
-          ? {
-              deviceType: selectedDeviceType,
-              searchQuery,
-              sortMode,
-              selectedDeviceUuid: selectedItem?.uuid ?? "",
-            }
-          : {
-              deviceType: "全部设备",
-              searchQuery: "",
-              sortMode: appSettings.workspace.deviceSortMode,
-              selectedDeviceUuid: "",
-            },
-      },
-    });
-  }
-
-  function setRememberWindowBounds(value: boolean) {
-    updateAppSettings({
-      ...appSettings,
-      workspace: { ...appSettings.workspace, rememberWindowBounds: value, windowBounds: value ? appSettings.workspace.windowBounds : null },
-    });
-  }
-
-  function setDeviceSortSetting(value: SortMode) {
-    updateAppSettings({
-      ...appSettings,
-      workspace: { ...appSettings.workspace, deviceSortMode: value },
-    });
-  }
-
-  function setDeviceTypeSortSetting(value: DeviceTypeSortMode) {
-    updateAppSettings({
-      ...appSettings,
-      workspace: { ...appSettings.workspace, deviceTypeSortMode: value },
-    });
-  }
-
-  function setGeneratorSetting<K extends keyof AppSettings["passwordGenerator"]>(key: K, value: AppSettings["passwordGenerator"][K]) {
-    const next = normalizeAppSettings({
-      ...appSettings,
-      passwordGenerator: { ...appSettings.passwordGenerator, [key]: value },
-    });
-    updateAppSettings(next);
-  }
-
   function requestResetSettings() {
     pendingConfirmation = {
       action: "reset-settings",
@@ -1625,6 +1561,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
         if (previousAutostart) await disableAutostart();
       }
       await resetAppSettings();
+      settingsReadFailed = false;
       const defaults = createDefaultAppSettings();
       appSettings = normalizeAppSettings({
         ...defaults,
@@ -1635,6 +1572,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       defaultsApplied = true;
       autoLockSession.schedule();
       showStatus("应用设置已恢复默认值");
+      return true;
     } catch (error) {
       if (!defaultsApplied) {
         appSettings = previousSettings;
@@ -1653,10 +1591,12 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
         }
       }
       showStatus(`恢复设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      return false;
     }
   }
 
   function showStatus(message: string, duration = 2200, actionLabel = "", action: (() => void) | null = null) {
+    if (confirmationBusy) confirmationReportedStatus = message;
     statusController.show(message, duration, actionLabel, action);
   }
 
@@ -1749,10 +1689,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 
   function startPaneResize(pane: ResizePane, event: PointerEvent) {
     layoutController.startResize(pane, event);
-  }
-
-  function stopPaneResize() {
-    layoutController.stopResize();
   }
 
   function maskPassword(password: string) {
@@ -1849,9 +1785,11 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   function closeOverlays() {
+    if (confirmationBusy) return;
     const returnToSettings = dataDialogReturnToSettings
       && (activeDialog === "export-config" || activeDialog === "snapshots");
     const returnToSecuritySettings = activeDialog === "security-password";
+    if (returnToSecuritySettings && (vaultPasswordBusy || recoveryFileBusy)) return;
     if (returnToSecuritySettings && recoveryKey && (!recoveryFileSaved || !recoveryAcknowledged)) {
       showStatus("请先保存恢复文件");
       return;
@@ -1878,6 +1816,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   function cancelPendingConfirmation() {
+    if (confirmationBusy) return;
     const returnToSettings = dataDialogReturnToSettings && activeDialog === null;
     overlayController.cancelPendingConfirmation();
     dataDialogReturnToSettings = false;
@@ -1893,7 +1832,9 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     if (activeDialog === "bulk-password") return saveBulkPasswordUpdate();
     if (activeDialog === "account") return saveAccount();
     if (activeDialog === "device") return saveDevice();
-    if (activeDialog === "export-config") return exportConfig();
+    if (activeDialog === "export-config") {
+      (document.getElementById("export-config-form") as HTMLFormElement | null)?.requestSubmit();
+    }
   }
 
   function handleGlobalKeydown(event: KeyboardEvent) {
@@ -1913,7 +1854,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   async function deleteDeviceType(confirmation?: PendingConfirmation) {
-    await deviceTypeController.deleteDeviceType(confirmation ?? { deviceType: selectedDeviceType });
+    return deviceTypeController.deleteDeviceType(confirmation ?? { deviceType: selectedDeviceType });
   }
 
   function saveDeviceType() {
@@ -1921,7 +1862,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   function executeSaveDeviceType(confirmation?: PendingConfirmation) {
-    deviceTypeController.executeSaveDeviceType(confirmation);
+    return deviceTypeController.executeSaveDeviceType(confirmation);
   }
 
   function openAddDeviceDialog(deviceType = selectedDeviceType) {
@@ -1937,7 +1878,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   function executeSaveDevice(confirmation?: PendingConfirmation) {
-    deviceController.executeSaveDevice(confirmation);
+    return deviceController.executeSaveDevice(confirmation);
   }
 
   function openAddAccountDialog() {
@@ -2013,7 +1954,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   }
 
   async function deleteSelectedDevice(confirmation: PendingConfirmation) {
-    await deviceController.deleteSelected(confirmation);
+    return deviceController.deleteSelected(confirmation);
   }
 
   function requestDeleteSelectedDevice() {
@@ -2023,37 +1964,38 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   type ConfirmationContext = {
     confirmation: PendingConfirmation;
     importedConfig: ConfigData | null;
-    configFormat: ConfigFormat;
+    configFormat: ConfigTransferFormat;
     importMode: ConfigImportMode;
+    xlsxOverwriteDeviceKeys: string[];
   };
 
-  const confirmationHandlers: Partial<Record<ConfirmationAction, (context: ConfirmationContext) => void | boolean | Promise<void | boolean>>> = {
-    "delete-device-type": async ({ confirmation }) => {
-      await deleteDeviceType(confirmation);
-    },
-    "delete-device": async ({ confirmation }) => {
-      await deleteSelectedDevice(confirmation);
-    },
-    "import-config": async ({ importedConfig, configFormat, importMode }) => {
+  const confirmationHandlers: Partial<Record<ConfirmationAction, (context: ConfirmationContext) => boolean | Promise<boolean>>> = {
+    "delete-account": ({ confirmation }) => accountPasswordController.executeAccountConfirmation(confirmation),
+    "save-account": ({ confirmation }) => accountPasswordController.executeAccountConfirmation(confirmation),
+    "save-account-password": ({ confirmation }) => accountPasswordController.executeAccountConfirmation(confirmation),
+    "update-password": ({ confirmation }) => accountPasswordController.executePasswordConfirmation(confirmation),
+    "bulk-update-password": ({ confirmation }) => accountPasswordController.executePasswordConfirmation(confirmation),
+    "restore-history": ({ confirmation }) => accountPasswordController.executePasswordConfirmation(confirmation),
+    "delete-device-type": ({ confirmation }) => deleteDeviceType(confirmation),
+    "delete-device": ({ confirmation }) => deleteSelectedDevice(confirmation),
+    "import-config": ({ importedConfig, configFormat, importMode, xlsxOverwriteDeviceKeys }) => {
       if (!importedConfig) throw new Error("待导入配置已失效，请重新选择文件");
-      return applyImportedConfig(importedConfig, configFormat, importMode);
+      return applyImportedConfig(importedConfig, configFormat, importMode, xlsxOverwriteDeviceKeys);
     },
     "save-device": ({ confirmation }) => executeSaveDevice(confirmation),
     "save-device-type": ({ confirmation }) => executeSaveDeviceType(confirmation),
-    "restore-snapshot": async ({ confirmation }) => {
+    "restore-snapshot": ({ confirmation }) => {
       if (!confirmation.snapshotId) throw new Error("数据快照目标信息不完整，请重新选择快照");
-      await restoreSnapshot(confirmation.snapshotId, true);
+      return restoreSnapshot(confirmation.snapshotId, true);
     },
-    "reset-settings": async () => {
-      await resetSettings();
-    },
+    "reset-settings": () => resetSettings(),
   };
 
   async function confirmPendingAction() {
     const confirmation = pendingConfirmation;
-    if (!confirmation) return;
+    if (!confirmation || confirmationBusy) return;
     if (confirmation.action === "import-config" && confirmation.importModeErrors?.[importConfigMode]) {
-      showStatus(`无法按“${importConfigMode === "add-missing" ? "仅新增" : "全部覆盖"}”导入：${confirmation.importModeErrors[importConfigMode]}`, 7000);
+      confirmationError = `无法按“${importConfigMode === "add-missing" ? "仅新增" : "全部覆盖"}”导入：${confirmation.importModeErrors[importConfigMode]}`;
       return;
     }
     const context: ConfirmationContext = {
@@ -2061,25 +2003,22 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       importedConfig: pendingImportedConfig,
       configFormat: pendingConfigFormat,
       importMode: importConfigMode,
+      xlsxOverwriteDeviceKeys: confirmation.xlsxOverwriteDeviceKeys ?? [],
     };
-    pendingConfirmation = null;
+    confirmationError = "";
+    confirmationReportedStatus = "";
+    confirmationBusy = true;
     try {
-      if (await accountPasswordController.executeConfirmation(confirmation)) {
-        pendingImportedConfig = null;
-        return;
-      }
       const handler = confirmationHandlers[confirmation.action];
-      if (!handler) {
-        pendingImportedConfig = null;
-        showStatus("这个操作暂时无法执行", 5000);
+      if (!handler) throw new Error("这个操作暂时无法执行");
+      const applied = await handler(context);
+      // Security cleanup or a newer confirmation owns the surface once identity changes.
+      if (pendingConfirmation !== confirmation) return;
+      if (!applied) {
+        confirmationError = confirmationReportedStatus || "操作未完成，请检查后重试。";
         return;
       }
-      const result = await handler(context);
-      if (confirmation.action === "import-config" && result === false) {
-        pendingImportedConfig = context.importedConfig;
-        pendingConfirmation = confirmation;
-        return;
-      }
+      pendingConfirmation = null;
       pendingImportedConfig = null;
       if (confirmation.action === "import-config" && dataDialogReturnToSettings) {
         dataDialogReturnToSettings = false;
@@ -2087,14 +2026,12 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
         activeDialog = "settings";
       }
     } catch (error) {
-      if (confirmation.action === "import-config") {
-        pendingImportedConfig = context.importedConfig;
-        pendingConfirmation = confirmation;
-      } else {
-        pendingImportedConfig = null;
-      }
+      if (pendingConfirmation !== confirmation) return;
       const reason = error instanceof Error ? error.message : String(error ?? "");
-      showStatus(reason ? `操作失败：${reason}` : "操作失败：发生未知错误", 7000);
+      confirmationError = reason ? `操作失败：${reason}` : "操作失败：发生未知错误";
+    } finally {
+      confirmationBusy = false;
+      confirmationReportedStatus = "";
     }
   }
 
@@ -2103,14 +2040,16 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     configTransferController.openExportConfigDialog();
   }
 
-  async function exportConfig(format: ConfigFormat = exportConfigFormat) {
+  async function exportConfig(format: ConfigTransferFormat = exportConfigFormat, password = ""): Promise<string | null> {
     const returnToSettings = dataDialogReturnToSettings;
-    await configTransferController.exportConfig(format);
+    const error = await configTransferController.exportConfig(format, password);
+    if (error) return error;
     if (returnToSettings && activeDialog === null) {
       dataDialogReturnToSettings = false;
       settingsActiveSection = "data";
       activeDialog = "settings";
     }
+    return null;
   }
 
   async function chooseConfigFile() {
@@ -2124,9 +2063,9 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     customDeviceTypes = normalized.customDeviceTypes;
   }
 
-  async function applyImportedConfig(config: ConfigData, format: ConfigFormat, mode: ConfigImportMode) {
+  async function applyImportedConfig(config: ConfigData, format: ConfigTransferFormat, mode: ConfigImportMode, overwriteDeviceKeys: string[] = []) {
     const returnToSettings = dataDialogReturnToSettings;
-    const applied = await configTransferController.applyImportedConfig(config, format, mode);
+    const applied = await configTransferController.applyImportedConfig(config, format, mode, overwriteDeviceKeys);
     if (!applied) return false;
     dataDialogReturnToSettings = false;
     if (returnToSettings && activeDialog === null) {
@@ -2164,7 +2103,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   const settingsActions = {
     setSection: setSettingsSection,
     setTooltipEnabled: setTooltipSetting,
-    setLowMemoryBackground,
     setStartOnBoot: setStartOnBootSetting,
     setStartupLock,
     setAutoLockEnabled,
@@ -2172,15 +2110,11 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     openVaultPasswordDialog,
     lockNow: lockVaultNow,
     setTheme: setThemeSetting,
-    setDensity: setDensitySetting,
-    setFontSize: setFontSizeSetting,
-    setRememberLayout,
-    setRememberLastView,
-    setRememberWindowBounds,
-    setDeviceSortMode: setDeviceSortSetting,
-    setDeviceTypeSortMode: setDeviceTypeSortSetting,
-    setGeneratorValue: setGeneratorSetting,
     openStoragePath,
+    copyStoragePath: (kind: "installation" | "app-data") => {
+      if (!isTauri() || environmentStatus !== "ready") return;
+      void copyText(kind === "installation" ? installationPath : appDataPath, kind === "installation" ? "程序位置" : "数据目录");
+    },
     openSnapshotsDialog,
     openExportConfigDialog,
     chooseConfigFile,
@@ -2205,7 +2139,15 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     copySelectedAccountInfo,
     openEditAccountDialog,
     requestDeleteSelectedAccount,
-    setActivePopover: (popover: ActivePopover | null) => (activePopover = popover),
+    setActivePopover: (popover: ActivePopover | null) => {
+      activePopover = popover;
+      if (popover !== "editable-context") editableContext = null;
+    },
+    editCopy,
+    editCut,
+    editPaste,
+    editSelectAll,
+    editClearSearch,
   };
 
   const deviceDetailActions = {
@@ -2231,6 +2173,11 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 
   const workspaceActions = {
     sidebar: {
+      toggleCollapsed: () => {
+        layoutController.stopResize();
+        closeOverlays();
+        sidebarCollapsed = !sidebarCollapsed;
+      },
       openTypeBlankContextMenu,
       openAddTypeDialog,
       openEditTypeDialog,
@@ -2252,12 +2199,10 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       openEditDeviceDialog,
       requestDeleteSelectedDevice,
       openDeviceSortPopover: (event: MouseEvent) => openPopover("device-sort", event),
-      openDeviceActionsPopover: (event: MouseEvent) => openPopover("device-actions", event),
       openDeviceContextMenu,
       openDeviceListBlankContextMenu,
       selectDevice,
     },
-    startPaneResize: (pane: ResizePane, event: PointerEvent) => startPaneResize(pane, event),
     deviceDetail: deviceDetailActions,
   };
 
@@ -2301,21 +2246,15 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     startOnBoot: appSettings.interface.startOnBoot,
     startupLock: vaultLockEnabled,
     autoLockMinutes: appSettings.interface.autoLockMinutes,
-    lowMemoryBackground: appSettings.interface.lowMemoryBackground,
     autostartAvailable,
     autostartUpdating,
     theme: appSettings.interface.theme,
-    density: appSettings.interface.density,
-    fontSize: appSettings.interface.fontSize,
-    rememberLayout: appSettings.workspace.rememberLayout,
-    rememberLastView: appSettings.workspace.rememberLastView,
-    rememberWindowBounds: appSettings.workspace.rememberWindowBounds,
-    deviceSortMode: appSettings.workspace.deviceSortMode,
-    deviceTypeSortMode: appSettings.workspace.deviceTypeSortMode,
-    generator: appSettings.passwordGenerator,
-    installationPath: installationPath || "当前环境不可用",
-    appDataPath: appDataPath || "当前环境不可用",
+    installationPath,
+    appDataPath,
     storageMode,
+    environmentStatus,
+    operatingSystem,
+    applicationArch,
     version: appVersion,
   };
 
@@ -2333,6 +2272,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     selectedAccountHasPassword: Boolean(selectedAccount.password),
     deviceTypeOptionsLength: deviceTypeOptions.length,
     hasSelectedDevice,
+    editableContext,
   };
 
   $: deviceDetailModel = {
@@ -2354,6 +2294,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 
   $: workspaceView = {
     sidebar: {
+      collapsed: sidebarCollapsed,
       deviceTypeRows,
       selectedDeviceType,
       selectedTypeDeviceCount,
@@ -2375,7 +2316,6 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
       deviceTypeOptionsLength: deviceTypeOptions.length,
       listContextLabel,
     },
-    resizingPane,
     deviceDetail: deviceDetailModel,
   };
 
@@ -2395,11 +2335,15 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     retry={retryVaultStorage}
     canRecoverBackup={vaultBackupRecoveryRequired}
     recoverBackup={recoverVaultBackup}
+    canExit={vaultCanExit}
+    exitError={vaultExitError}
+    exiting={vaultExiting}
+    exitApplication={() => vaultStorageController.exitApplication()}
   />
 {/if}
 
 <main class="app-shell" class:storage-blocked={vaultStorageState !== "ready"} style={layoutStyle} aria-hidden={vaultStorageState !== "ready"} inert={vaultStorageState !== "ready"}>
-  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml" on:change={selectConfigFileFromBrowser} />
+  <input id="import-file" class="hidden-file-input" type="file" accept=".json,.yaml,.yml,.xlsx,application/json,application/yaml,text/yaml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" on:change={selectConfigFileFromBrowser} />
   <WorkspaceContent
     view={workspaceView}
     actions={workspaceActions}
@@ -2409,8 +2353,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
   />
 
   <OverlayLayer
-    actionPopoverModel={actionPopoverModel}
-    actionPopoverActions={actionPopoverActions}
+    popover={{ model: actionPopoverModel, actions: actionPopoverActions }}
     {activeDialog}
     bind:typeForm
     bind:passwordForm
@@ -2418,20 +2361,31 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     bind:accountForm
     bind:deviceForm
     bind:exportConfigFormat
+    exportPasswordConfigured={vaultLockEnabled}
     bind:openTypePicker
     bind:bulkTypeSearch
     bind:bulkUsernameSearch
     bind:deviceTypeSearch
+    validationFeedback={formValidationFeedback}
     appDialogView={appDialogView}
     appDialogActions={appDialogActions}
-    {vaultSnapshots}
-    {closeOverlays}
-    {cancelPendingConfirmation}
-    {requestRestoreSnapshot}
-    {pendingConfirmation}
-    {importConfigMode}
-    {confirmPendingAction}
-    setImportConfigMode={(mode) => (importConfigMode = mode)}
+    snapshots={{ items: vaultSnapshots, close: closeOverlays, restore: requestRestoreSnapshot }}
+    confirmation={{
+      pending: pendingConfirmation,
+      busy: confirmationBusy,
+      error: confirmationError,
+      progressLabel: "正在执行，请稍候…",
+      importMode: importConfigMode,
+      cancel: cancelPendingConfirmation,
+      confirm: confirmPendingAction,
+      setImportMode: (mode) => { if (!confirmationBusy) { importConfigMode = mode; confirmationError = ""; } },
+      setXlsxOverwriteDeviceKeys: (keys) => {
+        if (!confirmationBusy && pendingConfirmation?.xlsxImport) {
+          pendingConfirmation = { ...pendingConfirmation, xlsxOverwriteDeviceKeys: keys };
+          confirmationError = "";
+        }
+      },
+    }}
     {generatorPanelOpen}
     bind:generatedPassword
     bind:generatorLength
@@ -2448,12 +2402,14 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
     bind:excludedCharacters
     passwordGeneratorView={passwordGeneratorView}
     passwordGeneratorActions={passwordGeneratorActions}
-    {copyStatus}
-    {pauseStatusDismiss}
-    {resumeStatusDismiss}
-    {dismissStatus}
-    {statusActionLabel}
-    {runStatusAction}
+    status={{
+      message: copyStatus,
+      pause: pauseStatusDismiss,
+      resume: resumeStatusDismiss,
+      dismiss: dismissStatus,
+      actionLabel: statusActionLabel,
+      runAction: runStatusAction,
+    }}
     settingsView={settingsView}
     settingsActions={settingsActions}
     {vaultPasswordDialogMode}
@@ -2475,6 +2431,7 @@ import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "./l
 
 {#if vaultLocked}
   <VaultLockScreen
+    {revealResetToken}
     bind:password={vaultUnlockPassword}
     error={vaultUnlockError}
     busy={vaultUnlockBusy}

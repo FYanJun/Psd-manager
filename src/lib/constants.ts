@@ -1,35 +1,35 @@
 import type { DeviceType, DeviceTypeMeta } from "./types";
 
 export const APP_TITLE = "密码管理器";
-export const CONFIG_FORMAT_VERSION = 3;
-export const VAULT_SCHEMA_VERSION = 2;
-export const APP_SETTINGS_SCHEMA_VERSION = 2;
 export const DEFAULT_ACCOUNT_TAG = "";
 
-export const SIDEBAR_DEFAULT_RATIO = 0.14;
-export const SIDEBAR_MIN_RATIO = 0.12;
+export const SIDEBAR_DEFAULT_RATIO = 0.15;
+export const SIDEBAR_WIDTH = 224;
+export const SIDEBAR_COLLAPSED_WIDTH = 64;
+export const SIDEBAR_DIVIDER_WIDTH = 1;
+export const SIDEBAR_MIN_RATIO = 0.10;
 export const SIDEBAR_MAX_RATIO = 0.2;
-export const LIST_DEFAULT_RATIO = 0.21;
-export const LIST_MIN_RATIO = 0.18;
-export const LIST_MAX_RATIO = 0.34;
+export const LIST_DEFAULT_RATIO = 0.25;
+export const DEVICE_LIST_WIDTH = 280;
+export const DETAIL_MIN_WIDTH = 400;
+export const LEGACY_WINDOW_MIN_WIDTH = 786;
+export const WINDOW_MIN_WIDTH = SIDEBAR_WIDTH + SIDEBAR_DIVIDER_WIDTH + DEVICE_LIST_WIDTH + 1 + DETAIL_MIN_WIDTH;
+export const WINDOW_MIN_HEIGHT = 720;
+export const LIST_MIN_RATIO = 0.20;
+export const LIST_MAX_RATIO = 0.38;
 export const GENERATOR_DEFAULT_RATIO = 0.32;
 export const GENERATOR_MIN_RATIO = 0.24;
 export const GENERATOR_MAX_RATIO = 0.48;
-export const RESIZER_RATIO = 0.005;
 
 export const initialItems = [];
 
 export const DEFAULT_APP_SETTINGS = {
-  schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
   interface: {
     tooltipEnabled: true,
     theme: "system" as const,
-    density: "standard" as const,
-    fontSize: "standard" as const,
     startOnBoot: false,
     startupLock: false,
     autoLockMinutes: 0,
-    lowMemoryBackground: true,
   },
   workspace: {
     rememberLayout: true,

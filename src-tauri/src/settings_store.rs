@@ -32,7 +32,6 @@ pub(crate) fn save_app_settings_sync(app: &AppHandle, content: String) -> Result
         .lock()
         .map_err(|_| "应用设置文件锁已损坏".to_string())?;
     let path = app_settings_path(app)?;
-    validate_app_settings_content(&content)?;
     let normalized = serde_json::to_string(&validate_app_settings_content(&content)?)
         .map_err(|error| format!("无法编码应用设置：{error}"))?;
     let temporary_path = path.with_extension("json.tmp");

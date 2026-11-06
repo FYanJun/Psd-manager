@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, MoreHorizontal, Pencil, Plus, Search, SearchX, Server, Trash2 } from "@lucide/svelte";
+  import { ArrowDownUp, Pencil, Plus, Search, SearchX, Server, Trash2 } from "@lucide/svelte";
   import type { VaultItem } from "../lib/types";
   import { getAccounts } from "../lib/vault";
   import { iconColorStyle } from "../lib/color";
@@ -16,7 +16,6 @@
   export let openEditDeviceDialog: () => void;
   export let requestDeleteSelectedDevice: () => void;
   export let openDeviceSortPopover: (event: MouseEvent) => void;
-  export let openDeviceActionsPopover: (event: MouseEvent) => void;
   export let openDeviceContextMenu: (id: number, event: MouseEvent) => void;
   export let openDeviceListBlankContextMenu: (event: MouseEvent) => void;
   export let selectDevice: (id: number) => void;
@@ -28,24 +27,21 @@
       {#if searchQuery.trim()}
         <Search size={21} />
       {/if}
-      <span>{listContextLabel}</span>
+      <span tabindex="0" data-value-tooltip={listContextLabel}>{listContextLabel}</span>
       <small>{filteredItems.length}</small>
     </div>
     <div class="toolbar-actions">
       <button class="icon-button compact-action" aria-label="新增设备" data-tooltip={deviceTypeOptionsLength === 0 ? "请先新增设备类型" : "新增设备"} disabled={deviceTypeOptionsLength === 0} on:click={() => openAddDeviceDialog()}>
         <Plus size={18} />
       </button>
-      <button class="icon-button compact-action device-secondary-action" aria-label="编辑设备信息" data-tooltip={hasSelectedDevice ? "编辑设备信息" : "请先选择设备"} disabled={!hasSelectedDevice} on:click={() => openEditDeviceDialog()}>
+      <button class="icon-button compact-action" aria-label="编辑设备信息" data-tooltip={hasSelectedDevice ? "编辑设备信息" : "请先选择设备"} disabled={!hasSelectedDevice} on:click={() => openEditDeviceDialog()}>
         <Pencil size={17} />
       </button>
-      <button class="icon-button compact-action device-secondary-action" aria-label="删除设备" data-tooltip={hasSelectedDevice ? "删除设备" : "请先选择设备"} disabled={!hasSelectedDevice} on:click={() => requestDeleteSelectedDevice()}>
+      <button class="icon-button compact-action" aria-label="删除设备" data-tooltip={hasSelectedDevice ? "删除设备" : "请先选择设备"} disabled={!hasSelectedDevice} on:click={() => requestDeleteSelectedDevice()}>
         <Trash2 size={17} />
       </button>
-      <button class="icon-button compact-action device-sort-action" aria-label="设备排序" data-tooltip="设备排序" on:click={openDeviceSortPopover}>
+      <button class="icon-button compact-action" aria-label="设备排序" data-tooltip="设备排序" on:click={openDeviceSortPopover}>
         <ArrowDownUp size={18} />
-      </button>
-      <button class="icon-button compact-action device-overflow-action" aria-label="更多设备操作" data-tooltip="更多设备操作" on:click={openDeviceActionsPopover}>
-        <MoreHorizontal size={19} />
       </button>
     </div>
   </div>
@@ -70,6 +66,7 @@
         {@const deviceReference = item.ipAddress || item.assetCode || item.location || "未填写设备信息"}
         <button
           class:selected={item.id === selectedId}
+          aria-current={item.id === selectedId ? "true" : undefined}
           class="item-row"
           data-value-tooltip={item.deviceName}
           on:click={() => selectDevice(item.id)}

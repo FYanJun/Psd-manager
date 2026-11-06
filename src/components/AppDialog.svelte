@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { FormValidationFeedback } from "../lib/form-validation";
+  export let validationFeedback: FormValidationFeedback | null = null;
   import ModalFrame from "./ModalFrame.svelte";
   import AccountDialog from "./dialogs/AccountDialog.svelte";
   import BulkPasswordDialog from "./dialogs/BulkPasswordDialog.svelte";
@@ -8,7 +10,7 @@
   import PasswordDialog from "./dialogs/PasswordDialog.svelte";
   import SettingsDialog from "./dialogs/SettingsDialog.svelte";
   import VaultPasswordDialog from "./dialogs/VaultPasswordDialog.svelte";
-  import type { ActiveDialog, AccountForm, BulkPasswordForm, ConfigFormat, DeviceForm, TypeForm, TypePickerScope, VaultPasswordDialogMode } from "../lib/types";
+  import type { ActiveDialog, AccountForm, BulkPasswordForm, ConfigTransferFormat, DeviceForm, TypeForm, TypePickerScope, VaultPasswordDialogMode } from "../lib/types";
   import type { AppDialogActions, AppDialogView } from "../lib/view-models";
 
   export let activeDialog: ActiveDialog = null;
@@ -17,7 +19,8 @@
   export let bulkPasswordForm: BulkPasswordForm;
   export let accountForm: AccountForm;
   export let deviceForm: DeviceForm;
-  export let exportConfigFormat: ConfigFormat = "json";
+  export let exportConfigFormat: ConfigTransferFormat = "json";
+  export let exportPasswordConfigured = false;
   export let openTypePicker: TypePickerScope | null = null;
   export let bulkTypeSearch = "";
   export let bulkUsernameSearch = "";
@@ -67,6 +70,19 @@
     bulkPasswordMatches: view.bulkPasswordMatches,
     bulkPasswordSelectedMatches: view.bulkPasswordSelectedMatches,
   };
+  $: dialogDescription = activeDialog === "settings" ? "管理界面、数据、安全和应用信息。"
+    : activeDialog === "type" ? "设置类型名称、图标和颜色，便于归类查找。"
+    : activeDialog === "device" ? "设备属性与账号凭据分别管理。"
+    : activeDialog === "account" ? "维护当前设备下的账号、密码和备注。"
+    : activeDialog === "password" ? "保存后，原密码会保留在当前账号的历史记录中。"
+    : activeDialog === "bulk-password" ? "先选择匹配的账号，再统一更新密码。"
+    : activeDialog === "export-config" ? "选择配置格式，并将导出文件保存在可信位置。"
+    : "管理资产库的本地启动密码与恢复信息。";
+  $: canClose = activeDialog !== "security-password" || (
+    !vaultPasswordBusy
+    && !recoveryFileBusy
+    && (!recoveryKey || (recoveryFileSaved && recoveryAcknowledged))
+  );
   $: bulkPasswordActions = {
     closeOverlays: actions.closeOverlays,
     openGeneratorPanel: actions.openGeneratorPanel,
@@ -84,14 +100,17 @@
 </script>
 
 {#if activeDialog}
+  {#key activeDialog}
   <ModalFrame
     title={dialogTitle}
+    description={dialogDescription}
     titleId="business-dialog-title"
     close={actions.closeOverlays}
+    {canClose}
   >
 
       {#if activeDialog === "type"}
-        <DeviceTypeDialog bind:typeForm closeOverlays={actions.closeOverlays} saveDeviceType={actions.saveDeviceType} />
+        <DeviceTypeDialog {validationFeedback} bind:typeForm closeOverlays={actions.closeOverlays} saveDeviceType={actions.saveDeviceType} />
       {:else if activeDialog === "password"}
         <PasswordDialog
           bind:passwordForm
@@ -114,7 +133,7 @@
           actions={bulkPasswordActions}
         />
       {:else if activeDialog === "export-config"}
-        <ExportConfigDialog bind:exportConfigFormat closeOverlays={actions.closeOverlays} exportConfig={actions.exportConfig} />
+        <ExportConfigDialog bind:exportConfigFormat {exportPasswordConfigured} revealResetToken={view.revealResetToken} closeOverlays={actions.closeOverlays} exportConfig={actions.exportConfig} />
       {:else if activeDialog === "settings"}
         <SettingsDialog view={settingsView} actions={settingsActions} close={actions.closeOverlays} />
       {:else if activeDialog === "security-password"}
@@ -125,6 +144,7 @@
           bind:confirmPassword={vaultPasswordForm.confirmPassword}
           error={vaultPasswordError}
           busy={vaultPasswordBusy}
+          revealResetToken={view.revealResetToken}
           {recoveryKey}
           bind:recoveryAcknowledged
           {recoveryFileName}
@@ -137,9 +157,9 @@
           save={saveVaultPassword}
         />
       {:else if activeDialog === "account"}
-        <AccountDialog bind:accountForm selectedItem={view.selectedItem} revealResetToken={view.revealResetToken} closeOverlays={actions.closeOverlays} saveAccount={actions.saveAccount} />
+        <AccountDialog {validationFeedback} bind:accountForm selectedItem={view.selectedItem} revealResetToken={view.revealResetToken} closeOverlays={actions.closeOverlays} saveAccount={actions.saveAccount} />
       {:else}
-        <DeviceDialog
+        <DeviceDialog {validationFeedback}
           bind:deviceForm
           bind:openTypePicker
           bind:deviceTypeSearch
@@ -153,4 +173,5 @@
         />
       {/if}
   </ModalFrame>
+  {/key}
 {/if}

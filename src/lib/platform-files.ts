@@ -1,5 +1,5 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile as read, writeTextFile as write } from "@tauri-apps/plugin-fs";
+import { readFile as readBinary, readTextFile as read, writeFile as writeBinary, writeTextFile as write } from "@tauri-apps/plugin-fs";
 import { platformOperation } from "./platform-operation";
 
 export function openFileDialog(options: Parameters<typeof open>[0]) {
@@ -13,4 +13,10 @@ export function readTextFile(path: string) {
 }
 export function writeTextFile(path: string, content: string) {
   return platformOperation("storage", () => write(path, content));
+}
+export function readBinaryFile(path: string) {
+  return platformOperation("storage", () => readBinary(path));
+}
+export function writeBinaryFile(path: string, content: Uint8Array) {
+  return platformOperation("storage", () => writeBinary(path, content));
 }

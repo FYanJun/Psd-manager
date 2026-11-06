@@ -1,5 +1,5 @@
-import { APP_TITLE, CONFIG_FORMAT_VERSION } from "./constants";
-import type { ConfigData, ConfigSummary, ConfigFormat, DeviceTypeMeta, VaultItem } from "./types";
+import { APP_TITLE } from "./constants";
+import type { ConfigData, ConfigSummary, ConfigFormat, ConfigTransferFormat, DeviceTypeMeta, VaultItem } from "./types";
 import { countVaultAccounts, countVaultHistory } from "./vault";
 import { padDatePart } from "./utils";
 import { createJsonConfigPayload, parseJsonConfigContent } from "./config/structured";
@@ -21,7 +21,6 @@ export {
 export function createConfigMeta() {
   return {
     appName: APP_TITLE,
-    formatVersion: CONFIG_FORMAT_VERSION,
     exportedAt: new Date().toISOString(),
   };
 }
@@ -36,7 +35,7 @@ export function createConfigPayload(
   return JSON.stringify(createJsonConfigPayload(config), null, 2);
 }
 
-export function createConfigFilename(format: ConfigFormat) {
+export function createConfigFilename(format: ConfigTransferFormat) {
   const now = new Date();
   const timestamp = [
     now.getFullYear(),
@@ -52,9 +51,6 @@ export function parseConfigContent(content: string, format: ConfigFormat): Confi
   const config = format === "yaml"
       ? parseYamlConfigContent(content)
       : parseJsonConfigContent(content);
-  if (config.meta.formatVersion !== CONFIG_FORMAT_VERSION) {
-    throw new ConfigImportError(`不支持配置格式 v${config.meta.formatVersion}，当前仅支持 v${CONFIG_FORMAT_VERSION}`);
-  }
   assertValidConfigNames(config.items);
   assertValidConfigFields(config);
   assertValidConfigIdentities(config);
@@ -81,8 +77,9 @@ export function parseConfigContentWithFallback(
   throw configImportError ?? firstError ?? new Error("invalid config");
 }
 
-export function inferConfigFormat(pathOrName: string): ConfigFormat {
+export function inferConfigFormat(pathOrName: string): ConfigTransferFormat {
   const normalized = pathOrName.toLowerCase();
+  if (normalized.endsWith(".xlsx")) return "xlsx";
   if (normalized.endsWith(".yaml") || normalized.endsWith(".yml")) return "yaml";
   return "json";
 }
@@ -102,7 +99,6 @@ export function getConfigSummary(config: ConfigData): ConfigSummary {
     accountCount,
     historyCount,
     typeCount: new Set([...itemTypeLabels, ...customTypeLabels]).size,
-    formatVersion: config.meta.formatVersion,
   };
 }
 
@@ -112,7 +108,6 @@ export function formatConfigSummary(summary: ConfigSummary) {
     { label: "账号", value: `${summary.accountCount} 个` },
     { label: "历史", value: `${summary.historyCount} 条` },
     { label: "类型", value: `${summary.typeCount} 个` },
-    { label: "格式", value: `v${summary.formatVersion}` },
   ];
 }
 

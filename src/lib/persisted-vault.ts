@@ -1,5 +1,4 @@
 import { AppError } from "./app-error";
-import { VAULT_SCHEMA_VERSION } from "./constants";
 import {
   getTextInputValidationError,
   hasValidPersistedPassword,
@@ -248,14 +247,11 @@ function validateSnapshots(value: unknown, path: string): VaultSnapshot[] {
 
 function validateCurrentState(value: unknown): PersistedVaultState {
   const record = requireRecord(value, "资产库");
-  const schemaVersion = requireInteger(record, "schemaVersion", "资产库", 1);
-  if (schemaVersion !== VAULT_SCHEMA_VERSION) throw new VaultSchemaError(`资产库数据版本应为 ${VAULT_SCHEMA_VERSION}`);
   rejectField(record, "paneLayout", "资产库");
-  rejectUnknownFields(record, "资产库", ["schemaVersion", "revision", "items", "customDeviceTypes", "snapshots"]);
+  rejectUnknownFields(record, "资产库", ["revision", "items", "customDeviceTypes", "snapshots"]);
   const customDeviceTypes = validateDeviceTypes(record.customDeviceTypes, "customDeviceTypes");
   const deviceTypes = new Map(customDeviceTypes.map((type) => [type.label, type]));
   const state: PersistedVaultState = {
-    schemaVersion,
     revision: requireInteger(record, "revision", "资产库"),
     items: validateItems(record.items, "items", deviceTypes),
     customDeviceTypes,
@@ -270,6 +266,11 @@ export function parsePersistedVaultContent(content: string) {
     parsed = JSON.parse(content);
   } catch {
     throw new VaultSchemaError("资产库内容不是合法 JSON");
+  }
+  if (isRecord(parsed) && "schemaVersion" in parsed) {
+    const normalized = { ...parsed };
+    delete normalized.schemaVersion;
+    return validateCurrentState(normalized);
   }
   return validateCurrentState(parsed);
 }

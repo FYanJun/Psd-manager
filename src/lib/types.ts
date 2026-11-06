@@ -11,8 +11,6 @@ export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string 
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
 export type ThemePreference = "system" | "light" | "dark";
-export type DensityPreference = "standard" | "compact";
-export type FontSizePreference = "small" | "standard" | "large";
 export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | "settings" | "security-password" | null;
 export type ActivePopover =
   | "type-sort"
@@ -23,7 +21,9 @@ export type ActivePopover =
   | "type-blank-context"
   | "list-blank-context"
   | "detail-blank-context"
+  | "editable-context"
   | null;
+export type EditableContextKind = "search" | "text" | "password" | "number";
 export type ConfirmationAction =
   | "delete-device"
   | "delete-account"
@@ -42,6 +42,8 @@ export type ConfirmationAction =
 export type PopoverPosition = {
   top: number;
   left: number;
+  reference?: HTMLElement;
+  contextElement?: Element;
 };
 
 export type PendingConfirmation = {
@@ -57,6 +59,15 @@ export type PendingConfirmation = {
   importModeSummaries?: Record<ConfigImportMode, ConfirmationSummaryItem[]>;
   importModeDetails?: Record<ConfigImportMode, string>;
   importModeErrors?: Partial<Record<ConfigImportMode, string>>;
+  xlsxImport?: boolean;
+  xlsxDeviceConflicts?: Array<{
+    key: string;
+    deviceType: string;
+    deviceName: string;
+    localAccountCount: number;
+    incomingAccountCount: number;
+  }>;
+  xlsxOverwriteDeviceKeys?: string[];
   deviceType?: "全部设备" | DeviceType;
   deviceTypeUuid?: string;
   snapshotId?: string;
@@ -171,7 +182,6 @@ export type VaultSnapshot = {
 };
 
 export type PersistedVaultState = {
-  schemaVersion: number;
   revision: number;
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
@@ -198,19 +208,16 @@ export type GeneratorTarget = "current-account" | "bulk-password" | null;
 export type TypePickerScope = "device" | "bulk";
 export type ResizePane = "sidebar" | "list" | "generator";
 export type ConfigFormat = "json" | "yaml";
+export type ConfigTransferFormat = ConfigFormat | "xlsx";
 export type VaultPasswordDialogMode = "set" | "change" | "disable";
 
 export type AppSettings = {
-  schemaVersion: 2;
   interface: {
     tooltipEnabled: boolean;
     theme: ThemePreference;
-    density: DensityPreference;
-    fontSize: FontSizePreference;
     startOnBoot: boolean;
     startupLock: boolean;
     autoLockMinutes: number;
-    lowMemoryBackground: boolean;
   };
   workspace: {
     rememberLayout: boolean;
@@ -256,7 +263,6 @@ export type ConfigData = {
   customDeviceTypes: DeviceTypeMeta[];
   meta: {
     appName: string;
-    formatVersion: number;
     exportedAt: string;
   };
 };
@@ -266,7 +272,6 @@ export type ConfigSummary = {
   accountCount: number;
   historyCount: number;
   typeCount: number;
-  formatVersion: number;
 };
 
 export type ConfigDiffSummary = {

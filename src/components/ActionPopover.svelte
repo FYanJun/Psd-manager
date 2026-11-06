@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { Clipboard, Copy, Eraser, Scissors, TextSelect } from "@lucide/svelte";
   import type { ActivePopover, DeviceType, DeviceTypeSortMode, PopoverPosition, SortMode } from "../lib/types";
+  import BusinessMenu from "./BusinessMenu.svelte";
+  import EditableMenu from "./EditableMenu.svelte";
   import type { ActionPopoverActions, ActionPopoverModel } from "../lib/view-models";
   import AccountContextMenu from "./popovers/AccountContextMenu.svelte";
   import BlankDeviceContextMenu from "./popovers/BlankDeviceContextMenu.svelte";
@@ -26,6 +28,7 @@
   let selectedAccountHasPassword: boolean;
   let deviceTypeOptionsLength: number;
   let hasSelectedDevice: boolean;
+  let editableContext: ActionPopoverModel["editableContext"];
   let setDeviceTypeSortMode: ActionPopoverActions["setDeviceTypeSortMode"];
   let setSortMode: ActionPopoverActions["setSortMode"];
   let selectDeviceType: ActionPopoverActions["selectDeviceType"];
@@ -44,39 +47,7 @@
   let openEditAccountDialog: ActionPopoverActions["openEditAccountDialog"];
   let requestDeleteSelectedAccount: ActionPopoverActions["requestDeleteSelectedAccount"];
   let setActivePopover: ActionPopoverActions["setActivePopover"];
-  let menuElement: HTMLDivElement;
-  let previousPopover: ActivePopover = null;
-
-  function getMenuItems() {
-    return menuElement
-      ? Array.from(menuElement.querySelectorAll<HTMLButtonElement>("button.menu-item:not(:disabled)"))
-      : [];
-  }
-
-  async function focusFirstMenuItem() {
-    await tick();
-    getMenuItems()[0]?.focus({ preventScroll: true });
-  }
-
-  function handleMenuKeydown(event: KeyboardEvent) {
-    const menuItems = getMenuItems();
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setActivePopover(null);
-      return;
-    }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || menuItems.length === 0) return;
-    event.preventDefault();
-    const currentIndex = menuItems.findIndex((item) => item === document.activeElement);
-    const nextIndex = event.key === "Home"
-      ? 0
-      : event.key === "End"
-        ? menuItems.length - 1
-        : event.key === "ArrowDown"
-          ? (currentIndex + 1 + menuItems.length) % menuItems.length
-          : (currentIndex - 1 + menuItems.length) % menuItems.length;
-    menuItems[nextIndex]?.focus({ preventScroll: true });
-  }
+  function closeMenu() { setActivePopover(null); }
 
   $: ({
     activePopover,
@@ -92,6 +63,7 @@
     selectedAccountHasPassword,
     deviceTypeOptionsLength,
     hasSelectedDevice,
+    editableContext,
   } = model);
   $: ({
     setDeviceTypeSortMode,
@@ -112,16 +84,33 @@
     openEditAccountDialog,
     requestDeleteSelectedAccount,
     setActivePopover,
+    editCopy,
+    editCut,
+    editPaste,
+    editSelectAll,
+    editClearSearch,
   } = actions);
-  $: if (activePopover !== previousPopover) {
-    previousPopover = activePopover;
-    if (activePopover) void focusFirstMenuItem();
-  }
 </script>
 
+<div class="action-popover-host">
 {#if activePopover}
-  <div bind:this={menuElement} class="action-popover" role="menu" aria-label="操作菜单" tabindex="-1" style={`top: ${popoverPosition.top}px; left: ${popoverPosition.left}px;`} on:keydown={handleMenuKeydown} on:contextmenu={(event) => event.preventDefault()}>
-    {#if activePopover === "type-sort"}
+  {#key `${activePopover}`}
+  {#key popoverPosition}
+  <svelte:component this={activePopover === "editable-context" ? EditableMenu : BusinessMenu} position={popoverPosition} close={closeMenu}>
+    {#if activePopover === "editable-context" && editableContext}
+      <div class="context-menu-title">
+        <strong>{editableContext.kind === "search" ? "搜索" : editableContext.kind === "password" ? "密码字段" : "编辑内容"}</strong>
+        <span>文本编辑</span>
+      </div>
+      <button class="menu-item" role="menuitem" disabled={!editableContext.canCut} on:click={() => editCut()}><Scissors size={16} /><span>剪切</span></button>
+      <button class="menu-item" role="menuitem" disabled={!editableContext.canCopy} on:click={() => editCopy()}><Copy size={16} /><span>复制</span></button>
+      <button class="menu-item" role="menuitem" disabled={!editableContext.canPaste} on:click={() => editPaste()}><Clipboard size={16} /><span>粘贴</span></button>
+      <button class="menu-item" role="menuitem" disabled={!editableContext.canSelectAll} on:click={() => editSelectAll()}><TextSelect size={16} /><span>全选</span></button>
+      {#if editableContext.canClearSearch}
+        <div class="menu-separator"></div>
+        <button class="menu-item" role="menuitem" on:click={() => editClearSearch()}><Eraser size={16} /><span>清空搜索</span></button>
+      {/if}
+    {:else if activePopover === "type-sort"}
       <DeviceTypeSortMenu mode={deviceTypeSortMode} setMode={setDeviceTypeSortMode} {setActivePopover} showTitle />
     {:else if activePopover === "device-sort"}
       <DeviceSortMenu mode={sortMode} setMode={setSortMode} {setActivePopover} showTitle />
@@ -160,33 +149,46 @@
     {:else if activePopover === "account-context"}
       <AccountContextMenu {selectedAccountLabel} {selectedAccountHasPassword} {openPasswordDialog} {copySelectedAccountInfo} {openEditAccountDialog} {requestDeleteSelectedAccount} />
     {/if}
-  </div>
+  </svelte:component>
+  {/key}
+  {/key}
 {/if}
+</div>
 
 <style>
-  .action-popover {
+  .action-popover-host {
+    display: contents;
+  }
+
+  .action-popover-host :global(.action-popover) {
     position: fixed;
-    z-index: 25;
+    z-index: 70;
     display: grid;
     gap: 4px;
     width: min(236px, calc(100vw - 24px));
-    max-height: calc(100vh - 24px);
+    max-height: min(330px, var(--bits-dropdown-menu-content-available-height, calc(100vh - 24px)));
     overflow: auto;
     padding: 8px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     color: var(--app-text);
     background: var(--surface);
-    box-shadow: var(--shadow);
+    box-shadow: var(--popover-shadow);
   }
 
-  .action-popover :global(h3) {
+  .action-popover-host :global(.action-popover h3) {
     margin: 4px 6px 6px;
     color: var(--text-secondary);
     font-size: var(--font-size-12);
   }
 
-  .action-popover :global(.context-menu-title) {
+  .action-popover-host :global(.action-popover [data-dropdown-menu-radio-group]) {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .action-popover-host :global(.action-popover .context-menu-title) {
     display: grid;
     gap: 2px;
     padding: 7px 8px 8px;
@@ -194,77 +196,82 @@
     margin-bottom: 3px;
   }
 
-  .action-popover :global(.context-menu-title strong),
-  .action-popover :global(.context-menu-title span) {
+  .action-popover-host :global(.action-popover .context-menu-title strong),
+  .action-popover-host :global(.action-popover .context-menu-title span) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .action-popover :global(.context-menu-title strong) {
+  .action-popover-host :global(.action-popover .context-menu-title strong) {
     color: var(--text-strong);
     font-size: var(--font-size-13);
   }
 
-  .action-popover :global(.context-menu-title span) {
+  .action-popover-host :global(.action-popover .context-menu-title span) {
     color: var(--muted);
     font-size: var(--font-size-12);
-    font-weight: 700;
+    font-weight: var(--weight-medium);
   }
 
-  .action-popover :global(button) {
+  .action-popover-host :global(.action-popover button) {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     min-height: 34px;
+    width: 100%;
     border-radius: 7px;
     padding: 0 9px;
     text-align: left;
     font-size: var(--font-size-14);
-    font-weight: 650;
+    font-weight: var(--weight-medium);
   }
 
-  .action-popover :global(button.menu-item) {
+  .action-popover-host :global(.action-popover button.menu-item) {
     justify-content: flex-start;
   }
 
-  .action-popover :global(button.menu-item svg) {
+  .action-popover-host :global(.action-popover button.menu-item svg) {
     flex: 0 0 auto;
     color: var(--text-secondary);
   }
 
-  .action-popover :global(button.menu-item.danger-menu-item svg) {
+  .action-popover-host :global(.action-popover button.menu-item.danger-menu-item svg) {
     color: currentColor;
   }
 
-  .action-popover :global(.menu-separator) {
+  .action-popover-host :global(.action-popover .menu-separator) {
     height: 1px;
     margin: 4px 6px;
     background: var(--border);
   }
 
-  .action-popover :global(button small) {
+  .action-popover-host :global(.action-popover button small) {
     color: var(--muted);
     font-size: var(--font-size-12);
   }
 
-  .action-popover :global(button:hover),
-  .action-popover :global(button.selected) {
+  .action-popover-host :global(.action-popover button:hover),
+  .action-popover-host :global(.action-popover button[data-highlighted]) {
+    background: var(--control-hover);
+  }
+
+  .action-popover-host :global(.action-popover button.selected) {
     background: var(--accent-subtle);
   }
 
-  .action-popover :global(button:disabled) {
-    color: #9aa1a9;
+  .action-popover-host :global(.action-popover button:disabled) {
+    color: var(--text-quiet);
     cursor: default;
     opacity: 0.58;
   }
 
-  .action-popover :global(button:disabled:hover) {
+  .action-popover-host :global(.action-popover button:disabled:hover) {
     background: transparent;
   }
 
-  .action-popover :global(.danger-menu-item) {
-    color: #c4382b;
+  .action-popover-host :global(.action-popover .danger-menu-item) {
+    color: var(--danger-panel-text);
   }
 </style>

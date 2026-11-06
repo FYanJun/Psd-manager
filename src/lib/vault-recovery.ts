@@ -10,6 +10,26 @@ function deviceKey(item: Pick<VaultItem, "uuid">) {
   return item.uuid;
 }
 
+export function configDeviceNameKey(deviceType: string, deviceName: string) {
+  return JSON.stringify([deviceType.trim(), deviceName.trim()]);
+}
+
+export function findXlsxDeviceConflicts(currentItems: VaultItem[], incomingItems: VaultItem[]) {
+  const incomingByName = new Map(incomingItems.map((item) => [configDeviceNameKey(item.deviceType, item.deviceName), item]));
+  return currentItems.flatMap((local) => {
+    const key = configDeviceNameKey(local.deviceType, local.deviceName);
+    const incoming = incomingByName.get(key);
+    if (!incoming) return [];
+    return [{
+      key,
+      deviceType: local.deviceType,
+      deviceName: local.deviceName,
+      localAccountCount: getAccounts(local).length,
+      incomingAccountCount: getAccounts(incoming).length,
+    }];
+  });
+}
+
 function accountKey(account: Pick<DeviceAccount, "uuid">) {
   return account.uuid;
 }
@@ -274,6 +294,75 @@ export function mergeMissingImportedConfig(
   ];
   return {
     items,
+    customDeviceTypes,
+    meta: cloneValue(incoming.meta),
+  };
+}
+
+function historyContentKey(entry: PasswordHistory) {
+  return JSON.stringify([entry.password, entry.newPassword, entry.changedAt, entry.reason]);
+}
+
+export function mergeXlsxImportedConfig(
+  currentItems: VaultItem[],
+  currentTypes: DeviceTypeMeta[],
+  incoming: ConfigData,
+  overwriteDeviceKeys: string[],
+): ConfigData {
+  const incomingByName = new Map(incoming.items.map((item) => [configDeviceNameKey(item.deviceType, item.deviceName), item]));
+  const overwriteKeys = new Set(overwriteDeviceKeys);
+  const currentTypesByLabel = new Map(currentTypes.map((type) => [type.label.trim(), type]));
+  const incomingTypesByLabel = new Map(incoming.customDeviceTypes.map((type) => [type.label.trim(), type]));
+
+  const mapIncomingType = (item: VaultItem) => {
+    const type = currentTypesByLabel.get(item.deviceType.trim()) ?? incomingTypesByLabel.get(item.deviceType.trim());
+    return {
+      ...item,
+      deviceTypeUuid: type?.uuid ?? item.deviceTypeUuid,
+      iconText: type?.iconText ?? item.iconText,
+    };
+  };
+
+  const items = currentItems.map((local) => {
+    const key = configDeviceNameKey(local.deviceType, local.deviceName);
+    const imported = incomingByName.get(key);
+    if (!imported || !overwriteKeys.has(key)) return local;
+
+    const localAccounts = getAccounts(local);
+    const accounts = getAccounts(imported).map((incomingAccount) => {
+      const localAccount = localAccounts.find((candidate) => candidate.username.trim() === incomingAccount.username.trim());
+      if (!localAccount) return cloneValue(incomingAccount);
+      const localHistoryByContent = new Map(localAccount.history.map((entry) => [historyContentKey(entry), entry]));
+      return {
+        ...incomingAccount,
+        uuid: localAccount.uuid,
+        history: incomingAccount.history.map((entry) => {
+          const matchingHistory = localHistoryByContent.get(historyContentKey(entry));
+          return matchingHistory ? { ...entry, uuid: matchingHistory.uuid } : entry;
+        }),
+      };
+    });
+    const mapped = mapIncomingType(imported);
+    return syncItemWithAccounts({ ...mapped, uuid: local.uuid, id: local.id }, accounts);
+  });
+
+  const currentKeys = new Set(currentItems.map((item) => configDeviceNameKey(item.deviceType, item.deviceName)));
+  const newItems = incoming.items
+    .filter((item) => !currentKeys.has(configDeviceNameKey(item.deviceType, item.deviceName)))
+    .map((item) => mapIncomingType(cloneValue(item)));
+
+  const typeByLabel = new Map(currentTypes.map((type) => [type.label.trim(), type]));
+  const customDeviceTypes = [...currentTypes];
+  incoming.customDeviceTypes.forEach((type) => {
+    const existing = typeByLabel.get(type.label.trim());
+    if (existing) return;
+    const cloned = cloneValue(type);
+    customDeviceTypes.push(cloned);
+    typeByLabel.set(cloned.label.trim(), cloned);
+  });
+
+  return {
+    items: normalizeVaultItems([...items, ...newItems]),
     customDeviceTypes,
     meta: cloneValue(incoming.meta),
   };

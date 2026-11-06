@@ -27,8 +27,9 @@ export function createAccountPasswordController(port: AccountPasswordControllerP
   }
 
   async function executeConfirmation(confirmation: PendingConfirmation) {
-    const accountResult = await accountController.executeAccountConfirmation(confirmation);
-    if (accountResult !== false) return accountResult;
+    if (["delete-account", "save-account", "save-account-password"].includes(confirmation.action)) {
+      return accountController.executeAccountConfirmation(confirmation);
+    }
     return await passwordController.executePasswordConfirmation(confirmation);
   }
 

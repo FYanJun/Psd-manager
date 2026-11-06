@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, ChevronRight, Pencil, Plus, Trash2 } from "@lucide/svelte";
+  import { ArrowDownUp, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2 } from "@lucide/svelte";
   import type { DeviceType, DeviceTypeMeta } from "../lib/types";
   import { typeColorClass, typeColorStyle } from "../lib/color";
 
@@ -7,6 +7,8 @@
   export let selectedDeviceType: "全部设备" | DeviceType;
   export let selectedTypeDeviceCount = 0;
   export let canDeleteSelectedDeviceType = false;
+  export let collapsed = false;
+  export let toggleCollapsed: (() => void) | undefined = undefined;
 
   export let openTypeBlankContextMenu: (event: MouseEvent) => void;
   export let openAddTypeDialog: () => void;
@@ -17,7 +19,19 @@
   export let openTypeContextMenu: (deviceType: "全部设备" | DeviceType, event: MouseEvent) => void;
 </script>
 
-<aside class="sidebar" aria-label="设备类型" on:contextmenu={openTypeBlankContextMenu}>
+<aside class="sidebar" class:is-collapsed={collapsed} class:has-collapse-toggle={!!toggleCollapsed} aria-label="设备类型" on:contextmenu={openTypeBlankContextMenu}>
+  {#if toggleCollapsed}
+    <button
+      type="button"
+      class="icon-button compact-action sidebar-collapse-toggle"
+      aria-label={collapsed ? "展开左栏" : "收起左栏"}
+      aria-expanded={!collapsed}
+      data-tooltip={collapsed ? "展开左栏" : "收起左栏"}
+      on:click={toggleCollapsed}
+    >
+      {#if collapsed}<PanelLeftOpen size={18} />{:else}<PanelLeftClose size={18} />{/if}
+    </button>
+  {/if}
   <div class="pane-header sidebar-pane-header">
     <div class="sidebar-pane-title">
       <span class="pane-kicker">资产库</span>
@@ -50,16 +64,17 @@
       <button
         class:selected={selectedDeviceType === type.label}
         class="device-type-row"
-        data-tooltip={type.label}
+        aria-label={`${type.label}，${type.count} 个设备`}
+        aria-current={selectedDeviceType === type.label ? "true" : undefined}
+        data-tooltip={`${type.label} · ${type.count} 个设备`}
         on:click={() => selectDeviceType(type.label)}
         on:contextmenu={(event) => openTypeContextMenu(type.label, event)}
       >
         <span class={`type-icon ${typeColorClass(type.color)}`} style={typeColorStyle(type.color)}>{type.iconText}</span>
         <span class="type-copy">
           <strong>{type.label}</strong>
-          <small>{type.count} 个设备</small>
         </span>
-        <ChevronRight size={17} />
+        <span class="type-count" aria-hidden="true">{type.count}</span>
       </button>
     {/each}
   </div>

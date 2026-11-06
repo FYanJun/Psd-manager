@@ -3,13 +3,13 @@ use serde::{Deserialize, Serialize};
 
 const RECOVERY_KEY_PREFIX: &str = "PSDM-";
 const RECOVERY_FILE_FORMAT: &str = "psd-manager-recovery";
-const RECOVERY_FILE_VERSION: u8 = 1;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct RecoveryFilePayload {
     format: String,
-    version: u8,
+    #[serde(default, skip_serializing, rename = "version")]
+    legacy_version: Option<u8>,
     recovery_key: String,
 }
 
@@ -72,8 +72,10 @@ pub(crate) fn parse_recovery_file(content: &str) -> Result<Vec<u8>, String> {
         Err(_error) if trimmed.starts_with(RECOVERY_KEY_PREFIX) => return decode_hex(trimmed),
         Err(error) => return Err(format!("恢复文件格式不正确：{error}")),
     };
-    if payload.format != RECOVERY_FILE_FORMAT || payload.version != RECOVERY_FILE_VERSION {
-        return Err("不支持的恢复文件格式或版本".to_string());
+    if payload.format != RECOVERY_FILE_FORMAT
+        || payload.legacy_version.is_some_and(|version| version != 1)
+    {
+        return Err("不支持的恢复文件格式".to_string());
     }
     decode_hex(&payload.recovery_key)
 }
@@ -81,7 +83,7 @@ pub(crate) fn parse_recovery_file(content: &str) -> Result<Vec<u8>, String> {
 pub(crate) fn format_recovery_file(secret: &[u8]) -> Result<String, String> {
     let payload = RecoveryFilePayload {
         format: RECOVERY_FILE_FORMAT.to_string(),
-        version: RECOVERY_FILE_VERSION,
+        legacy_version: None,
         recovery_key: format_recovery_key(secret)?,
     };
     serde_json::to_string_pretty(&payload)
@@ -97,7 +99,11 @@ mod recovery_format_tests {
         let secret: Vec<u8> = (0..32).collect();
         let file = format_recovery_file(&secret).unwrap();
         assert!(file.ends_with('\n'));
+        assert!(!file.contains("\"version\""));
         assert_eq!(parse_recovery_file(&file).unwrap(), secret);
+        let mut legacy: serde_json::Value = serde_json::from_str(&file).unwrap();
+        legacy["version"] = serde_json::json!(1);
+        assert_eq!(parse_recovery_file(&legacy.to_string()).unwrap(), secret);
         assert_eq!(
             parse_recovery_file(&format_recovery_key(&secret).unwrap()).unwrap(),
             secret
@@ -109,7 +115,7 @@ mod recovery_format_tests {
             serde_json::from_str(&format_recovery_file(&[1; 32]).unwrap()).unwrap();
         file["version"] = serde_json::json!(2);
         assert!(parse_recovery_file(&file.to_string()).is_err());
-        file["version"] = serde_json::json!(1);
+        file.as_object_mut().unwrap().remove("version");
         file["extra"] = serde_json::json!(true);
         assert!(parse_recovery_file(&file.to_string()).is_err());
         assert!(parse_recovery_file("PSDM-ABC").is_err());

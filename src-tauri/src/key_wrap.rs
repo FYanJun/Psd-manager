@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 
 const VAULT_PASSWORD_AAD: &[u8] = b"com.fan.psd-manager:vault-password:1";
 const VAULT_RECOVERY_AAD: &[u8] = b"com.fan.psd-manager:vault-recovery:1";
-pub(crate) const PASSWORD_LOCK_VERSION: u8 = 1;
 pub(crate) const PASSWORD_NONCE_LENGTH: usize = 12;
 pub(crate) const PASSWORD_TAG_LENGTH: usize = 16;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PasswordLockFile {
-    pub(crate) version: u8,
+    #[serde(default, skip_serializing, rename = "version")]
+    pub(crate) legacy_version: Option<u8>,
     pub(crate) kdf: PasswordKdfParameters,
     pub(crate) salt: Vec<u8>,
     pub(crate) nonce: Vec<u8>,
@@ -56,7 +56,7 @@ pub(crate) fn wrap_vault_key(
         wrap_vault_key_with_recovery(vault_key, &recovery_secret)?;
     Ok((
         PasswordLockFile {
-            version: PASSWORD_LOCK_VERSION,
+            legacy_version: None,
             kdf,
             salt,
             nonce: nonce.to_vec(),
@@ -179,5 +179,17 @@ mod key_wrap_tests {
         assert!(wrap_vault_key(&[0; 31], "test-password").is_err());
         assert!(wrap_vault_key_with_recovery(&[0; 32], &[1; 31]).is_err());
         assert!(wrap_vault_key_with_recovery(&[0; 31], &[1; 32]).is_err());
+    }
+    #[test]
+    fn lock_file_writes_no_version_and_reads_legacy_marker() {
+        let (lock, _) = wrap_vault_key(&[42; PASSWORD_KEY_LENGTH], "test-password").unwrap();
+        let mut value = serde_json::to_value(&lock).unwrap();
+        assert!(value.get("version").is_none());
+        value["version"] = serde_json::json!(1);
+        let legacy: PasswordLockFile = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(legacy.legacy_version, Some(1));
+        value["version"] = serde_json::json!(2);
+        let unsupported: PasswordLockFile = serde_json::from_value(value).unwrap();
+        assert_eq!(unsupported.legacy_version, Some(2));
     }
 }

@@ -1,6 +1,4 @@
-use crate::key_wrap::{
-    PasswordLockFile, PASSWORD_LOCK_VERSION, PASSWORD_NONCE_LENGTH, PASSWORD_TAG_LENGTH,
-};
+use crate::key_wrap::{PasswordLockFile, PASSWORD_NONCE_LENGTH, PASSWORD_TAG_LENGTH};
 use crate::password_kdf::{
     validate_password_kdf_parameters, PASSWORD_KEY_LENGTH, PASSWORD_SALT_LENGTH,
 };
@@ -60,9 +58,9 @@ pub(crate) fn read_password_lock_file(app: &AppHandle) -> Result<Option<Password
     }
     restrict_private_file(&path, "启动密码配置")?;
     let bytes = fs::read(&path).map_err(|error| format!("无法读取启动密码配置：{error}"))?;
-    let lock_file: PasswordLockFile = serde_json::from_slice(&bytes)
+    let mut lock_file: PasswordLockFile = serde_json::from_slice(&bytes)
         .map_err(|error| format!("启动密码配置格式不正确：{error}"))?;
-    if lock_file.version != PASSWORD_LOCK_VERSION
+    if lock_file.legacy_version.is_some_and(|version| version != 1)
         || lock_file.salt.len() != PASSWORD_SALT_LENGTH
         || lock_file.nonce.len() != PASSWORD_NONCE_LENGTH
         || lock_file.wrapped_key.len() != PASSWORD_KEY_LENGTH + PASSWORD_TAG_LENGTH
@@ -71,9 +69,10 @@ pub(crate) fn read_password_lock_file(app: &AppHandle) -> Result<Option<Password
         || (!lock_file.recovery_wrapped_key.is_empty()
             && lock_file.recovery_wrapped_key.len() != PASSWORD_KEY_LENGTH + PASSWORD_TAG_LENGTH)
     {
-        return Err("启动密码配置版本或密钥数据不正确".to_string());
+        return Err("启动密码配置或密钥数据不正确".to_string());
     }
     validate_password_kdf_parameters(&lock_file.salt, &lock_file.kdf)?;
+    lock_file.legacy_version = None;
     Ok(Some(lock_file))
 }
 

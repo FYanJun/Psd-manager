@@ -5,10 +5,34 @@ use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 static MAIN_WINDOW_CREATE_LOCK: Mutex<()> = Mutex::new(());
 
+pub(crate) fn startup_theme(app: &AppHandle) -> Option<tauri::Theme> {
+    let content = load_app_settings_sync(app).ok().flatten()?;
+    let settings = serde_json::from_str::<AppSettingsFile>(&content).ok()?;
+    theme_from_preference(settings.theme_preference())
+}
+
+fn theme_from_preference(preference: &str) -> Option<tauri::Theme> {
+    match preference {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    }
+}
+
+pub(crate) fn theme_initialization_script(theme: Option<tauri::Theme>) -> String {
+    let preference = match theme {
+        Some(tauri::Theme::Light) => "light",
+        Some(tauri::Theme::Dark) => "dark",
+        _ => "system",
+    };
+    include_str!("../../src/theme-init.js").replace("__PSD_THEME_PREFERENCE__", preference)
+}
+
 const INITIAL_WINDOW_WIDTH_RATIO: f64 = 0.75;
 const INITIAL_WINDOW_HEIGHT_RATIO: f64 = 0.75;
-const MIN_WINDOW_WIDTH: u32 = 1024;
-const MIN_WINDOW_HEIGHT: u32 = 720;
+pub(crate) const MIN_WINDOW_WIDTH: u32 = 906;
+pub(crate) const LEGACY_MIN_WINDOW_WIDTH: u32 = 786;
+pub(crate) const MIN_WINDOW_HEIGHT: u32 = 720;
 
 fn adaptive_dimension(available: u32, ratio: f64, minimum: u32) -> u32 {
     if available < minimum {
@@ -196,7 +220,13 @@ pub(crate) fn restore_main_window(app: &AppHandle) {
         };
 
         let saved_bounds = saved_window_bounds(&app);
-        match WebviewWindowBuilder::from_config(&app, &config).and_then(|builder| builder.build()) {
+        let theme = startup_theme(&app);
+        match WebviewWindowBuilder::from_config(&app, &config).and_then(|builder| {
+            builder
+                .theme(theme)
+                .initialization_script(theme_initialization_script(theme))
+                .build()
+        }) {
             Ok(window) => {
                 if let Some(bounds) = saved_bounds.as_ref() {
                     apply_saved_window_bounds(&window, bounds);
@@ -226,9 +256,39 @@ mod tests {
     use super::{clamp_window_bounds, initial_window_size, restored_inner_size};
 
     #[test]
+    fn startup_theme_matches_native_and_document_preferences() {
+        for (preference, expected) in [
+            ("light", Some(tauri::Theme::Light)),
+            ("dark", Some(tauri::Theme::Dark)),
+            ("system", None),
+        ] {
+            let theme = super::theme_from_preference(preference);
+            assert_eq!(theme, expected);
+            let script = super::theme_initialization_script(theme);
+            assert!(script.contains(&format!("const preference = \"{preference}\";")));
+            assert!(!script.contains("__PSD_THEME_PREFERENCE__"));
+        }
+        assert_eq!(super::theme_from_preference("unsupported"), None);
+    }
+
+    #[test]
+    fn configured_window_minimum_matches_runtime_bounds() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(
+            config["app"]["windows"][0]["minWidth"],
+            super::MIN_WINDOW_WIDTH
+        );
+        assert_eq!(
+            config["app"]["windows"][0]["minHeight"],
+            super::MIN_WINDOW_HEIGHT
+        );
+    }
+
+    #[test]
     fn initial_window_size_uses_work_area_ratio_and_minimums() {
         assert_eq!(initial_window_size((1920, 1080)), (1440, 810));
-        assert_eq!(initial_window_size((1280, 720)), (1024, 720));
+        assert_eq!(initial_window_size((1280, 720)), (960, 720));
     }
 
     #[test]

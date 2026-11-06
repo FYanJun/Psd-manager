@@ -14,6 +14,9 @@ export type VaultStorageViewState = {
   error: string;
   canRecoverBackup: boolean;
   hydrated: boolean;
+  canExit: boolean;
+  exitError: string;
+  exiting: boolean;
 };
 
 type PendingVaultSave = { generation: number; content: string };
@@ -33,9 +36,9 @@ type VaultStoragePort = {
   isLockEnabled(): boolean;
   isLocked(): boolean;
   hasPendingRecoveryFile(): boolean;
+  isSecurityOperationBusy?(): boolean;
   lock(): Promise<void>;
   clearSensitiveState(): void;
-  isLowMemoryBackground(): boolean;
   writeViewState(state: VaultStorageViewState): void;
 };
 
@@ -54,7 +57,7 @@ const defaultContentStore: VaultContentStore = {
     : browserPreviewStore.write(content, expectedRevision),
 };
 
-export type VaultWindow = Pick<ReturnType<typeof getCurrentWindow>, "destroy" | "hide" | "show" | "onCloseRequested">;
+export type VaultWindow = Pick<ReturnType<typeof getCurrentWindow>, "destroy" | "show" | "onCloseRequested">;
 export type VaultClosePlatform = {
   currentWindow(): VaultWindow | null;
   listen(event: string, handler: () => void): Promise<() => void>;
@@ -72,6 +75,10 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
   let storageError = "";
   let backupRecoveryRequired = false;
   let hydrated = false;
+  // A later reload must never turn a previously loaded editing session into a
+  // disposable startup failure, even though initialize resets hydrated.
+  let hasAppliedVaultContent = false;
+  let exitError = "";
   let pendingSave: PendingVaultSave | null = null;
   let dirtyContent = "";
   let persistedDataSignature = "";
@@ -97,6 +104,9 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       error: storageError,
       canRecoverBackup: backupRecoveryRequired,
       hydrated,
+      canExit: canExitAfterLoadError() && closePlatform.currentWindow() !== null,
+      exitError,
+      exiting: exitInProgress,
     });
   }
 
@@ -238,6 +248,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
     const stale = () => destroyed || generation !== loadGeneration;
     storageState = "loading";
     storageError = "";
+    exitError = "";
     backupRecoveryRequired = false;
     hydrated = false;
     persistedDataSignature = "";
@@ -249,6 +260,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       if (storedContent) {
         const parsed = parsePersistedVaultContent(storedContent);
         revision = parsed.revision;
+        hasAppliedVaultContent = true;
         port.applyLoaded(parsed);
         successfulContent = storedContent;
       } else {
@@ -264,6 +276,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       persistedDataSignature = getDataSignature(successfulContent || captureContent());
       refreshDirtyState();
       storageState = "ready";
+      hasAppliedVaultContent = true;
       hydrated = true;
       publish();
     } catch (error) {
@@ -320,6 +333,66 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
     return Boolean(dirtyScheduled || saveTimer || pendingSave || saveInFlight || dirtyContent);
   }
 
+  function canExitAfterLoadError() {
+    return storageState === "load-error" && !hasAppliedVaultContent && !hydrated
+      && !hasUnsavedChanges() && !activeSave && saveWaiters.length === 0
+      && !port.isSecurityOperationBusy?.()
+      && !port.hasPendingRecoveryFile();
+  }
+
+  function assertSecurityFlowCanClose() {
+    if (port.isSecurityOperationBusy?.()) {
+      throw new Error("安全操作正在进行，请完成后再关闭应用");
+    }
+    if (port.hasPendingRecoveryFile()) {
+      throw new Error("请先保存启动密码恢复文件，再关闭应用");
+    }
+  }
+
+  function showExitFailure(error: unknown) {
+    exitError = `退出失败：${getErrorMessage(error, "未知错误")}。可以重试退出。`;
+    publish();
+  }
+
+  async function exitApplication() {
+    if (exitInProgress || closeInProgress || destroyed) return;
+    const appWindow = closePlatform.currentWindow();
+    if (!appWindow) {
+      exitError = "浏览器预览不能退出桌面应用，请关闭当前浏览器标签页。";
+      publish();
+      return;
+    }
+    exitInProgress = true;
+    exitError = "";
+    publish();
+    let lockAttempted = false;
+    try {
+      if (!canExitAfterLoadError()) {
+        await prepareClose();
+        assertSecurityFlowCanClose();
+        if (port.isLockEnabled()) {
+          lockAttempted = true;
+          await port.lock();
+        }
+      }
+      // A startup read failure owns no editable vault. Exit the complete app
+      // without writing settings/assets or attempting a vault lock/reload.
+      assertSecurityFlowCanClose();
+      await closePlatform.exit();
+    } catch (error) {
+      await appWindow.show().catch(() => undefined);
+      if (storageState === "load-error" || storageState === "save-error") showExitFailure(error);
+      else {
+        const reason = getErrorMessage(error);
+        const prefix = lockAttempted ? "锁定失败" : "关闭失败";
+        port.showStatus(reason ? `${prefix}：${reason}` : `${prefix}：资产库尚未安全保存，请先重试保存`, 7000);
+      }
+    } finally {
+      exitInProgress = false;
+      publish();
+    }
+  }
+
   function suspend() {
     loadGeneration += 1;
     if (saveTimer) window.clearTimeout(saveTimer);
@@ -336,11 +409,9 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
   }
 
   async function prepareClose() {
+    assertSecurityFlowCanClose();
     if (storageState === "load-error") {
       throw new Error(storageError || "资产库当前不可用，请先处理读取错误");
-    }
-    if (port.hasPendingRecoveryFile()) {
-      throw new Error("请先保存启动密码恢复文件，再关闭应用");
     }
     if (storageState === "save-error") {
       throw new Error(storageError || "资产库尚未安全保存，请先重试保存");
@@ -349,29 +420,34 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       throw new Error("资产库正在读取，请稍后再关闭");
     }
     if (storageState === "ready" && hasUnsavedChanges()) await persistImmediately();
+    assertSecurityFlowCanClose();
     await port.captureWindowBounds();
+    assertSecurityFlowCanClose();
     await port.persistAppSettings();
+    assertSecurityFlowCanClose();
   }
 
   async function handleCloseRequested(appWindow: VaultWindow) {
     if (exitInProgress || closeInProgress) return;
+    if (storageState === "load-error") {
+      await exitApplication();
+      return;
+    }
     closeInProgress = true;
     let lockAttempted = false;
     let backgroundReleaseAttempted = false;
     try {
       await prepareClose();
+      assertSecurityFlowCanClose();
       if (port.isLockEnabled()) {
         lockAttempted = true;
         await port.lock();
       }
-      if (port.isLowMemoryBackground()) {
-        backgroundReleaseAttempted = true;
-        port.clearSensitiveState();
-        suspend();
-        await appWindow.destroy();
-      } else {
-        await appWindow.hide();
-      }
+      assertSecurityFlowCanClose();
+      backgroundReleaseAttempted = true;
+      port.clearSensitiveState();
+      suspend();
+      await appWindow.destroy();
     } catch (error) {
       // Keep the window visible whenever the save or lock sequence fails so the
       // error remains actionable and the user can retry immediately.
@@ -380,7 +456,9 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       }
       await appWindow.show().catch(() => undefined);
       const reason = getErrorMessage(error);
-      if (backgroundReleaseAttempted) {
+      if (storageState === "save-error") {
+        showExitFailure(error);
+      } else if (backgroundReleaseAttempted) {
         port.showStatus(reason ? `释放后台窗口失败，窗口保持打开：${reason}` : "释放后台窗口失败，窗口保持打开", 7000);
       } else if (lockAttempted) {
         port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000);
@@ -417,28 +495,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
           void handleCloseRequested(appWindow);
         }),
         closePlatform.listen("tray-exit-requested", () => {
-          if (exitInProgress || closeInProgress) return;
-          exitInProgress = true;
-          void (async () => {
-            let lockAttempted = false;
-            try {
-              await prepareClose();
-              if (port.isLockEnabled()) {
-                lockAttempted = true;
-                await port.lock();
-              }
-              // The Rust command exits the application, rather than destroying only
-              // the main window. A rejected invoke can happen when the process exits
-              // before the IPC response is delivered, so it is intentionally ignored.
-              await closePlatform.exit().catch(() => undefined);
-            } catch (error) {
-              await appWindow.show().catch(() => undefined);
-              const reason = getErrorMessage(error);
-              const prefix = lockAttempted ? "锁定失败" : "关闭失败";
-              port.showStatus(reason ? `${prefix}：${reason}` : `${prefix}：资产库尚未安全保存，请先重试保存`, 7000);
-              exitInProgress = false;
-            }
-          })();
+          void exitApplication();
         }),
       ]);
       const removeListeners = registrations
@@ -490,6 +547,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
     refreshDirtyState,
     retry,
     recoverBackup,
+    exitApplication,
     hasUnsavedChanges,
     suspend,
     mountCloseProtection,

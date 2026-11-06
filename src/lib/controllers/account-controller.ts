@@ -1,6 +1,6 @@
 import { createAccountFromForm, formatDeviceAccountInfo, updateAccountPassword } from "../device-commands";
 import {
-  getTextFieldsValidationError,
+  getTextInputValidationError,
   hasValidPasswordCharacters,
   INPUT_LIMITS,
   PASSWORD_CHARACTER_ERROR,
@@ -15,6 +15,11 @@ import {
 } from "./account-password-types";
 
 export function createAccountController(port: AccountPasswordControllerPort) {
+  function reportFieldError(field: string, message: string) {
+    if (port.reportValidationError) port.reportValidationError("account", field, message);
+    else port.showStatus(message, 5000);
+  }
+
   function deriveAccountState(state = port.read()) {
     return getAccountSelectionState(state);
   }
@@ -147,25 +152,27 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     }
     const username = form.username.trim();
     if (!username) {
-      port.showStatus("请输入用户名");
+      reportFieldError("username", "请输入用户名");
       return false;
     }
-    const textFields: Array<[string, string, number, boolean]> = [
-      ["用户名", form.username, INPUT_LIMITS.username, false],
-      ["账号标签", form.tag, INPUT_LIMITS.accountTag, false],
-      ["账号备注", form.notes, INPUT_LIMITS.notes, true],
+    const textFields: Array<[string, string, string, number, boolean]> = [
+      ["username", "用户名", form.username, INPUT_LIMITS.username, false],
+      ["tag", "账号标签", form.tag, INPUT_LIMITS.accountTag, false],
+      ["notes", "账号备注", form.notes, INPUT_LIMITS.notes, true],
     ];
-    const error = getTextFieldsValidationError(textFields);
-    if (error) {
-      port.showStatus(error, 5000);
-      return false;
+    for (const [field, label, value, limit, multiline] of textFields) {
+      const error = getTextInputValidationError(value, limit, multiline);
+      if (error) {
+        reportFieldError(field, `${label}${error}`);
+        return false;
+      }
     }
     if (!hasValidPasswordCharacters(form.password)) {
-      port.showStatus(PASSWORD_CHARACTER_ERROR, 5000);
+      reportFieldError("password", PASSWORD_CHARACTER_ERROR);
       return false;
     }
     if (hasDuplicateAccountUsername(accounts, username, currentAccountUuid)) {
-      port.showStatus("当前设备下已存在同名账号");
+      reportFieldError("username", "当前设备下已存在同名账号");
       return false;
     }
     return true;
@@ -252,12 +259,12 @@ export function createAccountController(port: AccountPasswordControllerPort) {
         : null;
     if (target?.accountUuid && !currentAccount) {
       port.showStatus("保存失败：待修改的账号已不存在", 5000);
-      return;
+      return false;
     }
-    if (!validateAccountForSave(item, selectedAccounts, form, currentAccount?.uuid ?? null)) return;
+    if (!validateAccountForSave(item, selectedAccounts, form, currentAccount?.uuid ?? null)) return false;
     if (currentAccount && getAccountChanges(currentAccount, form).length === 0) {
       port.showStatus("没有可保存的修改");
-      return;
+      return false;
     }
     const now = formatDateTime(new Date());
     const nextId = currentAccount?.id ?? Math.max(0, ...selectedAccounts.map((account) => account.id)) + 1;
@@ -292,6 +299,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
       port.write({ selectedAccountId: nextId, selectedAccountIds: [] });
     }
     port.setActiveDialog(null);
+    return true;
   }
 
   async function deleteSelectedAccount(
@@ -301,34 +309,34 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     const accountUuids = target.accountUuids ?? [];
     if (!itemUuid || accountUuids.length === 0) {
       port.showStatus("删除失败：账号目标信息不完整，请重新选择");
-      return;
+      return false;
     }
 
     const initialState = port.read();
     const initialItem = initialState.items.find((item) => item.uuid === itemUuid);
     if (!initialItem) {
       port.showStatus("删除失败：待删除的设备已不存在");
-      return;
+      return false;
     }
     const initialAccounts = getAccounts(initialItem);
     if (accountUuids.some((uuid) => !initialAccounts.some((account) => account.uuid === uuid))) {
       port.showStatus("删除失败：待删除的账号已不存在，请重新选择");
-      return;
+      return false;
     }
 
     const snapshot = await port.createSafetySnapshot(`删除设备“${initialItem.deviceName}”的账号前`);
-    if (!snapshot) return;
+    if (!snapshot) return false;
 
     const state = port.read();
     const targetItem = state.items.find((item) => item.uuid === itemUuid);
     if (!targetItem) {
       port.showStatus("删除失败：待删除的设备已不存在");
-      return;
+      return false;
     }
     const targetAccounts = getAccounts(targetItem);
     if (accountUuids.some((uuid) => !targetAccounts.some((account) => account.uuid === uuid))) {
       port.showStatus("删除失败：待删除的账号已不存在，请重新选择");
-      return;
+      return false;
     }
 
     const deletedAccounts = targetAccounts.filter((account) => accountUuids.includes(account.uuid));
@@ -355,6 +363,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
       snapshot.id,
       accountUuids.length > 1 ? `${accountUuids.length} 个账号已删除` : "账号已删除",
     );
+    return true;
   }
 
   function requestDeleteSelectedAccount() {
@@ -400,11 +409,10 @@ export function createAccountController(port: AccountPasswordControllerPort) {
 
   function executeAccountConfirmation(confirmation: PendingConfirmation) {
     if (confirmation.action === "delete-account") {
-      return deleteSelectedAccount(confirmation).then(() => true);
+      return deleteSelectedAccount(confirmation);
     }
     if (confirmation.action === "save-account" || confirmation.action === "save-account-password") {
-      executeSaveAccount(confirmation);
-      return true;
+      return executeSaveAccount(confirmation);
     }
     return false;
   }

@@ -1,19 +1,19 @@
 import { platformOperation } from "./platform-operation";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
-  APP_SETTINGS_SCHEMA_VERSION,
   DEFAULT_APP_SETTINGS,
+  WINDOW_MIN_WIDTH,
+  LEGACY_WINDOW_MIN_WIDTH,
+  WINDOW_MIN_HEIGHT,
 } from "./constants";
-import { clampPaneRatio } from "./layout";
+import { clampPaneRatio, getPaneRatioBounds } from "./layout";
 import { INPUT_LIMITS, sanitizeGeneratorSymbols, sanitizePasswordInput } from "./input-validation";
 import { isUuid } from "./uuid";
 import { isRecord } from "./utils";
 import type {
   AppSettings,
-  DensityPreference,
   DeviceType,
   DeviceTypeSortMode,
-  FontSizePreference,
   SortMode,
   ThemePreference,
 } from "./types";
@@ -53,10 +53,7 @@ function requireNumber(value: unknown, path: string, minimum?: number, maximum?:
 
 function validateAppSettingsShape(value: unknown) {
   const root = requireRecord(value, "应用设置");
-  rejectUnknownFields(root, "应用设置", ["schemaVersion", "interface", "workspace", "passwordGenerator"]);
-  if (root.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION) {
-    throw new Error(`不支持的应用设置版本，当前仅支持 ${APP_SETTINGS_SCHEMA_VERSION}`);
-  }
+  rejectUnknownFields(root, "应用设置", ["interface", "workspace", "passwordGenerator"]);
 
   const interfaceValue = requireRecord(root.interface, "应用设置.interface");
   rejectUnknownFields(interfaceValue, "应用设置.interface", [
@@ -66,11 +63,11 @@ function validateAppSettingsShape(value: unknown) {
   if (interfaceValue.theme !== "system" && interfaceValue.theme !== "light" && interfaceValue.theme !== "dark") {
     throw new Error("应用设置.interface.theme的值不受支持");
   }
-  if (interfaceValue.density !== "standard" && interfaceValue.density !== "compact") {
+  if ("density" in interfaceValue && interfaceValue.density !== "standard" && interfaceValue.density !== "compact") {
     throw new Error("应用设置.interface.density的值不受支持");
   }
-  if (interfaceValue.fontSize !== "small" && interfaceValue.fontSize !== "standard" && interfaceValue.fontSize !== "large") {
-    throw new Error("应用设置.interface.fontSize的值不受支持");
+  if ("fontSize" in interfaceValue) {
+    requireNumber(interfaceValue.fontSize, "应用设置.interface.fontSize（已移除的旧字段）", 10, 20, true);
   }
   requireBoolean(interfaceValue.startOnBoot, "应用设置.interface.startOnBoot");
   requireBoolean(interfaceValue.startupLock, "应用设置.interface.startupLock");
@@ -95,16 +92,19 @@ function validateAppSettingsShape(value: unknown) {
   }
   const layout = requireRecord(workspace.paneLayout, "应用设置.workspace.paneLayout");
   rejectUnknownFields(layout, "应用设置.workspace.paneLayout", ["sidebarRatio", "listRatio", "generatorRatio"]);
-  requireNumber(layout.sidebarRatio, "应用设置.workspace.paneLayout.sidebarRatio", 0.12, 0.2);
-  requireNumber(layout.listRatio, "应用设置.workspace.paneLayout.listRatio", 0.18, 0.34);
-  requireNumber(layout.generatorRatio, "应用设置.workspace.paneLayout.generatorRatio", 0.24, 0.48);
+  const sidebarBounds = getPaneRatioBounds("sidebar");
+  const listBounds = getPaneRatioBounds("list");
+  const generatorBounds = getPaneRatioBounds("generator");
+  requireNumber(layout.sidebarRatio, "应用设置.workspace.paneLayout.sidebarRatio", sidebarBounds.min, sidebarBounds.max);
+  requireNumber(layout.listRatio, "应用设置.workspace.paneLayout.listRatio", Math.min(0.18, listBounds.min), listBounds.max);
+  requireNumber(layout.generatorRatio, "应用设置.workspace.paneLayout.generatorRatio", generatorBounds.min, generatorBounds.max);
   if (workspace.windowBounds !== null) {
     const bounds = requireRecord(workspace.windowBounds, "应用设置.workspace.windowBounds");
     rejectUnknownFields(bounds, "应用设置.workspace.windowBounds", ["x", "y", "width", "height"]);
     requireNumber(bounds.x, "应用设置.workspace.windowBounds.x", -100000, 100000, true);
     requireNumber(bounds.y, "应用设置.workspace.windowBounds.y", -100000, 100000, true);
-    requireNumber(bounds.width, "应用设置.workspace.windowBounds.width", 1024, 10000, true);
-    requireNumber(bounds.height, "应用设置.workspace.windowBounds.height", 720, 10000, true);
+    requireNumber(bounds.width, "应用设置.workspace.windowBounds.width", LEGACY_WINDOW_MIN_WIDTH, 10000, true);
+    requireNumber(bounds.height, "应用设置.workspace.windowBounds.height", WINDOW_MIN_HEIGHT, 10000, true);
   }
   const lastView = requireRecord(workspace.lastView, "应用设置.workspace.lastView");
   rejectUnknownFields(lastView, "应用设置.workspace.lastView", ["deviceType", "searchQuery", "sortMode", "selectedDeviceUuid"]);
@@ -167,28 +167,20 @@ function theme(value: unknown, fallback: ThemePreference): ThemePreference {
   return value === "system" || value === "light" || value === "dark" ? value : fallback;
 }
 
-function density(value: unknown, fallback: DensityPreference): DensityPreference {
-  return value === "standard" || value === "compact" ? value : fallback;
-}
-
-function fontSize(value: unknown, fallback: FontSizePreference): FontSizePreference {
-  return value === "small" || value === "standard" || value === "large" ? value : fallback;
-}
-
 function windowBounds(value: unknown): AppSettings["workspace"]["windowBounds"] {
   if (!isRecord(value)) return null;
   if (!["x", "y", "width", "height"].every((key) => typeof value[key] === "number" && Number.isFinite(value[key]))) return null;
   const x = numberValue(value.x, 0, -100000, 100000);
   const y = numberValue(value.y, 0, -100000, 100000);
-  const width = numberValue(value.width, 0, 1024, 10000);
-  const height = numberValue(value.height, 0, 720, 10000);
-  if (width < 1024 || height < 720) return null;
+  const width = numberValue(value.width, 0, WINDOW_MIN_WIDTH, 10000);
+  const height = numberValue(value.height, 0, WINDOW_MIN_HEIGHT, 10000);
+  if (width < WINDOW_MIN_WIDTH || height < WINDOW_MIN_HEIGHT) return null;
   return { x, y, width, height };
 }
 
 export function normalizeAppSettings(value: unknown): AppSettings {
   const defaults = cloneDefaults();
-  if (!isRecord(value) || value.schemaVersion !== APP_SETTINGS_SCHEMA_VERSION) return defaults;
+  if (!isRecord(value)) return defaults;
   const interfaceValue = isRecord(value.interface) ? value.interface : {};
   const workspaceValue = isRecord(value.workspace) ? value.workspace : {};
   const layoutValue = isRecord(workspaceValue.paneLayout) ? workspaceValue.paneLayout : {};
@@ -210,16 +202,12 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     minimumNumbers = Math.max(0, minimumNumbers - (minimumOverflow - reducedSymbols));
   }
   return {
-    schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
     interface: {
       tooltipEnabled: bool(interfaceValue.tooltipEnabled, defaults.interface.tooltipEnabled),
       theme: theme(interfaceValue.theme, defaults.interface.theme),
-      density: density(interfaceValue.density, defaults.interface.density),
-      fontSize: fontSize(interfaceValue.fontSize, defaults.interface.fontSize),
       startOnBoot: bool(interfaceValue.startOnBoot, defaults.interface.startOnBoot),
       startupLock: bool(interfaceValue.startupLock, defaults.interface.startupLock),
       autoLockMinutes: numberValue(interfaceValue.autoLockMinutes, defaults.interface.autoLockMinutes, 0, 10080),
-      lowMemoryBackground: bool(interfaceValue.lowMemoryBackground, defaults.interface.lowMemoryBackground),
     },
     workspace: {
       rememberLayout: bool(workspaceValue.rememberLayout, defaults.workspace.rememberLayout),
@@ -258,6 +246,11 @@ export function normalizeAppSettings(value: unknown): AppSettings {
   };
 }
 
+export function parseAppSettings(value: unknown): AppSettings {
+  validateAppSettingsShape(value);
+  return normalizeAppSettings(value);
+}
+
 export function createDefaultAppSettings() {
   return cloneDefaults();
 }
@@ -267,8 +260,7 @@ export async function loadAppSettings() {
   if (!content) return createDefaultAppSettings();
   try {
     const parsed = JSON.parse(content) as unknown;
-    validateAppSettingsShape(parsed);
-    return normalizeAppSettings(parsed);
+    return parseAppSettings(parsed);
   } catch (error) {
     throw error instanceof Error ? error : new Error(`应用设置不是合法 JSON：${String(error)}`);
   }

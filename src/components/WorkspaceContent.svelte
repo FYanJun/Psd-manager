@@ -13,6 +13,8 @@
 </script>
 
 <SidebarPane
+  collapsed={view.sidebar.collapsed}
+  toggleCollapsed={actions.sidebar.toggleCollapsed}
   deviceTypeRows={view.sidebar.deviceTypeRows}
   selectedDeviceType={view.sidebar.selectedDeviceType}
   selectedTypeDeviceCount={view.sidebar.selectedTypeDeviceCount}
@@ -26,13 +28,7 @@
   openTypeContextMenu={actions.sidebar.openTypeContextMenu}
 />
 
-<button
-  class:active={view.resizingPane === "sidebar"}
-  class="pane-resizer"
-  type="button"
-  aria-label="调整设备类型宽度"
-  on:pointerdown={(event) => actions.startPaneResize("sidebar", event)}
-></button>
+<div class="sidebar-divider" aria-hidden="true"></div>
 
 <section class="workspace">
   <Topbar
@@ -63,19 +59,12 @@
       openEditDeviceDialog={actions.deviceList.openEditDeviceDialog}
       requestDeleteSelectedDevice={actions.deviceList.requestDeleteSelectedDevice}
       openDeviceSortPopover={actions.deviceList.openDeviceSortPopover}
-      openDeviceActionsPopover={actions.deviceList.openDeviceActionsPopover}
       openDeviceContextMenu={actions.deviceList.openDeviceContextMenu}
       openDeviceListBlankContextMenu={actions.deviceList.openDeviceListBlankContextMenu}
       selectDevice={actions.deviceList.selectDevice}
     />
 
-    <button
-      class:active={view.resizingPane === "list"}
-      class="pane-resizer"
-      type="button"
-      aria-label="调整设备列表宽度"
-      on:pointerdown={(event) => actions.startPaneResize("list", event)}
-    ></button>
+    <div class="sidebar-divider" aria-hidden="true"></div>
 
     <DeviceDetailPane
       bind:passwordVisible

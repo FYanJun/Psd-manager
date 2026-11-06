@@ -6,11 +6,55 @@
   import type { DeviceAccount, PasswordHistory, VaultItem } from "../lib/types";
   import type { DeviceDetailActions, DeviceDetailModel } from "../lib/view-models";
   import { iconColorStyle } from "../lib/color";
+  import { Tabs } from "bits-ui";
 
   export let passwordVisible = false;
   export let historyOpen = false;
   export let model: DeviceDetailModel;
   export let actions: DeviceDetailActions;
+
+  function fitDetailActions(element: HTMLElement) {
+    let frame: number | null = null;
+    function measure() {
+      frame = null;
+      const mirror = element.cloneNode(true) as HTMLElement;
+      mirror.classList.remove("actions-collapsed");
+      mirror.setAttribute("aria-hidden", "true");
+      mirror.inert = true;
+      mirror.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;width:max-content;max-width:none;top:0;left:0;";
+      for (const node of [mirror, ...mirror.querySelectorAll<HTMLElement>("*")]) {
+        node.removeAttribute("id");
+        node.removeAttribute("data-tooltip");
+        node.removeAttribute("data-value-tooltip");
+        node.removeAttribute("data-tooltip-trigger");
+      }
+      const identity = mirror.querySelector<HTMLElement>(".detail-header-identity");
+      if (identity) {
+        identity.style.flex = "0 0 auto";
+        identity.style.width = "max-content";
+      }
+      element.parentElement?.append(mirror);
+      const requiredWidth = mirror.getBoundingClientRect().width;
+      mirror.remove();
+      element.classList.toggle("actions-collapsed", requiredWidth > element.getBoundingClientRect().width + 1);
+    }
+    function schedule() {
+      if (frame === null) frame = requestAnimationFrame(measure);
+    }
+    const resizeObserver = new ResizeObserver(schedule);
+    resizeObserver.observe(element);
+    for (const node of element.querySelectorAll("h1, .identity-subtitle, .detail-actions span")) resizeObserver.observe(node);
+    const mutationObserver = new MutationObserver(schedule);
+    mutationObserver.observe(element, { subtree: true, childList: true, characterData: true });
+    schedule();
+    return {
+      destroy() {
+        resizeObserver.disconnect();
+        mutationObserver.disconnect();
+        if (frame !== null) cancelAnimationFrame(frame);
+      },
+    };
+  }
 
   let hasSelectedDevice: boolean;
   let hasDevices: boolean;
@@ -59,7 +103,7 @@
 
 <section class="detail-pane" aria-label="设备详情" on:contextmenu={openDetailBlankContextMenu}>
   {#if hasSelectedDevice}
-    <div class="detail-topline">
+    <div class="detail-topline" use:fitDetailActions>
       <div class="detail-header-identity">
         <span class={`detail-icon ${selectedItem.iconClass}`} style={iconColorStyle(selectedItem.iconClass)}>
           {selectedItem.iconText}
@@ -88,7 +132,7 @@
       </div>
     </div>
 
-    <div class="detail-scroll" role="group" aria-label="当前设备详情">
+    <Tabs.Root class="detail-scroll" role="group" aria-label="当前设备详情" orientation="vertical" bind:value={() => String(selectedAccount.id), (value) => selectAccount(Number(value))}>
       <DeviceInfoCard {selectedItem} {copyText} />
 
       <AccountList
@@ -101,7 +145,6 @@
         {openAccountContextMenu}
         {openAddAccountDialog}
         {requestDeleteSelectedAccount}
-        {selectAccount}
         {toggleAccountBatchSelection}
         {selectAllCurrentAccounts}
         {clearAccountBatchSelection}
@@ -121,7 +164,7 @@
         {requestRestoreHistoryPassword}
         {toggleHistorySort}
       />
-    </div>
+    </Tabs.Root>
   {:else}
     <div class="detail-topline">
       <div class="breadcrumb" aria-label="当前详情设备类型">

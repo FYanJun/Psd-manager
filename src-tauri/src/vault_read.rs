@@ -43,8 +43,8 @@ pub(crate) fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, Stri
     let bytes = fs::read(path).map_err(|error| format!("无法读取加密资产库：{error}"))?;
     let envelope: EncryptedVaultFile =
         serde_json::from_slice(&bytes).map_err(|error| format!("加密资产库格式不正确：{error}"))?;
-    if envelope.version != 1 || envelope.nonce.len() != 12 {
-        return Err("加密资产库版本或随机数格式不正确".to_string());
+    if envelope.legacy_version.is_some_and(|version| version != 1) || envelope.nonce.len() != 12 {
+        return Err("加密资产库格式或随机数不正确".to_string());
     }
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|error| format!("无法初始化解密器：{error}"))?;
@@ -71,8 +71,8 @@ pub(crate) fn decrypt_vault_file(path: &Path, key: &[u8]) -> Result<String, Stri
 
 pub(crate) fn load_valid_vault_file(path: &Path, key: &[u8]) -> Result<String, String> {
     let content = decrypt_vault_file(path, key)?;
-    validate_vault_payload(&content)?;
-    Ok(content)
+    let payload = validate_vault_payload(&content)?;
+    serde_json::to_string(&payload).map_err(|error| format!("无法编码资产库内容：{error}"))
 }
 
 #[cfg(test)]
@@ -102,7 +102,10 @@ mod vault_read_tests {
         }
     }
     fn encrypted(key: &[u8], revision: u64) -> Vec<u8> {
-        let content = serde_json::json!({"schemaVersion":2,"revision":revision,"items":[],"customDeviceTypes":[],"snapshots":[]}).to_string();
+        let content = serde_json::json!({"revision":revision,"items":[],"customDeviceTypes":[],"snapshots":[]}).to_string();
+        encrypt_content(key, &content)
+    }
+    fn encrypt_content(key: &[u8], content: &str) -> Vec<u8> {
         let cipher = Aes256Gcm::new_from_slice(key).unwrap();
         let nonce = Nonce::generate();
         let ciphertext = cipher
@@ -115,11 +118,40 @@ mod vault_read_tests {
             )
             .unwrap();
         serde_json::to_vec(&EncryptedVaultFile {
-            version: 1,
+            legacy_version: None,
             nonce: nonce.to_vec(),
             ciphertext,
         })
         .unwrap()
+    }
+    #[test]
+    fn legacy_marker_is_removed_in_memory_for_primary_and_backup() {
+        let dir = Scratch::new();
+        let primary = dir.0.join("vault.enc");
+        let backup = dir.0.join("vault.enc.bak");
+        let key = [7; 32];
+        let legacy = serde_json::json!({"schemaVersion":2,"revision":1,"items":[],"customDeviceTypes":[],"snapshots":[]});
+        let mut legacy_envelope: Value =
+            serde_json::from_slice(&encrypt_content(&key, &legacy.to_string())).unwrap();
+        legacy_envelope["version"] = serde_json::json!(1);
+        let encrypted_bytes = serde_json::to_vec(&legacy_envelope).unwrap();
+        fs::write(&primary, &encrypted_bytes).unwrap();
+        fs::write(&backup, &encrypted_bytes).unwrap();
+        let (content, source) = load_existing_vault(&primary, &backup, &key).unwrap();
+        assert!(source == Some(VaultSource::Primary));
+        let normalized: Value = serde_json::from_str(&content.unwrap()).unwrap();
+        assert!(normalized.get("schemaVersion").is_none());
+        assert_eq!(normalized["revision"], 1);
+        fs::write(&primary, b"corrupt").unwrap();
+        let (content, source) = load_existing_vault(&primary, &backup, &key).unwrap();
+        assert!(source == Some(VaultSource::Backup));
+        let normalized: Value = serde_json::from_str(&content.unwrap()).unwrap();
+        assert!(normalized.get("schemaVersion").is_none());
+        assert_eq!(fs::read(&backup).unwrap(), encrypted_bytes);
+        assert_eq!(fs::read(&primary).unwrap(), b"corrupt");
+        legacy_envelope["version"] = serde_json::json!(2);
+        fs::write(&primary, serde_json::to_vec(&legacy_envelope).unwrap()).unwrap();
+        assert!(load_valid_vault_file(&primary, &key).is_err());
     }
     #[test]
     fn primary_preferred_and_backup_selection_never_mutates_files() {

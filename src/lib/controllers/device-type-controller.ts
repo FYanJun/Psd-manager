@@ -1,3 +1,4 @@
+import type { ReportFormValidationError } from "../form-validation";
 import { fallbackDeviceTypeMeta, typeColorOptions } from "../constants";
 import {
   getTextInputValidationError,
@@ -39,6 +40,7 @@ export type DeviceTypeControllerPort = {
   setActivePopover(popover: ActivePopover): void;
   setPendingConfirmation(confirmation: PendingConfirmation | null): void;
   showStatus(message: string, duration?: number): void;
+  reportValidationError?: ReportFormValidationError;
   createSafetySnapshot(reason: string): Promise<SafetySnapshot | null>;
   offerSnapshotUndo(snapshotId: string, message: string): void;
   pushNavigationState(): void;
@@ -53,6 +55,11 @@ function formatTypeColor(color: string) {
 }
 
 export function createDeviceTypeController(port: DeviceTypeControllerPort) {
+  function reportFieldError(field: string, message: string, duration?: number) {
+    if (port.reportValidationError) port.reportValidationError("type", field, message);
+    else port.showStatus(message, duration);
+  }
+
   function getTypeMeta(deviceType: string) {
     return getVisibleTypes(port.read()).find((type) => type.label === deviceType) ?? fallbackDeviceTypeMeta;
   }
@@ -152,37 +159,37 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     },
   ) {
     const requestedType = target.deviceType ?? port.read().selectedDeviceType;
-    if (requestedType === "全部设备") return;
+    if (requestedType === "全部设备") return false;
     const typeMeta = target.deviceTypeUuid
       ? getTypeMetaByUuid(target.deviceTypeUuid)
       : getTypeMeta(requestedType);
     if (!typeMeta?.uuid) {
       port.showStatus("删除失败：待删除的设备类型已不存在", 5000);
-      return;
+      return false;
     }
     const deviceType = typeMeta.label;
-    if (deviceType === "全部设备") return;
+    if (deviceType === "全部设备") return false;
     const state = port.read();
     const deviceCount = state.items.filter((item) => item.deviceTypeUuid === typeMeta.uuid).length;
     if (deviceCount > 0) {
       port.showStatus(`该类型下还有 ${deviceCount} 个设备，请先移动或删除设备`);
       port.setActivePopover(null);
-      return;
+      return false;
     }
 
     const snapshot = await port.createSafetySnapshot(`删除设备类型“${deviceType}”前`);
-    if (!snapshot) return;
+    if (!snapshot) return false;
 
     const current = port.read();
     const currentTypeMeta = getTypeMetaByUuid(typeMeta.uuid);
     if (!currentTypeMeta) {
       port.showStatus("删除失败：待删除的设备类型已不存在", 5000);
-      return;
+      return false;
     }
     const currentDeviceCount = current.items.filter((item) => item.deviceTypeUuid === typeMeta.uuid).length;
     if (currentDeviceCount > 0) {
       port.showStatus(`该类型下已有 ${currentDeviceCount} 个设备，已取消删除`);
-      return;
+      return false;
     }
     port.pushNavigationState();
     port.write({
@@ -194,22 +201,23 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     port.setActivePopover(null);
     port.setActiveDialog(null);
     port.offerSnapshotUndo(snapshot.id, "设备类型已删除");
+    return true;
   }
 
   function validateTypeForm(form: TypeForm, originalUuid: string | null) {
     const label = form.label.trim();
     if (!label) {
-      port.showStatus("请输入设备类型名称");
+      reportFieldError("label", "请输入设备类型名称");
       return false;
     }
     const labelError = getTextInputValidationError(form.label, INPUT_LIMITS.deviceTypeName);
     if (labelError) {
-      port.showStatus(`设备类型名称${labelError}`, 5000);
+      reportFieldError("label", `设备类型名称${labelError}`, 5000);
       return false;
     }
     const iconError = getTextInputValidationError(form.iconText, INPUT_LIMITS.deviceTypeIcon);
     if (iconError || !isValidDeviceTypeIconText(form.iconText)) {
-      port.showStatus(`设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
+      reportFieldError("iconText", `设备类型图标${iconError ?? "不能超过 2 个字符"}`, 5000);
       return false;
     }
     if (!isValidDeviceTypeColor(form.color)) {
@@ -217,7 +225,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       return false;
     }
     if (hasDuplicateLabel(label, originalUuid)) {
-      port.showStatus("设备类型已存在");
+      reportFieldError("label", "设备类型已存在");
       return false;
     }
     return true;
@@ -280,9 +288,9 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     const originalLabel = originalMeta?.label ?? form.originalLabel;
     if (originalUuid && !originalMeta) {
       port.showStatus("保存失败：待修改的设备类型已不存在", 5000);
-      return;
+      return false;
     }
-    if (!validateTypeForm(form, originalUuid)) return;
+    if (!validateTypeForm(form, originalUuid)) return false;
 
     const nextMeta: DeviceTypeMeta = {
       uuid: originalUuid ?? createUuid(),
@@ -295,7 +303,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       && originalMeta.iconText === nextMeta.iconText
       && originalMeta.color === nextMeta.color) {
       port.showStatus("没有可保存的修改");
-      return;
+      return false;
     }
     let customDeviceTypes = state.customDeviceTypes;
     let items = state.items;
@@ -304,7 +312,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       const originalIndex = customDeviceTypes.findIndex((type) => type.uuid === originalUuid);
       if (originalIndex < 0) {
         port.showStatus("保存失败：待修改的设备类型已不存在", 5000);
-        return;
+        return false;
       }
       customDeviceTypes = customDeviceTypes.map((type, index) => index === originalIndex ? nextMeta : type);
       items = items.map((item) =>
@@ -334,6 +342,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       selectedDeviceType: nextSelectedDeviceType,
     });
     port.setActiveDialog(null);
+    return true;
   }
 
   return {

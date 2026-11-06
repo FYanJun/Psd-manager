@@ -6,6 +6,7 @@
 @import "./styles/dialogs.css";
 @import "./styles/responsive.css";
 @import "./styles/themes.css";
+@import "./styles/interaction-contracts.css";
 
 .hidden-file-input {
   display: none;

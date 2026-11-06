@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ListChecks, ListX, Plus, Trash2, UserRound } from "@lucide/svelte";
-  import { tick } from "svelte";
+  import { Checkbox, Tabs } from "bits-ui";
   import type { DeviceAccount, VaultItem } from "../../lib/types";
   import type { DeviceDetailActions } from "../../lib/view-models";
   import { formatAccountTag } from "../../lib/vault";
@@ -14,27 +14,10 @@
   export let openAccountContextMenu: DeviceDetailActions["openAccountContextMenu"];
   export let openAddAccountDialog: DeviceDetailActions["openAddAccountDialog"];
   export let requestDeleteSelectedAccount: DeviceDetailActions["requestDeleteSelectedAccount"];
-  export let selectAccount: DeviceDetailActions["selectAccount"];
   export let toggleAccountBatchSelection: DeviceDetailActions["toggleAccountBatchSelection"];
   export let selectAllCurrentAccounts: DeviceDetailActions["selectAllCurrentAccounts"];
   export let clearAccountBatchSelection: DeviceDetailActions["clearAccountBatchSelection"];
 
-  function handleAccountTabKeydown(event: KeyboardEvent, accountId: number) {
-    if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) return;
-    const currentIndex = selectedAccounts.findIndex((account) => account.id === accountId);
-    if (currentIndex < 0) return;
-    const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
-    const nextIndex = event.key === "Home"
-      ? 0
-      : event.key === "End"
-        ? selectedAccounts.length - 1
-        : (currentIndex + direction + selectedAccounts.length) % selectedAccounts.length;
-    const nextAccount = selectedAccounts[nextIndex];
-    if (!nextAccount) return;
-    event.preventDefault();
-    selectAccount(nextAccount.id);
-    void tick().then(() => document.getElementById(`account-tab-${nextAccount.id}`)?.focus());
-  }
 </script>
 
 <section class="account-section" aria-label="设备账号">
@@ -73,7 +56,7 @@
       </button>
     </div>
   </div>
-  <div class="account-list" role="tablist" aria-label="当前设备账号" aria-orientation="vertical">
+  <Tabs.List class="account-list" aria-label="当前设备账号">
     {#if selectedAccounts.length === 0}
       <div class="account-empty-state">
         <strong>暂无账号</strong>
@@ -88,30 +71,24 @@
           aria-label={`账号 ${account.username || account.title || "未填写用户名"}`}
           on:contextmenu={(event) => openAccountContextMenu(account.id, event)}
         >
-          <label class="account-select-box">
-            <input
-              type="checkbox"
-              aria-label={`选择账号 ${account.username || account.title || "未填写用户名"}`}
-              checked={selectedAccountIds.includes(account.id)}
-              on:change={() => toggleAccountBatchSelection(account.id)}
-            />
+          <Checkbox.Root
+            class="account-select-box"
+            aria-label={`选择账号 ${account.username || account.title || "未填写用户名"}`}
+            bind:checked={() => selectedAccountIds.includes(account.id), () => toggleAccountBatchSelection(account.id)}
+          >
             <span class="account-checkbox" class:checked={selectedAccountIds.includes(account.id)} aria-hidden="true"></span>
-          </label>
-          <button
+          </Checkbox.Root>
+          <Tabs.Trigger
+            value={String(account.id)}
             class="account-tab"
-            role="tab"
+            data-value-tooltip={`${account.username || account.title || "未填写用户名"} · ${formatAccountTag(account, selectedItem.deviceType, selectedItem.tag)}`}
             id={`account-tab-${account.id}`}
-            aria-controls="selected-account-detail"
-            aria-selected={account.id === selectedAccount.id}
-            tabindex={account.id === selectedAccount.id ? 0 : -1}
-            on:keydown={(event) => handleAccountTabKeydown(event, account.id)}
-            on:click={() => selectAccount(account.id)}
           >
             <strong>{account.username || account.title || "未填写用户名"}</strong>
             <span>{formatAccountTag(account, selectedItem.deviceType, selectedItem.tag)}</span>
-          </button>
+          </Tabs.Trigger>
         </div>
       {/each}
     {/if}
-  </div>
+  </Tabs.List>
 </section>

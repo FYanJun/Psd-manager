@@ -54,7 +54,8 @@ struct ExitIntent(AtomicBool);
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EncryptedVaultFile {
-    version: u8,
+    #[serde(default, skip_serializing, rename = "version")]
+    legacy_version: Option<u8>,
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
 }
@@ -65,6 +66,27 @@ struct StorageInfo {
     installation_path: String,
     app_data_path: String,
     storage_mode: &'static str,
+    operating_system: &'static str,
+    application_arch: &'static str,
+}
+
+#[test]
+fn storage_info_serializes_native_target_and_paths() {
+    for mode in ["installed", "portable"] {
+        let info = StorageInfo {
+            installation_path: "/example/application".into(),
+            app_data_path: "/example/data".into(),
+            storage_mode: mode,
+            operating_system: std::env::consts::OS,
+            application_arch: std::env::consts::ARCH,
+        };
+        let value = serde_json::to_value(info).unwrap();
+        assert_eq!(value["operatingSystem"], std::env::consts::OS);
+        assert_eq!(value["applicationArch"], std::env::consts::ARCH);
+        assert_eq!(value["storageMode"], mode);
+        assert_eq!(value["installationPath"], "/example/application");
+        assert_eq!(value["appDataPath"], "/example/data");
+    }
 }
 
 fn installation_directory() -> Result<PathBuf, String> {
@@ -90,6 +112,8 @@ fn installation_directory() -> Result<PathBuf, String> {
 fn storage_info(app: &AppHandle) -> Result<StorageInfo, String> {
     let app_data_directory = data_container_directory(app)?;
     Ok(StorageInfo {
+        operating_system: std::env::consts::OS,
+        application_arch: std::env::consts::ARCH,
         installation_path: installation_directory()?.to_string_lossy().into_owned(),
         app_data_path: app_data_directory.to_string_lossy().into_owned(),
         storage_mode: if cfg!(psd_manager_portable) {
@@ -163,6 +187,7 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let launched_from_autostart =
                 std::env::args().any(|argument| argument == AUTOSTART_LAUNCH_ARGUMENT);
@@ -177,7 +202,11 @@ pub fn run() {
                 else {
                     return Err("未找到 main 窗口配置，无法启动应用".into());
                 };
-                let window = WebviewWindowBuilder::from_config(app.handle(), &config)?.build()?;
+                let theme = native_window::startup_theme(app.handle());
+                let window = WebviewWindowBuilder::from_config(app.handle(), &config)?
+                    .theme(theme)
+                    .initialization_script(native_window::theme_initialization_script(theme))
+                    .build()?;
                 apply_startup_window_bounds(app.handle(), &window);
                 let _ = window.show();
             }
@@ -192,6 +221,7 @@ pub fn run() {
             commands::save_secure_vault,
             commands::get_vault_lock_status,
             commands::setup_vault_password,
+            commands::verify_vault_password,
             commands::unlock_vault,
             commands::recover_vault_password,
             commands::lock_vault,

@@ -1,13 +1,17 @@
 <script lang="ts">
+  import type { FormValidationFeedback } from "../../lib/form-validation";
   import ClearableInput from "../ClearableInput.svelte";
   import { typeColorOptions } from "../../lib/constants";
   import { INPUT_LIMITS, sanitizeSingleLineTextInput } from "../../lib/input-validation";
   import { colorInputValue, typeColorClass, typeColorStyle } from "../../lib/color";
   import type { TypeForm } from "../../lib/types";
 
+  export let validationFeedback: FormValidationFeedback | null = null;
   export let typeForm: TypeForm;
   export let closeOverlays: () => void;
   export let saveDeviceType: () => void;
+
+  $: formFeedback = validationFeedback?.form === "type" ? validationFeedback : null;
 
   function setCustomColor(event: Event) {
     typeForm.color = (event.currentTarget as HTMLInputElement).value;
@@ -25,11 +29,23 @@
   <div class="type-editor-fields">
     <label>
       <span>类型名称</span>
-      <ClearableInput bind:value={typeForm.label} placeholder="例如：交换机" maxlength={INPUT_LIMITS.deviceTypeName} transformValue={sanitizeSingleLineTextInput} />
+      <ClearableInput
+      bind:value={typeForm.label}
+      ariaLabel="类型名称"
+      errorMessage={formFeedback?.field === "label" ? formFeedback.message : ""}
+      errorFocusToken={formFeedback?.revision ?? 0}
+      placeholder="例如：交换机" maxlength={INPUT_LIMITS.deviceTypeName} transformValue={sanitizeSingleLineTextInput}
+    />
     </label>
     <label>
       <span>图标文字</span>
-      <ClearableInput bind:value={typeForm.iconText} placeholder="例如：交" maxlength={INPUT_LIMITS.deviceTypeIcon} transformValue={sanitizeSingleLineTextInput} />
+      <ClearableInput
+      bind:value={typeForm.iconText}
+      ariaLabel="图标文字"
+      errorMessage={formFeedback?.field === "iconText" ? formFeedback.message : ""}
+      errorFocusToken={formFeedback?.revision ?? 0}
+      placeholder="例如：交" maxlength={INPUT_LIMITS.deviceTypeIcon} transformValue={sanitizeSingleLineTextInput}
+    />
     </label>
   </div>
   <div class="form-control type-color-control">

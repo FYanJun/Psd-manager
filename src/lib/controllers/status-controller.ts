@@ -11,7 +11,7 @@ export function createStatusController(port: StatusControllerPort) {
   let message = "";
   let actionLabel = "";
   let action: (() => void) | null = null;
-  let hovered = false;
+  let paused = false;
   let timer: ReturnType<typeof window.setTimeout> | null = null;
 
   function publish() {
@@ -25,7 +25,7 @@ export function createStatusController(port: StatusControllerPort) {
 
   function scheduleDismiss(duration = 2200) {
     clearTimer();
-    if (!message || hovered) return;
+    if (!message || paused) return;
     timer = window.setTimeout(() => {
       message = "";
       actionLabel = "";
@@ -39,14 +39,13 @@ export function createStatusController(port: StatusControllerPort) {
     message = nextMessage;
     actionLabel = nextActionLabel;
     action = nextAction;
-    hovered = false;
     publish();
     scheduleDismiss(duration);
   }
 
   function dismiss() {
     clearTimer();
-    hovered = false;
+    paused = false;
     message = "";
     actionLabel = "";
     action = null;
@@ -60,12 +59,12 @@ export function createStatusController(port: StatusControllerPort) {
   }
 
   function pause() {
-    hovered = true;
+    paused = true;
     clearTimer();
   }
 
   function resume() {
-    hovered = false;
+    paused = false;
     scheduleDismiss(3000);
   }
 

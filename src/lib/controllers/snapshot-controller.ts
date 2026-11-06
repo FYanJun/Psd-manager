@@ -59,7 +59,6 @@ export function createSnapshotController(port: SnapshotControllerPort) {
     }
     port.applySnapshot(snapshot);
     port.setActiveDialog(null);
-    port.setPendingConfirmation(null);
     try {
       await port.persistImmediately();
       port.showStatus("数据快照已恢复");
@@ -74,6 +73,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
         8000,
       );
     }
+    port.setPendingConfirmation(null);
     return true;
   }
 

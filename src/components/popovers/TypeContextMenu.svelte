@@ -2,6 +2,7 @@
   import { Pencil, Plus, Search, Trash2 } from "@lucide/svelte";
   import type { ActivePopover, DeviceType, DeviceTypeSortMode } from "../../lib/types";
   import DeviceTypeSortMenu from "./DeviceTypeSortMenu.svelte";
+  import MenuItem from "../MenuItem.svelte";
 
   export let contextDeviceType: "全部设备" | DeviceType;
   export let selectedDeviceType: "全部设备" | DeviceType;
@@ -22,31 +23,20 @@
   <span>设备类型</span>
 </div>
 {#if contextDeviceType !== selectedDeviceType || searchQuery.trim()}
-  <button class="menu-item" role="menuitem" on:click={() => { selectDeviceType(contextDeviceType); setActivePopover(null); }}>
-    <Search size={16} />
-    <span>显示此类型</span>
-  </button>
+  <MenuItem icon={Search} label="显示此类型" onSelect={() => { selectDeviceType(contextDeviceType); setActivePopover(null); }} />
 {/if}
 {#if contextDeviceType !== "全部设备"}
   <div class="menu-separator"></div>
-  <button class="menu-item" role="menuitem" on:click={() => openEditTypeDialog(contextDeviceType)}>
-    <Pencil size={16} />
-    <span>编辑设备类型</span>
-  </button>
-  <button
-    class="menu-item danger-menu-item"
-    role="menuitem"
+  <MenuItem icon={Pencil} label="编辑设备类型" onSelect={() => openEditTypeDialog(contextDeviceType)} />
+  <MenuItem
+    icon={Trash2}
+    label="删除设备类型"
+    danger
     disabled={!canDeleteDeviceType(contextDeviceType)}
-    data-tooltip={getDeviceTypeCount(contextDeviceType) > 0 ? "该类型下还有设备，不能直接删除" : "删除设备类型"}
-    on:click={() => requestDeleteDeviceType(contextDeviceType)}
-  >
-    <Trash2 size={16} />
-    <span>删除设备类型</span>
-  </button>
+    tooltip={getDeviceTypeCount(contextDeviceType) > 0 ? "该类型下还有设备，不能直接删除" : "删除设备类型"}
+    onSelect={() => requestDeleteDeviceType(contextDeviceType)}
+  />
 {/if}
-<button class="menu-item" role="menuitem" on:click={() => openAddTypeDialog()}>
-  <Plus size={16} />
-  <span>新增设备类型</span>
-</button>
+<MenuItem icon={Plus} label="新增设备类型" onSelect={() => openAddTypeDialog()} />
 <div class="menu-separator"></div>
 <DeviceTypeSortMenu mode={deviceTypeSortMode} setMode={setDeviceTypeSortMode} {setActivePopover} />

@@ -1,19 +1,19 @@
 <script lang="ts">
-  import { ChevronDown, Search } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
+  import TypePicker from "../TypePicker.svelte";
+  import UsernameCombobox from "../UsernameCombobox.svelte";
   import { formatAccountTag } from "../../lib/vault";
   import {
     INPUT_LIMITS,
-    sanitizePasswordInput,
     sanitizeSingleLineTextInput,
   } from "../../lib/input-validation";
   import type {
     BulkPasswordForm,
+    BulkPasswordMatch,
     BulkUsernameSuggestion,
     TypePickerScope,
   } from "../../lib/types";
   import type { BulkPasswordDialogActions, BulkPasswordDialogView } from "../../lib/view-models";
-  import { typeColorClass, typeColorStyle } from "../../lib/color";
 
   export let bulkPasswordForm: BulkPasswordForm;
   export let openTypePicker: TypePickerScope | null = null;
@@ -48,63 +48,42 @@
     setBulkPasswordDeviceType, updateBulkUsernameSearch, selectBulkUsername,
     selectAllBulkPasswordMatches, clearBulkPasswordMatches, isBulkPasswordMatchSelected,
     toggleBulkPasswordMatch, saveBulkPasswordUpdate } = actions);
+
 </script>
 
 <div class="form-grid bulk-password-form">
-  <div class="form-control type-combo-field wide-field">
-    <span>设备类型</span>
-    <div class="type-combo">
-      {#if selectedBulkTypeMeta}
-        <button type="button" class="type-combo-trigger" aria-expanded={openTypePicker === "bulk"} aria-controls="bulk-type-options" on:click={() => toggleTypePicker("bulk")}>
-          <span class={`type-combo-icon ${typeColorClass(selectedBulkTypeMeta.color)}`} style={typeColorStyle(selectedBulkTypeMeta.color)}>{selectedBulkTypeMeta.iconText}</span>
-          <span class="type-combo-copy"><strong>{selectedBulkTypeMeta.label}</strong><small>{selectedBulkTypeMeta.count} 个设备</small></span>
-          <ChevronDown size={18} />
-        </button>
-      {/if}
-      {#if openTypePicker === "bulk"}
-        <div class="type-combo-popover" id="bulk-type-options">
-          <div class="type-combo-search">
-            <Search size={15} />
-            <ClearableInput bind:value={bulkTypeSearch} placeholder="搜索设备类型" ariaLabel="搜索批量改密设备类型" maxlength={INPUT_LIMITS.deviceTypeName} transformValue={sanitizeSingleLineTextInput} />
-          </div>
-          <div class="type-combo-list" role="listbox" aria-label="批量改密设备类型">
-            {#if filteredBulkTypeRows.length === 0}
-              <div class="type-combo-empty">没有匹配的设备类型</div>
-            {:else}
-              {#each filteredBulkTypeRows as type}
-                <button type="button" class:selected={bulkPasswordForm.deviceType === type.label} role="option" aria-selected={bulkPasswordForm.deviceType === type.label} on:click={() => setBulkPasswordDeviceType(type.label)}>
-                  <span class={`type-combo-icon ${typeColorClass(type.color)}`} style={typeColorStyle(type.color)}>{type.iconText}</span>
-                  <span class="type-combo-copy"><strong>{type.label}</strong><small>{type.count} 个设备</small></span>
-                </button>
-              {/each}
-            {/if}
-          </div>
-        </div>
-      {/if}
+  <div class="bulk-password-controls wide-field">
+    <div class="form-control type-combo-field">
+      <span>设备类型</span>
+      <TypePicker
+        selectedMeta={selectedBulkTypeMeta}
+        selectedValue={bulkPasswordForm.deviceType}
+        options={filteredBulkTypeRows}
+        bind:search={bulkTypeSearch}
+        open={openTypePicker === "bulk"}
+        scope="bulk"
+        optionsId="bulk-type-options"
+        ariaLabel="批量改密设备类型"
+        searchAriaLabel="搜索批量改密设备类型"
+        showCount={true}
+        toggle={toggleTypePicker}
+        select={setBulkPasswordDeviceType}
+      />
     </div>
+    <div class="form-control bulk-username-field">
+      <span>匹配用户名（区分大小写）</span>
+      <UsernameCombobox value={bulkUsernameSearch} suggestions={bulkUsernameSuggestions} open={bulkUsernameSuggestionsOpen} onValueChange={updateBulkUsernameSearch} onSelect={selectBulkUsername} />
+    </div>
+    <label>
+      <span>新密码</span>
+      <ClearableInput bind:value={bulkPasswordForm.password} type="password" maxlength={INPUT_LIMITS.password} validateAccountPassword={true} {revealResetToken} />
+    </label>
+    <label>
+      <span>更新原因</span>
+      <ClearableInput bind:value={bulkPasswordForm.reason} maxlength={INPUT_LIMITS.passwordReason} transformValue={sanitizeSingleLineTextInput} />
+    </label>
+    <button class="secondary-button bulk-random-password" on:click={() => { openGeneratorPanel("bulk-password"); setActiveDialog(null); }}>使用随机密码</button>
   </div>
-  <div class="form-control bulk-username-field">
-    <span>匹配用户名</span>
-    <ClearableInput value={bulkUsernameSearch} placeholder="输入用户名，可直接匹配或选择候选" maxlength={INPUT_LIMITS.username} transformValue={sanitizeSingleLineTextInput} onValueChange={updateBulkUsernameSearch} />
-    {#if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim() && bulkUsernameSuggestions.length > 0}
-      <div class="bulk-username-suggestions" role="listbox" aria-label="完整用户名候选">
-        {#each bulkUsernameSuggestions.slice(0, 8) as suggestion}
-          <button type="button" role="option" aria-selected={false} on:click={() => selectBulkUsername(suggestion)}><strong>{suggestion.username}</strong></button>
-        {/each}
-      </div>
-    {:else if bulkUsernameSuggestionsOpen && bulkUsernameSearch.trim()}
-      <p class="quiet-text">没有匹配的完整用户名。</p>
-    {/if}
-  </div>
-  <label>
-    <span>新密码</span>
-    <ClearableInput bind:value={bulkPasswordForm.password} type="password" maxlength={INPUT_LIMITS.password} transformValue={sanitizePasswordInput} {revealResetToken} />
-  </label>
-  <label class="wide-field">
-    <span>更新原因</span>
-    <ClearableInput bind:value={bulkPasswordForm.reason} maxlength={INPUT_LIMITS.passwordReason} transformValue={sanitizeSingleLineTextInput} />
-  </label>
-  <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("bulk-password"); setActiveDialog(null); }}>使用随机密码</button>
 
   <section class="bulk-preview wide-field" aria-label="批量更新命中账号">
     <div class="bulk-preview-head">
@@ -120,9 +99,9 @@
       {/if}
     </div>
     {#if !bulkPasswordForm.username.trim()}
-      <p class="quiet-text">输入用户名后，会立即匹配账号；候选框可用于快速选择完整用户名。</p>
+      <p class="quiet-text">输入完整用户名后按大小写精确匹配；候选搜索忽略大小写，可用于选择完整用户名。</p>
     {:else if bulkPasswordMatches.length === 0}
-      <p class="quiet-text">没有完全匹配的账号，请检查用户名或从候选框中选择。</p>
+      <p class="quiet-text">没有精确匹配的账号，请检查用户名大小写或从候选框中选择。</p>
     {:else}
       <div class="bulk-match-list">
         {#each bulkPasswordMatches as match}

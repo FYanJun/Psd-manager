@@ -57,9 +57,9 @@ export function formatDeviceInfo(item: VaultItem) {
 }
 
 export function matchesBulkUsername(account: DeviceAccount, username: string) {
-  const target = normalizeSearchValue(username);
+  const target = username.trim();
   if (!target) return true;
-  return normalizeSearchValue(account.username) === target;
+  return account.username.trim() === target;
 }
 
 export function matchesBulkUsernameSearch(account: DeviceAccount, username: string) {
@@ -104,7 +104,7 @@ export function getBulkUsernameSuggestions(
         const username = account.username.trim();
         if (!username) return;
 
-        const key = normalizeSearchValue(username);
+        const key = username;
         if (!suggestions.has(key)) suggestions.set(key, { username });
       });
   });

@@ -23,6 +23,7 @@ type KeyboardPatch = Partial<Pick<KeyboardState,
 >>;
 
 type KeyboardActions = {
+  cancelPaneResize?(): boolean;
   closeGenerator(): void;
   closeOverlays(): void;
   cancelPendingConfirmation(): void;
@@ -48,19 +49,19 @@ type KeyboardControllerPort = {
 };
 
 function isEditableTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
+  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
 export function createKeyboardController(port: KeyboardControllerPort) {
   function closeSurface() {
     const state = port.read();
-    if (state.openTypePicker) port.write({ openTypePicker: null });
+    if (state.activePopover) port.write({ activePopover: null });
+    else if (state.openTypePicker) port.write({ openTypePicker: null });
     else if (state.bulkUsernameSuggestionsOpen) port.write({ bulkUsernameSuggestionsOpen: false });
     else if (state.pendingConfirmation) port.actions.cancelPendingConfirmation();
     else if (state.activeDialog) port.actions.closeOverlays();
     else if (state.generatorPanelOpen) port.actions.closeGenerator();
-    else if (state.activePopover) port.write({ activePopover: null });
     else if (state.searchQuery.trim()) port.actions.clearSearch();
     else return false;
     return true;
@@ -77,13 +78,15 @@ export function createKeyboardController(port: KeyboardControllerPort) {
   }
 
   function handle(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
     const state = port.read();
     if (state.vaultStorageState !== "ready") return;
     const shortcutModifier = event.metaKey || event.ctrlKey;
     const editableTarget = isEditableTarget(event.target);
 
     if (event.key === "Escape") {
-      if (closeSurface()) event.preventDefault();
+      if (port.actions.cancelPaneResize?.()) event.preventDefault();
+      else if (closeSurface()) event.preventDefault();
       else if (editableTarget) (event.target as HTMLElement).blur();
       return;
     }
@@ -95,7 +98,7 @@ export function createKeyboardController(port: KeyboardControllerPort) {
       return;
     }
 
-    if (state.pendingConfirmation) return;
+    if (state.pendingConfirmation || state.activeDialog) return;
     if (!shortcutModifier && !editableTarget && !state.activeDialog && !state.activePopover && !state.generatorPanelOpen) {
       if (event.key === "ArrowDown") {
         event.preventDefault();

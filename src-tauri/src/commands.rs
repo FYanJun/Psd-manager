@@ -103,6 +103,33 @@ pub(crate) async fn setup_vault_password(
 }
 
 #[tauri::command]
+pub(crate) async fn verify_vault_password(app: AppHandle, password: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = VAULT_IO_LOCK
+            .lock()
+            .map_err(|_| "资产库文件锁已损坏".to_string())?;
+        let _file_guard = lock_vault_file(&app)?;
+        let lock_file =
+            read_password_lock_file(&app)?.ok_or_else(|| "启动密码尚未设置".to_string())?;
+        let session = app.state::<VaultSession>();
+        let session_guard = session
+            .0
+            .lock()
+            .map_err(|_| "资产库解锁状态已损坏".to_string())?;
+        let session_key = session_guard
+            .as_ref()
+            .ok_or_else(|| "资产库尚未解锁".to_string())?;
+        let verified_key = unwrap_vault_key(&lock_file, &password)?;
+        if verified_key != *session_key {
+            return Err("主密码与当前资产库会话不匹配".to_string());
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("验证启动密码任务失败：{error}"))?
+}
+
+#[tauri::command]
 pub(crate) async fn unlock_vault(app: AppHandle, password: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = VAULT_IO_LOCK

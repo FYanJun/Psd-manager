@@ -3,16 +3,13 @@ import type {
   ActivePopover,
   BulkPasswordMatch,
   BulkUsernameSuggestion,
-  ConfigFormat,
-  DensityPreference,
+  ConfigTransferFormat,
   DeviceAccount,
   DeviceType,
   DeviceTypeMeta,
   DeviceTypeSortMode,
-  FontSizePreference,
   PasswordHistory,
   PopoverPosition,
-  ResizePane,
   SortMode,
   ThemePreference,
   TypePickerScope,
@@ -21,6 +18,7 @@ import type {
 } from "./types";
 
 export type WorkspaceSidebarView = {
+  collapsed: boolean;
   deviceTypeRows: Array<DeviceTypeMeta & { count: number }>;
   selectedDeviceType: "全部设备" | DeviceType;
   selectedTypeDeviceCount: number;
@@ -49,11 +47,11 @@ export type WorkspaceView = {
   sidebar: WorkspaceSidebarView;
   topbar: WorkspaceTopbarView;
   deviceList: WorkspaceDeviceListView;
-  resizingPane: ResizePane | null;
   deviceDetail: DeviceDetailModel;
 };
 
 export type WorkspaceSidebarActions = {
+  toggleCollapsed(): void;
   openTypeBlankContextMenu(event: MouseEvent): void;
   openAddTypeDialog(): void;
   openEditTypeDialog(deviceType?: DeviceType): void;
@@ -72,39 +70,29 @@ export type WorkspaceTopbarActions = {
   openSettings(): void;
 };
 
+export type StorageInfo = {
+  installationPath: string;
+  appDataPath: string;
+  storageMode: "portable" | "installed";
+  operatingSystem: string;
+  applicationArch: string;
+};
+
 export type SettingsView = {
-  activeSection: "interface" | "workspace" | "generator" | "data" | "security" | "about" | "environment";
+  activeSection: "interface" | "data" | "security" | "about";
   tooltipEnabled: boolean;
   startOnBoot: boolean;
   startupLock: boolean;
   autoLockMinutes: number;
-  lowMemoryBackground: boolean;
   autostartAvailable: boolean;
   autostartUpdating: boolean;
   theme: ThemePreference;
-  density: DensityPreference;
-  fontSize: FontSizePreference;
-  rememberLayout: boolean;
-  rememberLastView: boolean;
-  rememberWindowBounds: boolean;
-  deviceSortMode: SortMode;
-  deviceTypeSortMode: DeviceTypeSortMode;
-  generator: {
-    length: number;
-    useUpper: boolean;
-    useLower: boolean;
-    useNumbers: boolean;
-    useSymbols: boolean;
-    excludeSimilar: boolean;
-    preventRepeats: boolean;
-    minimumNumbers: number;
-    minimumSymbols: number;
-    allowedSymbols: string;
-    excludedCharacters: string;
-  };
   installationPath: string;
   appDataPath: string;
-  storageMode: "portable" | "installed";
+  storageMode: "portable" | "installed" | null;
+  environmentStatus: "loading" | "ready" | "failed" | "preview";
+  operatingSystem: string;
+  applicationArch: string;
   version: string;
 };
 
@@ -115,19 +103,11 @@ export type SettingsActions = {
   setStartupLock(value: boolean): void | Promise<void>;
   setAutoLockEnabled(value: boolean): void;
   setAutoLockMinutes(value: number): void;
-  setLowMemoryBackground(value: boolean): void;
   openVaultPasswordDialog(mode: VaultPasswordDialogMode): void;
   lockNow(): void | Promise<void>;
   setTheme(value: ThemePreference): void;
-  setDensity(value: DensityPreference): void;
-  setFontSize(value: FontSizePreference): void;
-  setRememberLayout(value: boolean): void;
-  setRememberLastView(value: boolean): void;
-  setRememberWindowBounds(value: boolean): void;
-  setDeviceSortMode(value: SortMode): void;
-  setDeviceTypeSortMode(value: DeviceTypeSortMode): void;
-  setGeneratorValue<K extends keyof SettingsView["generator"]>(key: K, value: SettingsView["generator"][K]): void;
   openStoragePath(kind: "installation" | "app-data"): void;
+  copyStoragePath(kind: "installation" | "app-data"): void;
   openSnapshotsDialog(): void;
   openExportConfigDialog(): void;
   chooseConfigFile(): void;
@@ -139,7 +119,6 @@ export type WorkspaceDeviceListActions = {
   openEditDeviceDialog(): void;
   requestDeleteSelectedDevice(): void;
   openDeviceSortPopover(event: MouseEvent): void;
-  openDeviceActionsPopover(event: MouseEvent): void;
   openDeviceContextMenu(id: number, event: MouseEvent): void;
   openDeviceListBlankContextMenu(event: MouseEvent): void;
   selectDevice(id: number): void;
@@ -149,7 +128,6 @@ export type WorkspaceActions = {
   sidebar: WorkspaceSidebarActions;
   topbar: WorkspaceTopbarActions;
   deviceList: WorkspaceDeviceListActions;
-  startPaneResize(pane: ResizePane, event: PointerEvent): void;
   deviceDetail: DeviceDetailActions;
 };
 
@@ -187,7 +165,7 @@ export type AppDialogActions = {
   saveAccount(): void;
   setDeviceFormType(deviceType: DeviceType): void;
   saveDevice(): void;
-  exportConfig(format?: ConfigFormat): void;
+  exportConfig(format?: ConfigTransferFormat, password?: string): Promise<string | null>;
 };
 
 export type BulkPasswordDialogView = {
@@ -229,6 +207,14 @@ export type ActionPopoverModel = {
   selectedAccountHasPassword: boolean;
   deviceTypeOptionsLength: number;
   hasSelectedDevice: boolean;
+  editableContext: {
+    kind: import("./types").EditableContextKind;
+    canCopy: boolean;
+    canCut: boolean;
+    canPaste: boolean;
+    canSelectAll: boolean;
+    canClearSearch: boolean;
+  } | null;
 };
 
 export type ActionPopoverActions = {
@@ -250,6 +236,11 @@ export type ActionPopoverActions = {
   openEditAccountDialog(): void;
   requestDeleteSelectedAccount(): void;
   setActivePopover(popover: ActivePopover | null): void;
+  editCopy(): void | Promise<void>;
+  editCut(): void | Promise<void>;
+  editPaste(): void | Promise<void>;
+  editSelectAll(): void;
+  editClearSearch(): void;
 };
 
 export type DeviceDetailModel = {

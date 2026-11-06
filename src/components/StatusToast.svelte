@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { afterUpdate } from "svelte";
   import { X } from "@lucide/svelte";
 
   export let copyStatus = "";
@@ -7,10 +8,41 @@
   export let dismissStatus: () => void;
   export let actionLabel = "";
   export let runAction: () => void;
+
+  let toastElement: HTMLDivElement | null = null;
+  let pointerInside = false;
+  let focusInside = false;
+
+  // Content can be replaced while this same toast remains under the pointer or focus.
+  $: if (copyStatus && (pointerInside || focusInside)) pauseStatusDismiss();
+  $: if (!copyStatus) {
+    pointerInside = false;
+    focusInside = false;
+  }
+
+  afterUpdate(() => {
+    // Replacing the action can remove its focused button without a focusout event.
+    if (focusInside && toastElement && !toastElement.contains(document.activeElement)) {
+      focusInside = false;
+      updatePause();
+    }
+  });
+
+  function updatePause() {
+    if (pointerInside || focusInside) pauseStatusDismiss();
+    else resumeStatusDismiss();
+  }
+
+  function handleFocusOut(event: FocusEvent) {
+    if (event.relatedTarget instanceof Node && event.currentTarget instanceof HTMLElement && event.currentTarget.contains(event.relatedTarget)) return;
+    focusInside = false;
+    updatePause();
+  }
 </script>
 
 {#if copyStatus}
-  <div class="toast" role="status" on:pointerenter={pauseStatusDismiss} on:pointerleave={resumeStatusDismiss}>
+  <div bind:this={toastElement} class="toast" role="status" on:pointerenter={() => { pointerInside = true; updatePause(); }} on:pointerleave={() => { pointerInside = false; updatePause(); }}
+    on:focusin={() => { focusInside = true; updatePause(); }} on:focusout={handleFocusOut}>
     <span>{copyStatus}</span>
     {#if actionLabel}<button class="toast-action" on:click={() => runAction()}>{actionLabel}</button>{/if}
     <button class="toast-close" aria-label="关闭提示" on:click={dismissStatus}>
@@ -30,13 +62,13 @@
     gap: 10px;
     max-width: clamp(32%, var(--toast-share), 92%);
     padding: 10px 10px 10px 16px;
-    border: 1px solid #465563;
+    border: 1px solid var(--border);
     border-radius: 10px;
-    color: #fff;
-    background: var(--tooltip-background);
-    box-shadow: 0 18px 54px rgba(24, 28, 32, 0.26);
+    color: var(--app-text);
+    background: var(--surface-elevated);
+    box-shadow: var(--popover-shadow);
     font-size: var(--font-size-14);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     transform: translateX(-50%);
   }
 
@@ -55,23 +87,23 @@
     height: 28px;
     border: 0;
     border-radius: 8px;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.12);
+    color: var(--app-text);
+    background: var(--surface-subtle);
   }
 
   .toast-action {
     flex: 0 0 auto;
     min-height: 28px;
     padding: 0 10px;
-    border: 1px solid rgba(255, 255, 255, 0.34);
+    border: 1px solid var(--field-border);
     border-radius: 7px;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.12);
-    font-weight: 800;
+    color: var(--app-text);
+    background: var(--surface-subtle);
+    font-weight: var(--weight-semibold);
   }
 
   .toast-action:hover,
   .toast-close:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--control-hover);
   }
 </style>

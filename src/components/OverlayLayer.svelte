@@ -10,7 +10,7 @@
     AccountForm,
     ActiveDialog,
     BulkPasswordForm,
-    ConfigFormat,
+    ConfigTransferFormat,
     ConfigImportMode,
     DeviceForm,
     PendingConfirmation,
@@ -27,29 +27,36 @@
     PasswordGeneratorView,
   } from "../lib/view-models";
 
-  export let actionPopoverModel: ActionPopoverModel;
-  export let actionPopoverActions: ActionPopoverActions;
+  import type { FormValidationFeedback } from "../lib/form-validation";
+
+  export let validationFeedback: FormValidationFeedback | null = null;
+  export let popover: { model: ActionPopoverModel; actions: ActionPopoverActions };
   export let activeDialog: ActiveDialog = null;
   export let typeForm: TypeForm;
   export let passwordForm: { password: string; reason: string };
   export let bulkPasswordForm: BulkPasswordForm;
   export let accountForm: AccountForm;
   export let deviceForm: DeviceForm;
-  export let exportConfigFormat: ConfigFormat = "json";
+  export let exportConfigFormat: ConfigTransferFormat = "json";
+  export let exportPasswordConfigured = false;
   export let openTypePicker: TypePickerScope | null = null;
   export let bulkTypeSearch = "";
   export let bulkUsernameSearch = "";
   export let deviceTypeSearch = "";
   export let appDialogView: AppDialogView;
   export let appDialogActions: AppDialogActions;
-  export let vaultSnapshots: VaultSnapshot[] = [];
-  export let closeOverlays: () => void;
-  export let cancelPendingConfirmation: () => void;
-  export let requestRestoreSnapshot: (snapshot: VaultSnapshot) => void;
-  export let pendingConfirmation: PendingConfirmation | null = null;
-  export let importConfigMode: ConfigImportMode = "add-missing";
-  export let confirmPendingAction: () => void;
-  export let setImportConfigMode: (mode: ConfigImportMode) => void;
+  export let snapshots: { items: VaultSnapshot[]; close: () => void; restore: (snapshot: VaultSnapshot) => void };
+  export let confirmation: {
+    pending: PendingConfirmation | null;
+    busy?: boolean;
+    error?: string;
+    progressLabel?: string;
+    importMode: ConfigImportMode;
+    cancel: () => void;
+    confirm: () => void;
+    setImportMode: (mode: ConfigImportMode) => void;
+    setXlsxOverwriteDeviceKeys: (keys: string[]) => void;
+  };
   export let generatorPanelOpen = false;
   export let generatedPassword = "";
   export let generatorLength = 8;
@@ -66,12 +73,14 @@
   export let excludedCharacters = "";
   export let passwordGeneratorView: PasswordGeneratorView;
   export let passwordGeneratorActions: PasswordGeneratorActions;
-  export let copyStatus = "";
-  export let pauseStatusDismiss: () => void;
-  export let resumeStatusDismiss: () => void;
-  export let dismissStatus: () => void;
-  export let statusActionLabel = "";
-  export let runStatusAction: () => void;
+  export let status: {
+    message: string;
+    pause: () => void;
+    resume: () => void;
+    dismiss: () => void;
+    actionLabel: string;
+    runAction: () => void;
+  };
   export let tooltipEnabled = true;
   export let settingsView: import("../lib/view-models").SettingsView;
   export let settingsActions: import("../lib/view-models").SettingsActions;
@@ -90,7 +99,7 @@
   export let saveVaultPassword: () => void;
 </script>
 
-<ActionPopover model={actionPopoverModel} actions={actionPopoverActions} />
+<ActionPopover model={popover.model} actions={popover.actions} />
 
 <AppDialog
   bind:typeForm
@@ -99,11 +108,13 @@
   bind:accountForm
   bind:deviceForm
   bind:exportConfigFormat
+  {exportPasswordConfigured}
   bind:openTypePicker
   bind:bulkTypeSearch
   bind:bulkUsernameSearch
   bind:deviceTypeSearch
   activeDialog={activeDialog === "snapshots" ? null : activeDialog}
+  {validationFeedback}
   view={appDialogView}
   actions={appDialogActions}
   {settingsView}
@@ -125,17 +136,21 @@
 
 <VaultSnapshotsDialog
   open={activeDialog === "snapshots"}
-  snapshots={vaultSnapshots}
-  close={closeOverlays}
-  requestRestore={requestRestoreSnapshot}
+  snapshots={snapshots.items}
+  close={snapshots.close}
+  requestRestore={snapshots.restore}
 />
 
 <ConfirmationDialog
-  {pendingConfirmation}
-  {importConfigMode}
-  {cancelPendingConfirmation}
-  {confirmPendingAction}
-  {setImportConfigMode}
+  pendingConfirmation={confirmation.pending}
+  busy={confirmation.busy}
+  error={confirmation.error}
+  progressLabel={confirmation.progressLabel}
+  importConfigMode={confirmation.importMode}
+  cancelPendingConfirmation={confirmation.cancel}
+  confirmPendingAction={confirmation.confirm}
+  setImportConfigMode={confirmation.setImportMode}
+  setXlsxOverwriteDeviceKeys={confirmation.setXlsxOverwriteDeviceKeys}
 />
 
 {#if generatorPanelOpen}
@@ -159,11 +174,11 @@
 {/if}
 
 <StatusToast
-  {copyStatus}
-  {pauseStatusDismiss}
-  {resumeStatusDismiss}
-  {dismissStatus}
-  actionLabel={statusActionLabel}
-  runAction={runStatusAction}
+  copyStatus={status.message}
+  pauseStatusDismiss={status.pause}
+  resumeStatusDismiss={status.resume}
+  dismissStatus={status.dismiss}
+  actionLabel={status.actionLabel}
+  runAction={status.runAction}
 />
 <GlobalTooltip enabled={tooltipEnabled} />

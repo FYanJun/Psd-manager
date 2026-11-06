@@ -1,7 +1,9 @@
 :root {
+  color-scheme: light;
+  font-size: 16px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  color: #27313c;
-  background: #eef1f4;
+  color: var(--app-text);
+  background: var(--app-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   /* Explicit shades keep hierarchy and state colors predictable. */
@@ -33,9 +35,23 @@
   --green-500: #27804b;
   --amber-50: #fff8e8;
   --amber-500: #a66a00;
-  --sidebar: #edf1f4;
-  --sidebar-hover: #e3e8ed;
-  --sidebar-active: #dce5ee;
+  --type-blue-text: #0f5da8;
+  --type-blue-fill: #cde5ff;
+  --type-green-text: #256044;
+  --type-green-fill: #c9ecd5;
+  --type-rose-text: #913b35;
+  --type-rose-fill: #f2c5c1;
+  --type-indigo-text: #59428d;
+  --type-indigo-fill: #d8cdf0;
+  --type-sand-text: #8e4e22;
+  --type-sand-fill: #f5d0ae;
+  --type-gold-text: #755a18;
+  --type-gold-fill: #f2dfad;
+  --type-neutral-text: #ffffff;
+  --type-neutral-fill: #4b5563;
+  --sidebar: #f8fafc;
+  --sidebar-hover: #f0f3f7;
+  --sidebar-active: #e8eef6;
   --border: #d9e0e6;
   --muted: #5b6875;
   --quiet: #5b6875;
@@ -46,7 +62,7 @@
   --surface: #ffffff;
   --selected: #edf4fc;
   --field: #ffffff;
-  --field-border: #cfd8e1;
+  --field-border: #d8dfe8;
   --shadow: 0 12px 36px rgba(31, 43, 55, 0.12);
   /* Semantic design-system tokens: keep repeated visual decisions in one place. */
   --space-1: 4px;
@@ -60,6 +76,15 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-pill: 999px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --panel-padding: 20px;
+  --panel-gap: 20px;
+  --workspace-toolbar-height: 56px;
+  --workspace-pane-header-height: 56px;
+  --field-padding-inline: 12px;
   --control-height-sm: 36px;
   --control-height-md: 40px;
   --control-height-lg: 44px;
@@ -70,13 +95,11 @@
      percentage-based; these values describe review and responsive targets. */
   --window-default-width: 1440px;
   --window-default-height: 900px;
-  --window-min-width: 1024px;
+  --window-min-width: 906px;
   --window-min-height: 720px;
   --sidebar-min-width: 148px;
-  --list-min-width: 300px;
-  --detail-min-width: 420px;
-  --pane-resizer-min-width: 6px;
-  /* Semantic type aliases keep small/standard/large preferences working. */
+  --detail-min-width: 400px;
+  /* Semantic type aliases follow the user-selected body size. */
   --type-display: var(--font-size-28);
   --type-title: var(--font-size-20);
   --type-section: var(--font-size-17);
@@ -105,36 +128,39 @@
   --detail-icon-size: 38px;
   --empty-state-icon-size: 58px;
   --surface-elevated: #ffffff;
-  --surface-canvas: #f8fafb;
-  --surface-list: #fbfcfd;
+  --surface-canvas: #f8fafc;
+  --surface-list: #ffffff;
   --topbar-surface: #ffffff;
   --divider: #dfe5ea;
-  --text-placeholder: #7b8793;
+  --text-placeholder: #5b6875;
   --accent-focus: #2f8ce6;
-  --sidebar-share: 14%;
-  --sidebar-min-share: 12%;
-  --sidebar-max-share: 20%;
-  --list-share: 21%;
-  --list-min-share: 18%;
-  --list-max-share: 34%;
+  --sidebar-width: 224px;
+  --sidebar-divider-width: 1px;
+  --device-list-width: 280px;
   --generator-share: 32%;
   --generator-min-share: 24%;
   --generator-max-share: 48%;
-  --resizer-share: 0.5%;
   --toast-share: 44%;
-  --app-text: #27313c;
+  --app-text: #1e293b;
   --app-background: var(--surface-canvas);
-  --surface-muted: #f6f8fa;
-  --surface-subtle: #eef2f5;
-  --text-strong: #1c2732;
+  --surface-muted: #f8fafc;
+  --surface-subtle: #f1f5f9;
+  /* Keep the light surface steps as serializable RGB values for native
+     controls and WebView color inspection while preserving the intended
+     approximately 2% adjacent contrast. */
+  --surface-step-1: rgb(251 252 253);
+  --surface-step-2: rgb(247 249 251);
+  --ink-wash: color-mix(in oklch, var(--blue) 16%, transparent);
+  --text-strong: #0f172a;
   --text-secondary: #5b6875;
   --text-quiet: #5b6875;
   --control-hover: #eef2f5;
   --accent-subtle: #edf6ff;
   --selection-fill: #e8f2fd;
-  --selection-border: #9dc8f5;
+  --selection-border: #b8d3ef;
   --selection-text: var(--blue);
-  --selection-shadow: 0 1px 3px rgba(24, 38, 52, 0.08);
+  --selection-shadow: none;
+  --popover-shadow: 0 4px 16px rgba(24, 38, 52, 0.1);
   --overlay: rgba(28, 39, 50, 0.28);
   --modal-shadow: 0 24px 70px rgba(24, 38, 52, 0.24);
   --tooltip-background: #1d2935;
@@ -159,6 +185,16 @@
   --font-size-21: 21px;
   --font-size-22: 22px;
   --font-size-28: 28px;
+}
+
+:root {
+  font-variant-numeric: tabular-nums;
+}
+
+@supports (corner-shape: squircle) {
+  :where(*) {
+    corner-shape: squircle;
+  }
 }
 
 * {

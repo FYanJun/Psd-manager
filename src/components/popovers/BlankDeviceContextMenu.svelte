@@ -2,6 +2,7 @@
   import { Plus, Search } from "@lucide/svelte";
   import type { ActivePopover, DeviceType, SortMode } from "../../lib/types";
   import DeviceSortMenu from "./DeviceSortMenu.svelte";
+  import MenuItem from "../MenuItem.svelte";
 
   export let activePopover: ActivePopover;
   export let listContextLabel: string;
@@ -20,20 +21,14 @@
   <span>{activePopover === "detail-blank-context" ? "未选择设备" : "当前资产库范围"}</span>
 </div>
 {#if searchQuery.trim()}
-  <button class="menu-item" role="menuitem" on:click={() => { clearSearch(); setActivePopover(null); }}>
-    <Search size={16} />
-    <span>清空搜索</span>
-  </button>
+  <MenuItem icon={Search} label="清空搜索" onSelect={() => { clearSearch(); setActivePopover(null); }} />
 {/if}
-<button
-  class="menu-item"
-  role="menuitem"
+<MenuItem
+  icon={Plus}
+  label="新增设备"
   disabled={deviceTypeOptionsLength === 0}
-  data-tooltip={deviceTypeOptionsLength === 0 ? "请先在左栏创建设备类型" : "新增设备"}
-  on:click={() => openAddDeviceDialog(contextDeviceType)}
->
-  <Plus size={16} />
-  <span>新增设备</span>
-</button>
+  tooltip={deviceTypeOptionsLength === 0 ? "请先在左栏创建设备类型" : "新增设备"}
+  onSelect={() => openAddDeviceDialog(contextDeviceType)}
+/>
 <div class="menu-separator"></div>
 <DeviceSortMenu mode={sortMode} setMode={setSortMode} {setActivePopover} />

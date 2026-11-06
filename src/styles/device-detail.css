@@ -1,8 +1,10 @@
 /* Device detail pane, account list, and password history presentation. */
 .detail-pane {
+  --panel-padding: 12px;
+  --panel-gap: 12px;
   container: device-detail / inline-size;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: var(--workspace-pane-header-height) minmax(0, 1fr);
   min-width: 0;
   height: 100%;
   overflow: hidden;
@@ -40,7 +42,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--type-section);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   line-height: var(--leading-title);
 }
 
@@ -74,7 +76,7 @@
   border-radius: 8px;
   color: #fff;
   background: var(--primary-fill);
-  font-weight: 700;
+  font-weight: var(--weight-medium);
 }
 
 .update-password-action:hover {
@@ -101,16 +103,19 @@
 }
 
 .detail-scroll {
-  padding: var(--space-6) clamp(28px, 5vw, 64px) 48px;
+  padding: var(--panel-gap) 16px 20px;
+  background: var(--surface-canvas);
 }
 
 .detail-empty-state {
   display: grid;
   align-content: center;
-  justify-items: start;
-  max-width: 68%;
-  min-height: 100%;
-  padding: 28px clamp(36px, 7vw, 86px) 72px;
+  justify-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px;
+  overflow: auto;
+  text-align: center;
 }
 
 .empty-state-icon {
@@ -119,32 +124,35 @@
   justify-content: center;
   width: var(--empty-state-icon-size);
   height: var(--empty-state-icon-size);
-  border: 1px solid var(--blue-200);
-  border-radius: 14px;
-  color: var(--blue-600);
-  background: var(--blue-50);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
 }
 
 .detail-empty-state h1 {
-  margin: 24px 0 0;
+  margin: 16px 0 0;
   color: var(--text-strong);
-  font-size: var(--type-display);
-  line-height: var(--leading-display);
+  font-size: var(--type-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-title);
 }
 
 .detail-empty-state p {
-  max-width: 84%;
-  margin: 12px 0 0;
+  width: 100%;
+  max-width: 360px;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: var(--font-size-16);
+  font-size: var(--font-size-14);
   line-height: 1.6;
 }
 
 .empty-state-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
-  margin-top: 32px;
+  margin-top: 20px;
 }
 
 .identity-subtitle {
@@ -172,16 +180,18 @@
 .device-info-card {
   display: grid;
   width: 100%;
-  gap: var(--space-5);
-  margin: 0 0 var(--space-7);
-  border-bottom: 1px solid var(--divider);
-  padding: var(--space-1) 0 var(--space-6);
+  gap: 8px;
+  margin: 0 0 var(--panel-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--panel-padding);
+  background: var(--surface);
 }
 
 .device-info-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-5) 28px;
+  gap: 8px 16px;
 }
 
 .device-info-grid:has(.device-info-item:nth-child(2):last-child) {
@@ -208,15 +218,15 @@
 .device-info-item p {
   margin: 3px 0 0;
   overflow: hidden;
-  color: var(--text-strong);
   text-overflow: ellipsis;
+  color: var(--text-strong);
   white-space: nowrap;
-  font-size: var(--type-password);
-  line-height: var(--leading-password);
+  font-size: var(--type-control);
+  line-height: var(--leading-body);
 }
 
 .device-info-notes {
-  padding-top: var(--space-5);
+  padding-top: 8px;
   border-top: 1px solid var(--divider);
 }
 
@@ -230,27 +240,74 @@
   line-height: 1.6;
 }
 
-.device-info-card + .account-section {
-  margin-top: 0;
+.content-panel-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.content-panel-heading h2 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.content-panel-heading > span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-11);
+  line-height: var(--leading-body);
+}
+
+.field-group > .content-panel-heading {
+  padding: 8px var(--panel-padding);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-section .history-heading h2 {
+  color: var(--text-secondary);
+  font-size: var(--type-caption);
+}
+
+.device-info-card .content-panel-heading h2,
+.account-section .account-heading h2 {
+  color: var(--text-strong);
+  font-size: var(--type-section);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-title);
+}
+
+.account-heading-label > svg,
+.history-heading > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.meta-row:hover {
+  background: var(--control-hover);
 }
 
 .account-section {
   width: 100%;
-  margin: 0 0 var(--space-7);
+  margin: 0 0 var(--panel-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--panel-padding);
+  background: var(--surface);
 }
 
-/* Collapse detail actions only when their full labels no longer fit beside the device name. */
-@container device-detail (max-width: 620px) {
-  .detail-actions .tool-button span {
-    display: none;
-  }
+.detail-topline.actions-collapsed .detail-actions .tool-button span {
+  display: none;
+}
 
-  .detail-actions .tool-button {
-    width: 40px;
-    padding: 0;
-    justify-content: center;
-  }
-
+.detail-topline.actions-collapsed .detail-actions .tool-button {
+  width: 40px;
+  padding: 0;
+  justify-content: center;
 }
 
 @container device-detail (max-width: 380px) {
@@ -271,8 +328,8 @@
 
 .account-heading {
   justify-content: flex-start;
-  min-height: 36px;
-  margin-bottom: var(--space-3);
+  min-height: 34px;
+  margin-bottom: 8px;
 }
 
 .account-heading-label {
@@ -296,10 +353,10 @@
   overflow: hidden;
   border-radius: 999px;
   padding: 4px 8px;
-  background: var(--blue-50);
-  color: var(--blue);
+  background: var(--accent-subtle);
+  color: var(--selection-text);
   font-size: var(--type-caption);
-  font-weight: 800;
+  font-weight: var(--weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -313,10 +370,11 @@
   justify-content: flex-end;
 }
 
-.account-heading-action {
-  height: 34px;
-  padding: 0 11px;
-  font-size: var(--type-label);
+.account-heading-actions .secondary-button.account-heading-action {
+  min-height: 34px;
+  height: auto;
+  padding: 4px 10px;
+  font-size: var(--type-caption);
 }
 
 .account-heading-action:not(.account-add-action):not(.danger-outline) {
@@ -331,19 +389,21 @@
 }
 
 .account-add-action {
-  border-color: var(--blue-200);
-  color: var(--blue-700);
-  background: var(--blue-50);
+  border-color: var(--field-border);
+  color: var(--app-text);
+  background: var(--field);
 }
 
 .account-add-action:hover {
-  border-color: var(--blue-300);
-  color: var(--blue-700);
-  background: var(--blue-100);
+  border-color: var(--field-border);
+  color: var(--text-strong);
+  background: var(--control-hover);
 }
 
 .account-heading-action svg {
   flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
 }
 
 .account-action-compact-icon {
@@ -353,7 +413,7 @@
 .account-list {
   --account-row-height: 44px;
   display: grid;
-  gap: var(--space-2);
+  gap: 4px;
   max-height: calc(var(--account-row-height) * 4 + 18px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -365,31 +425,36 @@
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
   min-height: var(--account-row-height);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: var(--surface-list);
   overflow: hidden;
 }
 
+.account-row:nth-child(even):not(.selected) {
+  background: var(--surface-subtle);
+}
+
 .account-row.selected {
   border-color: var(--selection-border);
   background: var(--selection-fill);
-  box-shadow: var(--selection-shadow);
+  box-shadow: none;
 }
 
 .account-empty-state {
   display: grid;
   gap: 4px;
   min-height: 58px;
-  border: 1px dashed var(--gray-300);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;
-  background: var(--gray-25);
+  background: var(--surface-muted);
 }
 
 .account-empty-state strong {
   color: var(--text-strong);
   font-size: var(--type-control);
+  font-weight: var(--weight-medium);
 }
 
 .account-empty-state span {
@@ -404,20 +469,13 @@
   align-self: stretch;
   position: relative;
   min-height: 42px;
-  border-right: 1px solid var(--border);
+  padding: 0;
+  border-right: 0;
   cursor: pointer;
 }
 
 .account-row.selected .account-select-box {
   border-right-color: var(--selection-border);
-}
-
-.account-select-box input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: 0;
-  opacity: 0;
 }
 
 .account-checkbox {
@@ -448,7 +506,7 @@
   transform: rotate(45deg);
 }
 
-.account-select-box input:focus-visible + .account-checkbox {
+.account-select-box:focus-visible .account-checkbox {
   box-shadow: var(--focus-ring);
 }
 
@@ -473,6 +531,7 @@
 .account-list strong {
   color: var(--text-strong);
   font-size: var(--type-control);
+  font-weight: var(--weight-medium);
 }
 
 .account-list span {
@@ -480,21 +539,40 @@
   font-size: var(--type-label);
 }
 
+.account-tab > span:empty {
+  display: none;
+}
+
+.account-tab:has(> span:empty) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .field-group {
   overflow: hidden;
   width: 100%;
-  border: 1px solid var(--field-border);
-  border-radius: var(--radius-lg);
-  background: var(--field);
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
 }
 
 .field-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 72px;
-  gap: var(--space-5);
-  padding: var(--space-3) var(--space-5);
+  min-height: 56px;
+  gap: 12px;
+  padding: 10px var(--panel-padding);
+}
+
+.detail-pane .icon-button.inline {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.detail-pane .icon-button.inline svg {
+  width: 16px;
+  height: 16px;
 }
 
 .field-row > div:not(.field-tools) {
@@ -516,17 +594,18 @@
   display: block;
   color: var(--text-secondary);
   font-size: var(--type-label);
-  font-weight: 700;
+  font-weight: var(--weight-medium);
 }
 
-.field-row p {
+.field-row p,
+.field-row .password-value {
   margin: 2px 0 0;
   overflow: hidden;
-  color: var(--text-strong);
   text-overflow: ellipsis;
+  color: var(--text-strong);
   white-space: nowrap;
-  font-size: var(--type-password);
-  line-height: var(--leading-password);
+  font-size: var(--type-control);
+  line-height: var(--leading-body);
   text-decoration: none;
 }
 
@@ -534,8 +613,30 @@
   color: var(--blue);
 }
 
-.password-value {
+.field-row .notes-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+.field-row .password-value {
   letter-spacing: 2px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: var(--type-password);
+}
+
+.field-row .password-value.revealed {
+  max-height: 180px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  text-overflow: clip;
+  scrollbar-width: thin;
+}
+
+.field-row .password-value.revealed:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
 }
 
 .password-value.empty {
@@ -561,20 +662,44 @@
 .meta-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: var(--space-7);
-  padding: var(--space-2) 0;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+  margin-top: 8px;
+  min-height: 32px;
+  padding: 4px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-align: left;
-  font-size: var(--type-section);
-  font-weight: 700;
+  font-size: var(--type-caption);
+  font-weight: var(--weight-medium);
+}
+
+.meta-row > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.history-toggle-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.history-toggle-copy strong {
+  color: var(--text-strong);
+  font-weight: var(--weight-semibold);
 }
 
 .history-section {
   width: 100%;
-  margin-top: var(--space-5);
-  border-top: 1px solid var(--divider);
-  padding-top: var(--space-5);
+  margin-top: 12px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  padding: var(--panel-padding);
+  background: var(--surface);
 }
 
 .history-heading {
@@ -594,6 +719,7 @@
 .panel-heading h2 {
   margin: 0;
   font-size: var(--type-section);
+  font-weight: var(--weight-semibold);
 }
 
 .history-row {
@@ -628,6 +754,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--type-body);
+  font-weight: var(--weight-medium);
 }
 
 .history-row strong.masked {

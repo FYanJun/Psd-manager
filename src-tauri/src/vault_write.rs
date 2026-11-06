@@ -60,7 +60,7 @@ pub(crate) fn save_payload(
         )
         .map_err(|_| "资产库加密失败".to_string())?;
     let envelope = EncryptedVaultFile {
-        version: 1,
+        legacy_version: None,
         nonce: nonce.to_vec(),
         ciphertext,
     };
@@ -184,7 +184,7 @@ mod tests {
         }
     }
     fn payload(revision: u64) -> Value {
-        serde_json::json!({"schemaVersion":2,"revision":revision,"items":[],"customDeviceTypes":[],"snapshots":[]})
+        serde_json::json!({"revision":revision,"items":[],"customDeviceTypes":[],"snapshots":[]})
     }
     #[test]
     fn save_increments_revision_and_rotates_previous_primary() {
@@ -193,6 +193,8 @@ mod tests {
         let backup = dir.0.join(VAULT_BACKUP_FILE_NAME);
         let key = [9; 32];
         let first = save_payload(&primary, &backup, &key, payload(0), 0).unwrap();
+        let envelope: Value = serde_json::from_slice(&fs::read(&primary).unwrap()).unwrap();
+        assert!(envelope.get("version").is_none());
         assert_eq!(
             serde_json::from_str::<Value>(&first).unwrap()["revision"],
             1

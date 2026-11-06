@@ -7,8 +7,8 @@
   padding: 0 10px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: var(--type-body);
-  font-weight: 600;
+  font-size: var(--type-control);
+  font-weight: var(--weight-medium);
   transition: color 120ms ease, background 120ms ease;
 }
 
@@ -20,7 +20,7 @@
 .topbar > .tool-button:not(.accent) {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface-muted);
+  background: var(--surface);
 }
 
 .topbar > .tool-button:not(.accent):hover {
@@ -54,14 +54,15 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  height: var(--control-height-md);
+  min-height: var(--control-height-md);
+  height: auto;
   padding: 0 14px;
   border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   color: var(--text-strong);
   background: var(--surface);
   font-size: var(--type-control);
-  font-weight: 700;
+  font-weight: var(--weight-medium);
   transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
@@ -103,7 +104,7 @@ button:disabled {
   border-radius: 8px;
   color: #fff;
   background: var(--red-500);
-  font-weight: 800;
+  font-weight: var(--weight-semibold);
   line-height: 1.2;
   text-align: center;
 }
@@ -116,4 +117,20 @@ button:disabled {
 button:focus-visible {
   outline: 2px solid var(--accent-focus);
   outline-offset: 2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

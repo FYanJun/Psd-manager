@@ -3,7 +3,6 @@
   import { formatAccountTag } from "../../lib/vault";
   import {
     INPUT_LIMITS,
-    sanitizePasswordInput,
     sanitizeSingleLineTextInput,
   } from "../../lib/input-validation";
   import type { ActiveDialog, DeviceAccount, VaultItem } from "../../lib/types";
@@ -30,7 +29,7 @@
   </section>
   <label class="wide-field">
     <span>新密码</span>
-    <ClearableInput bind:value={passwordForm.password} type="password" maxlength={INPUT_LIMITS.password} transformValue={sanitizePasswordInput} {revealResetToken} />
+    <ClearableInput bind:value={passwordForm.password} type="password" maxlength={INPUT_LIMITS.password} validateAccountPassword={true} {revealResetToken} />
   </label>
   <label class="wide-field">
     <span>更新原因</span>

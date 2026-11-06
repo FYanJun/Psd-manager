@@ -1,6 +1,6 @@
-import { prepareConfigImport } from "../config-import-preview";
+import { prepareConfigImport, prepareConfigImportData } from "../config-import-preview";
 import { isTauri } from "@tauri-apps/api/core";
-import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "../platform-files";
+import { openFileDialog, saveFileDialog, readBinaryFile, readTextFile, writeBinaryFile, writeTextFile } from "../platform-files";
 import { createConfigImportController } from "./config-import-controller";
 import {
   ConfigImportError,
@@ -14,6 +14,7 @@ import type {
   ActivePopover,
   ConfigData,
   ConfigFormat,
+  ConfigTransferFormat,
   ConfigImportMode,
   DeviceTypeMeta,
   PendingConfirmation,
@@ -25,9 +26,9 @@ export type ConfigTransferState = {
   items: VaultItem[];
   customDeviceTypes: DeviceTypeMeta[];
   pendingImportedConfig: ConfigData | null;
-  pendingConfigFormat: ConfigFormat;
+  pendingConfigFormat: ConfigTransferFormat;
   importConfigMode: ConfigImportMode;
-  exportConfigFormat: ConfigFormat;
+  exportConfigFormat: ConfigTransferFormat;
 };
 
 type SafetySnapshot = { id: string };
@@ -42,7 +43,14 @@ export type ConfigTransferPort = {
   createSafetySnapshot(reason: string): Promise<SafetySnapshot | null>;
   offerSnapshotUndo(snapshotId: string, message: string): void;
   resetWorkspaceAfterReplace(items: VaultItem[]): void;
+  isExportPasswordConfigured(): boolean;
+  verifyExportPassword(password: string): Promise<void>;
 };
+
+export function getExportAuthorizationError(password: string, configured: boolean): string {
+  if (configured && !password) return "请输入主密码以授权导出";
+  return "";
+}
 
 function formatFileError(action: "导入" | "导出", error: unknown) {
   const message = getErrorMessage(error);
@@ -64,9 +72,25 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     port.setActiveDialog("export-config");
   }
 
-  async function exportConfig(format: ConfigFormat = port.read().exportConfigFormat) {
+  async function exportConfig(format: ConfigTransferFormat = port.read().exportConfigFormat, password = ""): Promise<string | null> {
+    const authorizationError = getExportAuthorizationError(password, port.isExportPasswordConfigured());
+    if (authorizationError) return authorizationError;
+    if (port.isExportPasswordConfigured()) {
+      try {
+        await port.verifyExportPassword(password);
+      } catch (error) {
+        return `主密码验证失败：${getErrorMessage(error) || "密码不正确"}`;
+      }
+    }
     const state = port.read();
-    const payload = createConfigPayload(state.items, state.customDeviceTypes, format);
+    let payload: string | Uint8Array;
+    try {
+      payload = format === "xlsx"
+        ? await import("../config/xlsx").then(({ createXlsxConfigPayload }) => createXlsxConfigPayload(state.items, state.customDeviceTypes))
+        : createConfigPayload(state.items, state.customDeviceTypes, format);
+    } catch (error) {
+      return `配置导出失败：${getErrorMessage(error) || "无法生成文件内容"}`;
+    }
     const filename = createConfigFilename(format);
     const formatLabel = format.toUpperCase();
     port.setActivePopover(null);
@@ -80,18 +104,22 @@ export function createConfigTransferController(port: ConfigTransferPort) {
         });
         if (!path) {
           port.showStatus("已取消导出");
-          return;
+          return null;
         }
-        await writeTextFile(path, payload);
+        if (payload instanceof Uint8Array) await writeBinaryFile(path, payload);
+        else await writeTextFile(path, payload);
         port.setActiveDialog(null);
         port.showStatus(`${formatLabel} 配置已导出`);
       } catch (error) {
         port.showStatus(formatFileError("导出", error), 5000);
       }
-      return;
+      return null;
     }
 
-    const blob = new Blob([payload], { type: getConfigMimeType(format) });
+    const blobData = payload instanceof Uint8Array ? new Uint8Array(payload).buffer : payload;
+    const blob = new Blob([blobData], {
+      type: format === "xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : getConfigMimeType(format),
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -100,6 +128,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     URL.revokeObjectURL(url);
     port.setActiveDialog(null);
     port.showStatus(`${formatLabel} 配置已导出`);
+    return null;
   }
 
   async function chooseConfigFile() {
@@ -109,20 +138,19 @@ export function createConfigTransferController(port: ConfigTransferPort) {
         const path = await openFileDialog({
           title: "选择要导入的配置文件",
           multiple: false,
-          filters: [{ name: "配置文件", extensions: ["json", "yaml", "yml"] }],
+          filters: [{ name: "配置文件", extensions: ["json", "yaml", "yml", "xlsx"] }],
         });
         if (!path || Array.isArray(path)) {
           port.showStatus("已取消导入");
           return;
         }
-        let content = "";
+        const format = inferConfigFormat(path);
         try {
-          content = await readTextFile(path);
+          if (format === "xlsx") await tryRequestApplyXlsxConfig(await readBinaryFile(path));
+          else tryRequestApplyConfig(await readTextFile(path), format);
         } catch (error) {
           port.showStatus(formatFileError("导入", error), 5000);
-          return;
         }
-        tryRequestApplyConfig(content, inferConfigFormat(path));
       } catch (error) {
         port.showStatus(formatFileError("导入", error), 5000);
       }
@@ -145,9 +173,33 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     }
   }
 
+  async function tryRequestApplyXlsxConfig(content: ArrayBuffer | Uint8Array) {
+    try {
+      const { parseXlsxConfigContent } = await import("../config/xlsx");
+      requestApplyParsedConfig(parseXlsxConfigContent(content), "xlsx");
+    } catch (error) {
+      clearPendingImport();
+      port.setPendingConfirmation(null);
+      const reason = error instanceof ConfigImportError
+        ? error.message
+        : "无法识别 Excel 工作簿结构或文件内容存在错误";
+      port.showStatus(`配置导入失败：${reason}`, 7000);
+    }
+  }
+
   function requestApplyConfig(content: string, preferredFormat: ConfigFormat) {
     const state = port.read();
     const { config, format, confirmation } = prepareConfigImport(state, content, preferredFormat);
+    stageConfigImport(config, format, confirmation);
+  }
+
+  function requestApplyParsedConfig(config: ConfigData, format: ConfigTransferFormat) {
+    const state = port.read();
+    const { confirmation } = prepareConfigImportData(state, config, format);
+    stageConfigImport(config, format, confirmation);
+  }
+
+  function stageConfigImport(config: ConfigData, format: ConfigTransferFormat, confirmation: PendingConfirmation) {
     port.setActivePopover(null);
     port.setActiveDialog(null);
     port.write({
@@ -164,8 +216,9 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     if (!file) return;
 
     try {
-      const content = await file.text();
-      tryRequestApplyConfig(content, inferConfigFormat(file.name));
+      const format = inferConfigFormat(file.name);
+      if (format === "xlsx") await tryRequestApplyXlsxConfig(await file.arrayBuffer());
+      else tryRequestApplyConfig(await file.text(), format);
     } catch (error) {
       port.showStatus(formatFileError("导入", error), 5000);
     } finally {
@@ -178,6 +231,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     exportConfig,
     chooseConfigFile,
     tryRequestApplyConfig,
+    tryRequestApplyXlsxConfig,
     requestApplyConfig,
     applyImportedConfig,
     selectConfigFileFromBrowser,

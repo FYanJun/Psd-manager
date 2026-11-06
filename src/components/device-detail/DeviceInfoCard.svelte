@@ -8,7 +8,8 @@
 </script>
 
 {#if selectedItem.ipAddress || selectedItem.assetCode || selectedItem.location || selectedItem.notes.trim()}
-  <div class="device-info-card" aria-label="设备信息">
+  <section class="device-info-card" aria-label="设备信息">
+    <header class="content-panel-heading"><h2>设备信息</h2></header>
     {#if selectedItem.ipAddress || selectedItem.assetCode || selectedItem.location}
       <div class="device-info-grid">
         {#if selectedItem.ipAddress}
@@ -68,5 +69,5 @@
         </button>
       </div>
     {/if}
-  </div>
+  </section>
 {/if}

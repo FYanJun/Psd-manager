@@ -1,11 +1,11 @@
 import {
   GENERATOR_MAX_RATIO,
   GENERATOR_MIN_RATIO,
-  LIST_MAX_RATIO,
-  LIST_MIN_RATIO,
-  RESIZER_RATIO,
-  SIDEBAR_MAX_RATIO,
-  SIDEBAR_MIN_RATIO,
+  DEVICE_LIST_WIDTH,
+  DETAIL_MIN_WIDTH,
+  SIDEBAR_WIDTH,
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_DIVIDER_WIDTH,
 } from "../constants";
 import { clampPaneRatio } from "../layout";
 import type { ResizePane } from "../types";
@@ -17,6 +17,7 @@ export type LayoutSnapshot = {
 };
 
 type WorkspaceLayoutPort = {
+  isSidebarCollapsed?(): boolean;
   read(): LayoutSnapshot;
   write(layout: LayoutSnapshot): void;
   setResizingPane(pane: ResizePane | null): void;
@@ -29,11 +30,13 @@ function formatPanePercent(ratio: number) {
 }
 
 export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
+  const sidebarWidth = () => port.isSidebarCollapsed?.() ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   let resizingPane: ResizePane | null = null;
   let resizeStartX = 0;
   let resizeStart: LayoutSnapshot = port.read();
   let pendingPointerEvent: PointerEvent | null = null;
   let resizeFrame: number | null = null;
+  let settleTimer: number | null = null;
 
   function normalize(layout: Partial<LayoutSnapshot>): LayoutSnapshot {
     return {
@@ -54,16 +57,13 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
   function style() {
     const layout = port.read();
     return [
-      `--sidebar-share: ${formatPanePercent(layout.sidebarRatio)}`,
-      `--sidebar-min-share: ${formatPanePercent(SIDEBAR_MIN_RATIO)}`,
-      `--sidebar-max-share: ${formatPanePercent(SIDEBAR_MAX_RATIO)}`,
-      `--list-share: ${formatPanePercent(layout.listRatio)}`,
-      `--list-min-share: ${formatPanePercent(LIST_MIN_RATIO)}`,
-      `--list-max-share: ${formatPanePercent(LIST_MAX_RATIO)}`,
+      `--sidebar-width: ${sidebarWidth()}px`,
+      `--sidebar-divider-width: ${SIDEBAR_DIVIDER_WIDTH}px`,
+      `--device-list-width: ${DEVICE_LIST_WIDTH}px`,
+      `--detail-min-width: ${DETAIL_MIN_WIDTH}px`,
       `--generator-share: ${formatPanePercent(layout.generatorRatio)}`,
       `--generator-min-share: ${formatPanePercent(GENERATOR_MIN_RATIO)}`,
       `--generator-max-share: ${formatPanePercent(GENERATOR_MAX_RATIO)}`,
-      `--resizer-share: ${formatPanePercent(RESIZER_RATIO)}`,
     ].join("; ");
   }
 
@@ -75,14 +75,7 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     if (!resizingPane) return;
     const deltaX = event.clientX - resizeStartX;
     const next = { ...port.read() };
-    if (resizingPane === "sidebar") {
-      next.sidebarRatio = clampPaneRatio(resizeStart.sidebarRatio + deltaX / viewportWidth(), "sidebar");
-    } else if (resizingPane === "list") {
-      const workspaceWidth = Math.max(1, viewportWidth() * (1 - resizeStart.sidebarRatio - RESIZER_RATIO));
-      next.listRatio = clampPaneRatio(resizeStart.listRatio + deltaX / workspaceWidth, "list");
-    } else {
-      next.generatorRatio = clampPaneRatio(resizeStart.generatorRatio - deltaX / viewportWidth(), "generator");
-    }
+    next.generatorRatio = clampPaneRatio(resizeStart.generatorRatio - deltaX / viewportWidth(), "generator");
     port.write(next);
   }
 
@@ -113,12 +106,56 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     document.body.classList.remove("is-resizing-pane");
     window.removeEventListener("pointermove", handleResize);
     window.removeEventListener("pointerup", stopResize);
-    window.removeEventListener("pointercancel", stopResize);
+    window.removeEventListener("pointercancel", cancelResize);
+    window.removeEventListener("blur", cancelResize);
+    if (settleTimer !== null) window.clearTimeout(settleTimer);
+    document.body.classList.add("pane-resize-settle");
+    settleTimer = window.setTimeout(() => {
+      settleTimer = null;
+      document.body.classList.remove("pane-resize-settle");
+    }, 280);
+  }
+
+  function clearResize() {
+    if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = null;
+    pendingPointerEvent = null;
+    resizingPane = null;
+    port.setResizingPane(null);
+    document.body.classList.remove("is-resizing-pane");
+    window.removeEventListener("pointermove", handleResize);
+    window.removeEventListener("pointerup", stopResize);
+    window.removeEventListener("pointercancel", cancelResize);
+    window.removeEventListener("blur", cancelResize);
+  }
+
+  function cancelResize() {
+    if (!resizingPane) return false;
+    if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = null;
+    pendingPointerEvent = null;
+    port.write({ ...port.read(), generatorRatio: resizeStart.generatorRatio });
+    clearResize();
+    if (settleTimer !== null) window.clearTimeout(settleTimer);
+    settleTimer = null;
+    document.body.classList.remove("pane-resize-settle");
+    return true;
+  }
+
+  function destroy() {
+    if (resizingPane) cancelResize();
+    if (settleTimer !== null) window.clearTimeout(settleTimer);
+    settleTimer = null;
+    document.body.classList.remove("pane-resize-settle");
   }
 
   function startResize(pane: ResizePane, event: PointerEvent) {
+    if (pane !== "generator") return;
     event.preventDefault();
     port.beforeResize();
+    if (settleTimer !== null) window.clearTimeout(settleTimer);
+    settleTimer = null;
+    document.body.classList.remove("pane-resize-settle");
     resizingPane = pane;
     resizeStartX = event.clientX;
     resizeStart = port.read();
@@ -126,8 +163,9 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     document.body.classList.add("is-resizing-pane");
     window.addEventListener("pointermove", handleResize);
     window.addEventListener("pointerup", stopResize);
-    window.addEventListener("pointercancel", stopResize);
+    window.addEventListener("pointercancel", cancelResize);
+    window.addEventListener("blur", cancelResize);
   }
 
-  return { restore, clamp, style, startResize, stopResize, destroy: stopResize };
+  return { restore, clamp, style, startResize, stopResize, cancelResize, destroy };
 }
