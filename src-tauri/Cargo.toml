@@ -1,6 +1,6 @@
 [package]
 name = "psd-manager"
-version = "0.1.29"
+version = "0.1.30"
 description = "Psd Manager - 密码管理器"
 authors = ["FanYanJun"]
 license = "AGPL-3.0-only"
