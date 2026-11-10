@@ -158,6 +158,36 @@ fn validate_setting_enum(value: &str, field: &str, allowed: &[&str]) -> Result<(
     }
 }
 
+fn validate_local_geometry(
+    layout: &AppPaneLayout,
+    bounds: Option<&AppWindowBounds>,
+) -> Result<(), String> {
+    for (field, value, minimum, maximum) in [
+        ("sidebarRatio", layout.sidebar_ratio, 0.10, 0.20),
+        ("listRatio", layout.list_ratio, 0.18, 0.38),
+        ("generatorRatio", layout.generator_ratio, 0.24, 0.48),
+    ] {
+        if !value.is_finite() || value < minimum || value > maximum {
+            return Err(format!(
+                "应用设置字段 workspace.paneLayout.{field} 超出范围"
+            ));
+        }
+    }
+    if let Some(bounds) = bounds {
+        if bounds.width < u64::from(crate::native_window::LEGACY_MIN_WINDOW_WIDTH)
+            || bounds.width > 10_000
+            || bounds.height < u64::from(crate::native_window::MIN_WINDOW_HEIGHT)
+            || bounds.height > 10_000
+        {
+            return Err("应用设置中的窗口尺寸超出范围".to_string());
+        }
+        if bounds.x < -100_000 || bounds.x > 100_000 || bounds.y < -100_000 || bounds.y > 100_000 {
+            return Err("应用设置中的窗口位置超出范围".to_string());
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_app_settings_content(content: &str) -> Result<serde_json::Value, String> {
     let settings: AppSettingsFile =
         serde_json::from_str(content).map_err(|error| format!("应用设置格式不正确：{error}"))?;
@@ -190,30 +220,10 @@ pub(crate) fn validate_app_settings_content(content: &str) -> Result<serde_json:
     {
         return Err("应用设置中的最近视图数据不正确".to_string());
     }
-    let layout = &settings.workspace.pane_layout;
-    for (field, value, minimum, maximum) in [
-        ("sidebarRatio", layout.sidebar_ratio, 0.10, 0.20),
-        ("listRatio", layout.list_ratio, 0.18, 0.38),
-        ("generatorRatio", layout.generator_ratio, 0.24, 0.48),
-    ] {
-        if !value.is_finite() || value < minimum || value > maximum {
-            return Err(format!(
-                "应用设置字段 workspace.paneLayout.{field} 超出范围"
-            ));
-        }
-    }
-    if let Some(bounds) = &settings.workspace.window_bounds {
-        if bounds.width < u64::from(crate::native_window::LEGACY_MIN_WINDOW_WIDTH)
-            || bounds.width > 10_000
-            || bounds.height < u64::from(crate::native_window::MIN_WINDOW_HEIGHT)
-            || bounds.height > 10_000
-        {
-            return Err("应用设置中的窗口尺寸超出范围".to_string());
-        }
-        if bounds.x < -100_000 || bounds.x > 100_000 || bounds.y < -100_000 || bounds.y > 100_000 {
-            return Err("应用设置中的窗口位置超出范围".to_string());
-        }
-    }
+    validate_local_geometry(
+        &settings.workspace.pane_layout,
+        settings.workspace.window_bounds.as_ref(),
+    )?;
     let generator = &settings.password_generator;
     if !(3..=24).contains(&generator.length)
         || generator.minimum_numbers > generator.length
@@ -225,6 +235,120 @@ pub(crate) fn validate_app_settings_content(content: &str) -> Result<serde_json:
         return Err("应用设置中的密码生成器参数不正确".to_string());
     }
     serde_json::to_value(settings).map_err(|error| format!("无法编码应用设置：{error}"))
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct AppSettingsPreferences {
+    interface: AppInterfaceSettings,
+    workspace: AppWorkspacePreferences,
+    password_generator: AppGeneratorSettings,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct AppWorkspacePreferences {
+    remember_layout: bool,
+    device_sort_mode: String,
+    device_type_sort_mode: String,
+    remember_last_view: bool,
+    remember_window_bounds: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct AppLocalState {
+    pane_layout: AppPaneLayout,
+    window_bounds: Option<AppWindowBounds>,
+}
+
+pub(crate) fn default_local_state() -> serde_json::Value {
+    serde_json::json!({
+        "paneLayout": {"sidebarRatio": 0.15, "listRatio": 0.25, "generatorRatio": 0.32},
+        "windowBounds": null,
+    })
+}
+
+fn empty_last_view(sort_mode: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({"deviceType": "全部设备", "searchQuery": "", "sortMode": sort_mode, "selectedDeviceUuid": ""})
+}
+
+pub(crate) fn split_settings_content(content: &str) -> Result<(String, String), String> {
+    let mut preferences = validate_app_settings_content(content)?;
+    let workspace = preferences["workspace"].as_object_mut().unwrap();
+    let state = serde_json::json!({
+        "paneLayout": workspace.remove("paneLayout").unwrap(),
+        "windowBounds": workspace.remove("windowBounds").unwrap(),
+    });
+    workspace.remove("lastView");
+    Ok((preferences.to_string(), state.to_string()))
+}
+
+// Accept exactly the current preferences structure or the validated former full
+// settings file; unrelated unknown fields remain errors at both boundaries.
+pub(crate) fn normalize_preferences_content(
+    content: &str,
+) -> Result<(String, Option<String>), String> {
+    if let Ok(preferences) = serde_json::from_str::<AppSettingsPreferences>(content) {
+        let value = serde_json::to_value(preferences)
+            .map_err(|error| format!("无法编码应用偏好：{error}"))?;
+        join_settings_content(&value.to_string(), &default_local_state().to_string())?;
+        return Ok((value.to_string(), None));
+    }
+    let (preferences, state) = split_settings_content(content)?;
+    Ok((preferences, Some(state)))
+}
+
+pub(crate) fn validate_local_state_content(content: &str) -> Result<String, String> {
+    let state: AppLocalState =
+        serde_json::from_str(content).map_err(|error| format!("本机状态格式不正确：{error}"))?;
+    validate_local_geometry(&state.pane_layout, state.window_bounds.as_ref())?;
+    serde_json::to_string(&state).map_err(|error| format!("无法编码本机状态：{error}"))
+}
+
+pub(crate) fn join_settings_content(preferences: &str, state: &str) -> Result<String, String> {
+    let preferences: AppSettingsPreferences = serde_json::from_str(preferences)
+        .map_err(|error| format!("应用偏好格式不正确：{error}"))?;
+    let mut value =
+        serde_json::to_value(preferences).map_err(|error| format!("无法编码应用偏好：{error}"))?;
+    let state: serde_json::Value = serde_json::from_str(&validate_local_state_content(state)?)
+        .map_err(|error| format!("无法读取本机状态：{error}"))?;
+    value["workspace"]["paneLayout"] = state["paneLayout"].clone();
+    value["workspace"]["windowBounds"] = state["windowBounds"].clone();
+    value["workspace"]["lastView"] = empty_last_view(&value["workspace"]["deviceSortMode"]);
+    Ok(validate_app_settings_content(&value.to_string())?.to_string())
+}
+
+pub(crate) fn portable_settings_content(full: &str) -> Result<String, String> {
+    let mut value = validate_app_settings_content(full)?;
+    value["interface"]["startOnBoot"] = false.into();
+    value["interface"]["startupLock"] = false.into();
+    value["workspace"]["paneLayout"] = default_local_state()["paneLayout"].clone();
+    value["workspace"]["windowBounds"] = serde_json::Value::Null;
+    value["workspace"]["lastView"] = empty_last_view(&value["workspace"]["deviceSortMode"]);
+    Ok(value.to_string())
+}
+
+pub(crate) fn merge_portable_settings(current: &str, imported: &str) -> Result<String, String> {
+    let mut current = validate_app_settings_content(current)?;
+    let imported = validate_app_settings_content(imported)?;
+    for field in ["theme", "tooltipEnabled"] {
+        current["interface"][field] = imported["interface"][field].clone();
+    }
+    current["passwordGenerator"] = imported["passwordGenerator"].clone();
+    for field in [
+        "rememberLayout",
+        "deviceSortMode",
+        "deviceTypeSortMode",
+        "rememberLastView",
+        "rememberWindowBounds",
+    ] {
+        current["workspace"][field] = imported["workspace"][field].clone();
+    }
+    // Current security, autostart and machine geometry remain authoritative.
+    // View identifiers/searches are never transplanted from another vault.
+    current["workspace"]["lastView"] = empty_last_view(&current["workspace"]["deviceSortMode"]);
+    Ok(current.to_string())
 }
 
 #[cfg(test)]
@@ -426,5 +550,72 @@ mod settings_validation_tests {
         value["workspace"]["windowBounds"]["width"] = json!(786);
         value["workspace"]["windowBounds"]["x"] = json!(-100001);
         assert!(validate_app_settings_content(&value.to_string()).is_err());
+    }
+    #[test]
+    fn portable_preferences_never_transplant_machine_security_or_business_state() {
+        let mut current = settings();
+        current["interface"]["startOnBoot"] = json!(true);
+        current["interface"]["startupLock"] = json!(true);
+        current["interface"]["autoLockMinutes"] = json!(12);
+        current["workspace"]["windowBounds"] = json!({"x":40,"y":60,"width":1200,"height":800});
+        current["workspace"]["lastView"]["searchQuery"] = json!("private-query");
+        let portable: Value =
+            serde_json::from_str(&portable_settings_content(&current.to_string()).unwrap())
+                .unwrap();
+        assert_eq!(portable["interface"]["startOnBoot"], false);
+        assert_eq!(portable["interface"]["startupLock"], false);
+        assert_eq!(portable["workspace"]["windowBounds"], Value::Null);
+        assert_eq!(portable["workspace"]["lastView"]["searchQuery"], "");
+        let mut incoming = settings();
+        incoming["interface"]["theme"] = json!("dark");
+        incoming["passwordGenerator"]["length"] = json!(12);
+        let merged: Value = serde_json::from_str(
+            &merge_portable_settings(&current.to_string(), &incoming.to_string()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(merged["interface"]["theme"], "dark");
+        assert_eq!(merged["interface"]["startOnBoot"], true);
+        assert_eq!(merged["interface"]["startupLock"], true);
+        assert_eq!(merged["interface"]["autoLockMinutes"], 12);
+        assert_eq!(merged["workspace"]["windowBounds"]["x"], 40);
+        assert_eq!(merged["passwordGenerator"]["length"], 12);
+        assert_eq!(merged["workspace"]["lastView"]["searchQuery"], "");
+    }
+    #[test]
+    fn persisted_preferences_and_state_are_strictly_validated() {
+        let (preferences, state) = split_settings_content(&settings().to_string()).unwrap();
+        let mut invalid: Value = serde_json::from_str(&preferences).unwrap();
+        invalid["workspace"]["lastView"] = json!({"searchQuery":"should-not-persist"});
+        assert!(normalize_preferences_content(&invalid.to_string()).is_err());
+        let mut invalid: Value = serde_json::from_str(&state).unwrap();
+        invalid["windowBounds"] = json!({"x":0,"y":0,"width":1,"height":1});
+        assert!(validate_local_state_content(&invalid.to_string()).is_err());
+        invalid = serde_json::from_str(&state).unwrap();
+        invalid["searchQuery"] = json!("private");
+        assert!(validate_local_state_content(&invalid.to_string()).is_err());
+        let legacy = settings().to_string();
+        let normalized = normalize_preferences_content(&legacy).unwrap();
+        assert!(normalized.1.is_some());
+        assert!(normalize_preferences_content(&normalized.0)
+            .unwrap()
+            .1
+            .is_none());
+    }
+    #[test]
+    fn empty_views_preserve_selected_device_sort_for_portable_and_merged_preferences() {
+        for mode in ["nameAsc", "typeAsc"] {
+            let mut source = settings();
+            source["workspace"]["deviceSortMode"] = json!(mode);
+            let portable: Value =
+                serde_json::from_str(&portable_settings_content(&source.to_string()).unwrap())
+                    .unwrap();
+            assert_eq!(portable["workspace"]["lastView"]["sortMode"], mode);
+            let merged: Value = serde_json::from_str(
+                &merge_portable_settings(&settings().to_string(), &source.to_string()).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(merged["workspace"]["deviceSortMode"], mode);
+            assert_eq!(merged["workspace"]["lastView"]["sortMode"], mode);
+        }
     }
 }

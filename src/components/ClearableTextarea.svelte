@@ -102,7 +102,7 @@
     min-width: 0;
     width: 100%;
     border-radius: 8px;
-    background: var(--surface-step-1);
+    background: var(--field);
   }
 
   .clearable-textarea .ink-wash {

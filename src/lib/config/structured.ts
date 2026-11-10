@@ -11,7 +11,7 @@ function readConnectionAddress(record: Record<string, unknown>) {
   return readString(record["连接地址"]).trim();
 }
 
-export function createJsonDeviceRecord(item: VaultItem, typeIconText: string) {
+function createJsonDeviceRecord(item: VaultItem, typeIconText: string) {
   const device: Record<string, unknown> = {
     设备UUID: item.uuid,
     设备名称: item.deviceName,
@@ -118,7 +118,7 @@ export function parseStructuredConfigPayload(parsed: Record<string, unknown>): C
   };
 }
 
-export function createImportedDeviceFromChineseRecord(
+function createImportedDeviceFromChineseRecord(
   record: Record<string, unknown>,
   index: number,
   fallbackDeviceType = "",

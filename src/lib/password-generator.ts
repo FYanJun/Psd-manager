@@ -18,7 +18,7 @@ function splitCharacters(value: string) {
   return Array.from(value);
 }
 
-export function uniqueChars(value: string) {
+function uniqueChars(value: string) {
   return Array.from(new Set(splitCharacters(value))).join("");
 }
 
@@ -26,7 +26,7 @@ export function normalizeGeneratorLength(length: number) {
   return Math.min(24, Math.max(3, Number.isFinite(length) ? Math.round(length) : 8));
 }
 
-export function getGeneratorGroups(options: GeneratorOptions) {
+function getGeneratorGroups(options: GeneratorOptions) {
   const customExcludes = new Set(
     splitCharacters(`${sanitizePasswordInput(options.excludedCharacters)}${options.excludeSimilar ? "0O1Il|`'" : ""}`)
   );

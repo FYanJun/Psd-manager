@@ -1,7 +1,6 @@
 import {
   getBulkPasswordMatches,
   getBulkPasswordMatchKey,
-  getBulkUsernameSuggestions,
   updateAccountPassword,
 } from "../device-commands";
 import {
@@ -12,7 +11,6 @@ import {
 } from "../input-validation";
 import type {
   BulkPasswordMatch,
-  BulkUsernameSuggestion,
   DeviceType,
   PendingConfirmation,
   PasswordHistory,
@@ -22,7 +20,6 @@ import { getAccounts, syncItemWithAccounts } from "../vault";
 import {
   getAccountSelectionState,
   type AccountPasswordControllerPort,
-  type AccountPasswordPatch,
   type AccountPasswordState,
 } from "./account-password-types";
 
@@ -49,20 +46,10 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   }
 
   function derivePasswordState(state = port.read()) {
-    const bulkUsernameSuggestions = state.bulkUsernameSearch.trim()
-      ? getBulkUsernameSuggestions(state.items, state.bulkPasswordForm, state.bulkUsernameSearch)
-      : [];
-    const bulkPasswordMatches = state.bulkPasswordForm.username.trim()
-      ? getBulkPasswordMatches(state.items, state.bulkPasswordForm)
-      : [];
-    const bulkPasswordSelectedMatches = bulkPasswordMatches.filter((match) =>
-      !state.bulkPasswordDeselectedKeys.includes(getBulkPasswordMatchKey(match))
-    );
-    return {
-      bulkUsernameSuggestions,
-      bulkPasswordMatches,
-      bulkPasswordSelectedMatches,
-    };
+    const bulkPasswordAllMatches = getBulkPasswordMatches(state.items);
+    const selectedKeys = new Set(state.bulkPasswordForm.selectedKeys);
+    const bulkPasswordSelectedMatches = bulkPasswordAllMatches.filter(match => selectedKeys.has(getBulkPasswordMatchKey(match)));
+    return { bulkPasswordAllMatches, bulkPasswordSelectedMatches };
   }
 
   function maskPassword(password: string) {
@@ -222,11 +209,9 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     port.write({
       bulkTypeSearch: "",
       bulkUsernameSearch: "",
-      bulkUsernameSuggestionsOpen: false,
-      bulkPasswordDeselectedKeys: [],
       bulkPasswordForm: {
         deviceType: state.selectedDeviceType,
-        username: "",
+        selectedKeys: [],
         password: useGenerated ? port.getGeneratorState().generatedPassword : "",
         reason: "",
       },
@@ -241,69 +226,43 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
 
   function setBulkPasswordDeviceType(deviceType: "全部设备" | DeviceType) {
     const { bulkPasswordForm } = port.read();
-    port.write({
-      bulkPasswordForm: { ...bulkPasswordForm, deviceType, username: "" },
-      bulkUsernameSearch: "",
-      bulkUsernameSuggestionsOpen: false,
-      bulkPasswordDeselectedKeys: [],
-      bulkTypeSearch: "",
-    });
+    port.write({ bulkPasswordForm: { ...bulkPasswordForm, deviceType }, bulkUsernameSearch: "", bulkTypeSearch: "" });
     port.setOpenTypePicker(null);
   }
 
-  function updateBulkUsernameSearch(username: string) {
-    const state = port.read();
-    const patch: AccountPasswordPatch = {
-      bulkUsernameSearch: username,
-      bulkUsernameSuggestionsOpen: Boolean(username.trim()),
-      bulkPasswordForm: { ...state.bulkPasswordForm, username },
-      bulkPasswordDeselectedKeys: [],
-    };
-    port.write(patch);
-  }
-
-  function selectBulkUsername(suggestion: BulkUsernameSuggestion) {
+  function clearBulkPasswordFilters() {
     const { bulkPasswordForm } = port.read();
-    port.write({
-      bulkUsernameSearch: suggestion.username,
-      bulkUsernameSuggestionsOpen: false,
-      bulkPasswordForm: { ...bulkPasswordForm, username: suggestion.username },
-      bulkPasswordDeselectedKeys: [],
-    });
+    port.write({ bulkPasswordForm: { ...bulkPasswordForm, deviceType: "全部设备" }, bulkUsernameSearch: "", bulkTypeSearch: "" });
+    port.setOpenTypePicker(null);
   }
 
   function isBulkPasswordMatchSelected(match: BulkPasswordMatch) {
-    return !port.read().bulkPasswordDeselectedKeys.includes(getBulkPasswordMatchKey(match));
+    return port.read().bulkPasswordForm.selectedKeys.includes(getBulkPasswordMatchKey(match));
   }
 
-  function toggleBulkPasswordMatch(match: BulkPasswordMatch) {
+  function setBulkPasswordMatchesSelected(matches: BulkPasswordMatch[], selected: boolean) {
     const state = port.read();
-    const key = getBulkPasswordMatchKey(match);
-    port.write({
-      bulkPasswordDeselectedKeys: state.bulkPasswordDeselectedKeys.includes(key)
-        ? state.bulkPasswordDeselectedKeys.filter((deselectedKey) => deselectedKey !== key)
-        : [...state.bulkPasswordDeselectedKeys, key],
-    });
-  }
-
-  function selectAllBulkPasswordMatches() {
-    const state = port.read();
-    const candidateKeySet = new Set(derivePasswordState(state).bulkPasswordMatches.map(getBulkPasswordMatchKey));
-    port.write({
-      bulkPasswordDeselectedKeys: state.bulkPasswordDeselectedKeys.filter((key) => !candidateKeySet.has(key)),
-    });
+    const validKeys = new Set(derivePasswordState(state).bulkPasswordAllMatches.map(getBulkPasswordMatchKey));
+    const targetKeys = new Set(matches.map(getBulkPasswordMatchKey).filter(key => validKeys.has(key)));
+    const selectedKeys = state.bulkPasswordForm.selectedKeys;
+    port.write({ bulkPasswordForm: { ...state.bulkPasswordForm,
+      selectedKeys: selected
+        ? Array.from(new Set([...selectedKeys, ...targetKeys]))
+        : selectedKeys.filter(key => !targetKeys.has(key)),
+    } });
   }
 
   function clearBulkPasswordMatches() {
-    const state = port.read();
-    const matchKeys = derivePasswordState(state).bulkPasswordMatches.map(getBulkPasswordMatchKey);
-    port.write({
-      bulkPasswordDeselectedKeys: Array.from(new Set([...state.bulkPasswordDeselectedKeys, ...matchKeys])),
-    });
+    const { bulkPasswordForm } = port.read();
+    port.write({ bulkPasswordForm: { ...bulkPasswordForm, selectedKeys: [] } });
   }
 
-  function resetBulkPasswordSelection() {
-    port.write({ bulkPasswordDeselectedKeys: [] });
+  function removeBulkPasswordSelection(keys: string[]) {
+    const { bulkPasswordForm } = port.read();
+    const removedKeys = new Set(keys);
+    port.write({ bulkPasswordForm: { ...bulkPasswordForm,
+      selectedKeys: bulkPasswordForm.selectedKeys.filter(key => !removedKeys.has(key)),
+    } });
   }
 
   function savePasswordUpdate() {
@@ -410,10 +369,6 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const derived = derivePasswordState(state);
     if (!validateNewPassword(state.bulkPasswordForm.password)) return null;
     if (!validatePasswordReason(state.bulkPasswordForm.reason)) return null;
-    if (derived.bulkPasswordMatches.length === 0) {
-      port.showStatus("没有匹配账号");
-      return null;
-    }
     if (derived.bulkPasswordSelectedMatches.length === 0) {
       port.showStatus("请选择需要改密的账号");
       return null;
@@ -455,8 +410,8 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       passwordValue: state.bulkPasswordForm.password,
       reasonValue: state.bulkPasswordForm.reason,
       summaryItems: [
-        { label: "设备范围", value: state.bulkPasswordForm.deviceType },
-        { label: "匹配用户名", value: state.bulkPasswordForm.username },
+        { label: "所选设备", value: `${new Set(changedMatches.map((match) => match.itemUuid)).size} 台` },
+        { label: "所选用户名", value: `${new Set(changedMatches.map((match) => match.username.trim())).size} 种` },
         { label: "影响账号", value: `${changedMatches.length} 个` },
         ...(skippedMatchCount > 0 ? [{ label: "跳过账号", value: `${skippedMatchCount} 个（密码相同）` }] : []),
         { label: "密码", value: "已修改（内容已隐藏）" },
@@ -542,13 +497,11 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     openBulkPasswordDialog,
     canOpenBulkPasswordDialog,
     setBulkPasswordDeviceType,
-    updateBulkUsernameSearch,
-    selectBulkUsername,
+    clearBulkPasswordFilters,
+    removeBulkPasswordSelection,
     isBulkPasswordMatchSelected,
-    toggleBulkPasswordMatch,
-    selectAllBulkPasswordMatches,
+    setBulkPasswordMatchesSelected,
     clearBulkPasswordMatches,
-    resetBulkPasswordSelection,
     savePasswordUpdate,
     executePasswordUpdate,
     saveBulkPasswordUpdate,

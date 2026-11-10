@@ -41,7 +41,7 @@ export function iconClassForType(deviceType: string, deviceTypes: DeviceTypeMeta
   return iconClassForColor(meta.color);
 }
 
-export function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
+function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
   if (!Array.isArray(value)) return [];
   const history = value.map((entry, index) => ({
     uuid: normalizeUuid(entry?.uuid),
@@ -63,7 +63,7 @@ export function normalizeHistoryEntries(value: unknown): PasswordHistory[] {
   });
 }
 
-export function normalizeAccount(value: unknown, index: number): DeviceAccount {
+function normalizeAccount(value: unknown, index: number): DeviceAccount {
   const account = value as Partial<DeviceAccount>;
   const username = readString(account.username).trim();
   const history = normalizeHistoryEntries(account.history);
@@ -84,7 +84,7 @@ export function normalizeAccount(value: unknown, index: number): DeviceAccount {
   };
 }
 
-export function normalizeAccountIds(accounts: DeviceAccount[]) {
+function normalizeAccountIds(accounts: DeviceAccount[]) {
   const usedIds = new Set<number>();
   const usedUuids = new Set<string>();
   let nextId = 1;
@@ -122,7 +122,7 @@ export function syncItemWithAccounts(item: VaultItem, accounts: DeviceAccount[])
   };
 }
 
-export function normalizeVaultItem(value: unknown, index: number): VaultItem {
+function normalizeVaultItem(value: unknown, index: number): VaultItem {
   const item = value as Partial<VaultItem>;
   const deviceType = readString(item.deviceType);
   const fallback: VaultItem = {

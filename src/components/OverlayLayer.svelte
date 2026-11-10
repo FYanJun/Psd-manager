@@ -1,4 +1,6 @@
 <script lang="ts">
+  import BackupDialog from "./dialogs/BackupDialog.svelte";
+  import { emptyBackupView, type BackupView } from "../lib/controllers/backup-controller";
   import ActionPopover from "./ActionPopover.svelte";
   import AppDialog from "./AppDialog.svelte";
   import ConfirmationDialog from "./ConfirmationDialog.svelte";
@@ -29,6 +31,8 @@
 
   import type { FormValidationFeedback } from "../lib/form-validation";
 
+  export let backupView: BackupView = emptyBackupView();
+  export let backupActions: { close(): void; submit(password: string, confirmation?: string): Promise<void>; confirmRestore(): Promise<void>; setIncludeSettings(value: boolean): void };
   export let validationFeedback: FormValidationFeedback | null = null;
   export let popover: { model: ActionPopoverModel; actions: ActionPopoverActions };
   export let activeDialog: ActiveDialog = null;
@@ -87,6 +91,7 @@
   export let vaultPasswordDialogMode: import("../lib/types").VaultPasswordDialogMode = "set";
   export let vaultPasswordForm: { currentPassword: string; newPassword: string; confirmPassword: string };
   export let vaultPasswordError = "";
+  export let vaultPasswordWarning = "";
   export let vaultPasswordBusy = false;
   export let recoveryKey = "";
   export let recoveryAcknowledged = false;
@@ -113,7 +118,7 @@
   bind:bulkTypeSearch
   bind:bulkUsernameSearch
   bind:deviceTypeSearch
-  activeDialog={activeDialog === "snapshots" ? null : activeDialog}
+  activeDialog={activeDialog === "snapshots" || activeDialog === "backup" ? null : activeDialog}
   {validationFeedback}
   view={appDialogView}
   actions={appDialogActions}
@@ -122,6 +127,7 @@
   {vaultPasswordDialogMode}
   {vaultPasswordForm}
   {vaultPasswordError}
+  {vaultPasswordWarning}
   {vaultPasswordBusy}
   {recoveryKey}
   bind:recoveryAcknowledged
@@ -133,6 +139,10 @@
   {finishRecoverySetup}
   {saveVaultPassword}
 />
+
+{#if activeDialog === "backup"}
+  <BackupDialog view={backupView} revealResetToken={appDialogView.revealResetToken} {...backupActions} />
+{/if}
 
 <VaultSnapshotsDialog
   open={activeDialog === "snapshots"}

@@ -4,7 +4,6 @@ import type { ActiveDialog, ActivePopover, PendingConfirmation, TypePickerScope,
 export type KeyboardState = {
   vaultStorageState: VaultStorageState;
   openTypePicker: TypePickerScope | null;
-  bulkUsernameSuggestionsOpen: boolean;
   pendingConfirmation: PendingConfirmation | null;
   activeDialog: ActiveDialog;
   generatorPanelOpen: boolean;
@@ -14,12 +13,10 @@ export type KeyboardState = {
   selectedItemId: number;
   selectedAccountId: number;
   hasSelectedDevice: boolean;
-  backCount: number;
-  forwardCount: number;
 };
 
 type KeyboardPatch = Partial<Pick<KeyboardState,
-  "openTypePicker" | "bulkUsernameSuggestionsOpen" | "pendingConfirmation" | "activeDialog" | "activePopover"
+  "openTypePicker" | "pendingConfirmation" | "activeDialog" | "activePopover"
 >>;
 
 type KeyboardActions = {
@@ -32,8 +29,6 @@ type KeyboardActions = {
   saveActiveDialog(): void;
   selectDevice(id: number): void;
   focusSearch(): void;
-  goBack(): void;
-  goForward(): void;
   openAddAccount(): void;
   openAddDevice(): void;
   openGenerator(): void;
@@ -58,7 +53,6 @@ export function createKeyboardController(port: KeyboardControllerPort) {
     const state = port.read();
     if (state.activePopover) port.write({ activePopover: null });
     else if (state.openTypePicker) port.write({ openTypePicker: null });
-    else if (state.bulkUsernameSuggestionsOpen) port.write({ bulkUsernameSuggestionsOpen: false });
     else if (state.pendingConfirmation) port.actions.cancelPendingConfirmation();
     else if (state.activeDialog) port.actions.closeOverlays();
     else if (state.generatorPanelOpen) port.actions.closeGenerator();
@@ -98,7 +92,7 @@ export function createKeyboardController(port: KeyboardControllerPort) {
       return;
     }
 
-    if (state.pendingConfirmation || state.activeDialog) return;
+    if (state.pendingConfirmation || state.activeDialog || state.generatorPanelOpen) return;
     if (!shortcutModifier && !editableTarget && !state.activeDialog && !state.activePopover && !state.generatorPanelOpen) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -120,16 +114,6 @@ export function createKeyboardController(port: KeyboardControllerPort) {
       return;
     }
     if (editableTarget) return;
-    if (event.key === "ArrowLeft" && state.backCount > 0) {
-      event.preventDefault();
-      port.actions.goBack();
-      return;
-    }
-    if (event.key === "ArrowRight" && state.forwardCount > 0) {
-      event.preventDefault();
-      port.actions.goForward();
-      return;
-    }
     if (key === "n") {
       event.preventDefault();
       if (event.shiftKey && state.hasSelectedDevice) port.actions.openAddAccount();

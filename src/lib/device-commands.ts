@@ -1,16 +1,12 @@
 import type {
   AccountForm,
-  BulkPasswordForm,
   BulkPasswordMatch,
-  BulkUsernameSuggestion,
   DeviceAccount,
-  DeviceType,
   PasswordHistory,
   VaultItem,
 } from "./types";
 import { DEFAULT_ACCOUNT_TAG } from "./constants";
 import { getAccounts } from "./vault";
-import { fuzzyContains, normalizeSearchValue } from "./utils";
 import { createUuid } from "./uuid";
 
 export function createAccountFromForm(
@@ -56,62 +52,18 @@ export function formatDeviceInfo(item: VaultItem) {
     .join("\n");
 }
 
-export function matchesBulkUsername(account: DeviceAccount, username: string) {
-  const target = username.trim();
-  if (!target) return true;
-  return account.username.trim() === target;
-}
-
-export function matchesBulkUsernameSearch(account: DeviceAccount, username: string) {
-  const target = username.trim();
-  if (!target) return false;
-  return fuzzyContains(normalizeSearchValue(account.username), target);
-}
-
-export function matchesBulkDeviceType(item: VaultItem, deviceType: "全部设备" | DeviceType) {
-  return deviceType === "全部设备" || item.deviceType === deviceType;
-}
-
-export function getBulkPasswordMatches(items: VaultItem[], form: BulkPasswordForm): BulkPasswordMatch[] {
-  return items.filter((item) => matchesBulkDeviceType(item, form.deviceType)).flatMap((item) =>
-    getAccounts(item)
-      .filter((account) => matchesBulkUsername(account, form.username))
-      .map((account) => ({
-        itemUuid: item.uuid,
-        accountUuid: account.uuid,
-        deviceName: item.deviceName,
-        deviceType: item.deviceType,
-        deviceTag: item.tag,
-        ipAddress: item.ipAddress,
-        username: account.username,
-        tag: account.tag,
-        updatedAt: account.updatedAt || item.updatedAt,
-      }))
-  );
-}
-
-export function getBulkUsernameSuggestions(
-  items: VaultItem[],
-  form: Pick<BulkPasswordForm, "deviceType">,
-  usernameSearch: string
-): BulkUsernameSuggestion[] {
-  const suggestions = new Map<string, BulkUsernameSuggestion>();
-
-  items.filter((item) => matchesBulkDeviceType(item, form.deviceType)).forEach((item) => {
-    getAccounts(item)
-      .filter((account) => matchesBulkUsernameSearch(account, usernameSearch))
-      .forEach((account) => {
-        const username = account.username.trim();
-        if (!username) return;
-
-        const key = username;
-        if (!suggestions.has(key)) suggestions.set(key, { username });
-      });
-  });
-
-  return Array.from(suggestions.values()).sort((left, right) =>
-    left.username.localeCompare(right.username, "zh-Hans-CN")
-  );
+export function getBulkPasswordMatches(items: VaultItem[]): BulkPasswordMatch[] {
+  return items.flatMap(item => getAccounts(item).map(account => ({
+    itemUuid: item.uuid,
+    accountUuid: account.uuid,
+    deviceName: item.deviceName,
+    deviceType: item.deviceType,
+    deviceTag: item.tag,
+    ipAddress: item.ipAddress,
+    username: account.username,
+    tag: account.tag,
+    updatedAt: account.updatedAt || item.updatedAt,
+  })));
 }
 
 export function getBulkPasswordMatchKey(match: Pick<BulkPasswordMatch, "itemUuid" | "accountUuid">) {

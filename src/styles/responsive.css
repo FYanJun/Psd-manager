@@ -1,13 +1,8 @@
 /* Responsive overrides shared by the desktop workspace and its overlays. */
 @media (max-width: 1180px) {
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
     gap: 8px;
     padding-inline: 12px;
-  }
-
-  .history-buttons {
-    display: none;
   }
 
   .detail-topline {
@@ -63,7 +58,7 @@
   }
 
   .bulk-password-form {
-    grid-template-rows: repeat(5, max-content) minmax(0, 1fr);
+    grid-template-rows: max-content minmax(140px, 1fr) max-content max-content;
   }
 
   .confirmation-summary {
@@ -93,7 +88,7 @@
     bottom: 8px;
   }
 
-  .bulk-preview-head {
+  .bulk-selected-head {
     display: grid;
   }
 
@@ -103,11 +98,6 @@
 
   .bulk-selection-actions .compact-button {
     flex: 1;
-  }
-
-  .bulk-match-copy {
-    grid-template-columns: 1fr;
-    gap: 2px;
   }
 
   .drawer-footer {

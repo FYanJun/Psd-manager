@@ -43,7 +43,6 @@ export type DeviceTypeControllerPort = {
   reportValidationError?: ReportFormValidationError;
   createSafetySnapshot(reason: string): Promise<SafetySnapshot | null>;
   offerSnapshotUndo(snapshotId: string, message: string): void;
-  pushNavigationState(): void;
 };
 
 function getVisibleTypes(state: DeviceTypeControllerState) {
@@ -191,7 +190,6 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
       port.showStatus(`该类型下已有 ${currentDeviceCount} 个设备，已取消删除`);
       return false;
     }
-    port.pushNavigationState();
     port.write({
       customDeviceTypes: current.customDeviceTypes.filter((type) => type.uuid !== typeMeta.uuid),
       selectedDeviceType: "全部设备",

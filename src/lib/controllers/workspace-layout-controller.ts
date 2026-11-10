@@ -149,6 +149,16 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     document.body.classList.remove("pane-resize-settle");
   }
 
+  function setGeneratorRatio(ratio: number) {
+    if (resizingPane || !Number.isFinite(ratio)) return;
+    const layout = port.read();
+    const next = clampPaneRatio(ratio, "generator");
+    if (next === layout.generatorRatio) return;
+    port.beforeResize();
+    port.write({ ...layout, generatorRatio: next });
+    port.onResizeEnd();
+  }
+
   function startResize(pane: ResizePane, event: PointerEvent) {
     if (pane !== "generator") return;
     event.preventDefault();
@@ -167,5 +177,5 @@ export function createWorkspaceLayoutController(port: WorkspaceLayoutPort) {
     window.addEventListener("blur", cancelResize);
   }
 
-  return { restore, clamp, style, startResize, stopResize, cancelResize, destroy };
+  return { restore, clamp, style, startResize, stopResize, cancelResize, setGeneratorRatio, destroy };
 }

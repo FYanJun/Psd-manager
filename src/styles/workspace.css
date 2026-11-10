@@ -259,9 +259,6 @@ body.is-resizing-pane::after {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.type-copy strong {
   color: var(--text-strong);
   font-size: var(--type-control);
   font-weight: var(--weight-medium);
@@ -293,7 +290,7 @@ body.is-resizing-pane::after {
 
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 12px;
   align-items: center;
   overflow: visible;
@@ -301,11 +298,6 @@ body.is-resizing-pane::after {
   padding: 0 var(--space-5) 0 var(--space-4);
   border-bottom: 1px solid var(--divider);
   background: var(--topbar-surface);
-}
-
-.history-buttons {
-  display: flex;
-  gap: 4px;
 }
 
 .search-box {
@@ -318,18 +310,24 @@ body.is-resizing-pane::after {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   background: var(--surface-list);
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .search-box:focus-within {
-  border-color: var(--blue-400);
+  border-color: var(--accent-focus);
+  box-shadow: inset 0 0 0 1px var(--accent-focus);
   background: var(--surface);
+}
+
+.search-box > svg {
+  flex-shrink: 0;
 }
 
 .search-box input {
   width: 100%;
   min-width: 0;
   height: 100%;
+  padding: 0;
   margin-left: 10px;
   border: 0;
   outline: 0;
@@ -351,6 +349,7 @@ body.is-resizing-pane::after {
 
 .search-box .topbar-search-input .clearable-input-field {
   height: 100%;
+  background: transparent;
 }
 
 .primary-button {
@@ -545,7 +544,6 @@ body.is-resizing-pane::after {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 8px;
   font-weight: var(--weight-semibold);
   color: #4d4f52;
 }

@@ -9,6 +9,7 @@
   export let newPassword = "";
   export let confirmPassword = "";
   export let error = "";
+  export let warning = "";
   export let busy = false;
   export let revealResetToken = 0;
   export let recoveryKey = "";
@@ -37,6 +38,7 @@
       <span class="vault-password-icon" aria-hidden="true"><ShieldCheck size={22} /></span>
       <p>请立即保存恢复文件。它只生成一次，可在忘记主密码时重置密码。</p>
     </div>
+    {#if warning}<p class="vault-password-error" role="alert">{warning}</p>{/if}
     <RecoveryFileConfirmation
       bind:acknowledged={recoveryAcknowledged}
       fileName={recoveryFileName}

@@ -36,7 +36,6 @@ pub(crate) fn replace_file_with_rollback(
     target_path: &Path,
     label: &str,
 ) -> Result<(), String> {
-    cleanup_replace_backups(target_path, label)?;
     let first_error = match fs::rename(temporary_path, target_path) {
         Ok(()) => return Ok(()),
         Err(error) => error,
@@ -56,6 +55,12 @@ pub(crate) fn replace_file_with_rollback(
         ".{file_name}.replace-backup-{}",
         std::process::id()
     ));
+    if rollback_path.exists() {
+        return Err(format!(
+            "无法替换{label}：存在尚未检查的替换恢复文件 {}",
+            rollback_path.display()
+        ));
+    }
     fs::rename(target_path, &rollback_path)
         .map_err(|error| format!("无法替换{label}：无法暂存旧文件：{error}"))?;
 
@@ -78,29 +83,6 @@ pub(crate) fn replace_file_with_rollback(
             }
         }
     }
-}
-
-fn cleanup_replace_backups(target_path: &Path, label: &str) -> Result<(), String> {
-    let parent = target_path
-        .parent()
-        .ok_or_else(|| format!("无法替换{label}：目标文件路径不正确"))?;
-    let file_name = target_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| format!("无法替换{label}：目标文件名不正确"))?;
-    let prefix = format!(".{file_name}.replace-backup-");
-    let entries = fs::read_dir(parent)
-        .map_err(|error| format!("无法替换{label}：无法检查旧替换备份：{error}"))?;
-    for entry in entries {
-        let entry =
-            entry.map_err(|error| format!("无法替换{label}：无法读取旧替换备份：{error}"))?;
-        let name = entry.file_name();
-        if name.to_string_lossy().starts_with(&prefix) {
-            fs::remove_file(entry.path())
-                .map_err(|error| format!("无法替换{label}：无法清理旧替换备份：{error}"))?;
-        }
-    }
-    Ok(())
 }
 
 pub(crate) fn restore_private_file(
@@ -225,5 +207,16 @@ mod private_file_tests {
         assert!(replace_file_with_rollback(&dir.0.join("missing.tmp"), &target, "测试").is_err());
         assert_eq!(fs::read(&target).unwrap(), b"keep");
         assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 1);
+    }
+    #[test]
+    fn replacement_never_removes_unvalidated_recovery_files() {
+        let dir = TestDirectory::new();
+        let target = dir.0.join("sample.bin");
+        let recovery = dir.0.join(".sample.bin.replace-backup-previous");
+        fs::write(&target, b"current").unwrap();
+        fs::write(&recovery, b"old-recovery").unwrap();
+        write_private_bytes(&target, b"updated", "测试").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"updated");
+        assert_eq!(fs::read(&recovery).unwrap(), b"old-recovery");
     }
 }

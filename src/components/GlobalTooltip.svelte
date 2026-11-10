@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createRawSnippet, onMount, untrack } from "svelte";
   import { Tooltip } from "bits-ui";
+  import "../styles/global-tooltip.css";
 
   type TooltipTarget = { element: HTMLElement; id: string; text: string; side: "top" | "bottom" };
 
@@ -132,27 +133,3 @@
     </Tooltip.Root>
   </Tooltip.Provider>
 {/if}
-
-<style>
-  :global(.global-tooltip) {
-    z-index: 1000;
-    width: max-content;
-    max-width: min(320px, calc(100vw - 16px));
-    padding: 7px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--tooltip-border, rgba(255, 255, 255, 0.14));
-    pointer-events: none;
-    color: #fff;
-    background: var(--tooltip-background, rgba(34, 38, 42, 0.96));
-    box-shadow: var(--tooltip-shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
-    font-size: var(--font-size-12);
-    font-weight: var(--weight-medium);
-    line-height: 1.3;
-    overflow-wrap: anywhere;
-    white-space: normal;
-  }
-
-  :global(.global-tooltip-arrow) {
-    color: var(--tooltip-background, rgba(34, 38, 42, 0.96));
-  }
-</style>

@@ -60,7 +60,7 @@ function isInvisibleControlCharacter(character: string, allowLineBreaks = false)
     || code === 0xfeff;
 }
 
-export function sanitizeTextInput(value: string, allowLineBreaks = false) {
+function sanitizeTextInput(value: string, allowLineBreaks = false) {
   return Array.from(value)
     .filter((character) => !isInvisibleControlCharacter(character, allowLineBreaks))
     .join("");
@@ -88,18 +88,8 @@ export function getTextInputValidationError(
   return null;
 }
 
-export function hasValidTextInput(value: string, maxLength: number, allowLineBreaks = false) {
+function hasValidTextInput(value: string, maxLength: number, allowLineBreaks = false) {
   return getTextInputValidationError(value, maxLength, allowLineBreaks) === null;
-}
-
-export function getTextFieldsValidationError(
-  fields: ReadonlyArray<readonly [label: string, value: string, maxLength: number, allowLineBreaks: boolean]>,
-) {
-  for (const [label, value, maxLength, allowLineBreaks] of fields) {
-    const error = getTextInputValidationError(value, maxLength, allowLineBreaks);
-    if (error) return `${label}${error}`;
-  }
-  return null;
 }
 
 export function sanitizePasswordInput(value: string) {

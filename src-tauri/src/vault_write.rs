@@ -25,7 +25,7 @@ pub(crate) fn save_payload(
     mut payload: Value,
     expected_revision: u64,
 ) -> Result<String, String> {
-    let (current_content, source) = load_existing_vault(&vault_path, &backup_path, &key)?;
+    let (current_content, source) = load_existing_vault(vault_path, backup_path, key)?;
     let current_revision = current_content
         .as_deref()
         .map(|current| validate_vault_payload(current).map(|value| vault_revision(&value)))
@@ -48,7 +48,7 @@ pub(crate) fn save_payload(
     let content =
         serde_json::to_string(&payload).map_err(|error| format!("无法编码资产库内容：{error}"))?;
     let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|error| format!("无法初始化加密器：{error}"))?;
+        Aes256Gcm::new_from_slice(key).map_err(|error| format!("无法初始化加密器：{error}"))?;
     let nonce = Nonce::generate();
     let ciphertext = cipher
         .encrypt(
@@ -86,7 +86,7 @@ pub(crate) fn save_payload(
         .sync_all()
         .map_err(|error| format!("无法同步临时资产库：{error}"))?;
     drop(temporary_file);
-    let verified = decrypt_vault_file(&temporary_path, &key)?;
+    let verified = decrypt_vault_file(&temporary_path, key)?;
     if verified != content {
         let _ = fs::remove_file(&temporary_path);
         return Err("加密资产库写入校验不一致".to_string());
@@ -102,13 +102,13 @@ pub(crate) fn save_payload(
     };
     if let Some(previous_backup_path) = &previous_backup_path {
         let _ = fs::remove_file(previous_backup_path);
-        fs::rename(&backup_path, previous_backup_path)
+        fs::rename(backup_path, previous_backup_path)
             .map_err(|error| format!("无法暂存旧资产库安全快照：{error}"))?;
     }
     if vault_path.exists() {
-        if let Err(error) = fs::rename(&vault_path, &backup_path) {
+        if let Err(error) = fs::rename(vault_path, backup_path) {
             if let Some(previous_backup_path) = &previous_backup_path {
-                let _ = fs::rename(previous_backup_path, &backup_path);
+                let _ = fs::rename(previous_backup_path, backup_path);
             }
             let _ = fs::remove_file(&temporary_path);
             return Err(format!("无法创建资产库安全快照：{error}"));
@@ -116,19 +116,19 @@ pub(crate) fn save_payload(
         // Directory fsync is best-effort; the file contents were already
         // flushed and the rotation remains recoverable if the platform refuses
         // to sync a directory.
-        let _ = sync_parent_directory(&backup_path);
+        let _ = sync_parent_directory(backup_path);
     }
-    if let Err(error) = fs::rename(&temporary_path, &vault_path) {
+    if let Err(error) = fs::rename(&temporary_path, vault_path) {
         let mut restore_errors = Vec::new();
         if backup_path.exists() && !vault_path.exists() {
-            if let Err(restore_error) = fs::rename(&backup_path, &vault_path) {
+            if let Err(restore_error) = fs::rename(backup_path, vault_path) {
                 restore_errors.push(format!("恢复主资产库失败：{restore_error}"));
             } else {
-                let _ = sync_parent_directory(&vault_path);
+                let _ = sync_parent_directory(vault_path);
             }
         }
         if let Some(previous_backup_path) = &previous_backup_path {
-            if let Err(restore_error) = fs::rename(previous_backup_path, &backup_path) {
+            if let Err(restore_error) = fs::rename(previous_backup_path, backup_path) {
                 restore_errors.push(format!("恢复旧安全快照失败：{restore_error}"));
             }
         }
@@ -142,7 +142,7 @@ pub(crate) fn save_payload(
             ))
         };
     }
-    let _ = sync_parent_directory(&vault_path);
+    let _ = sync_parent_directory(vault_path);
     if let Some(previous_backup_path) = &previous_backup_path {
         // The new primary and its recovery point are already durable. Failure
         // to remove an older recovery point must not turn a successful save into
@@ -150,7 +150,7 @@ pub(crate) fn save_payload(
         let _ = fs::remove_file(previous_backup_path);
     }
 
-    let persisted = decrypt_vault_file(&vault_path, &key)?;
+    let persisted = decrypt_vault_file(vault_path, key)?;
     if persisted != content {
         return Err("加密资产库落盘校验不一致".to_string());
     }

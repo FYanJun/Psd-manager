@@ -84,10 +84,11 @@ function prepareXlsxConfigImport(
   config: ConfigData,
 ) {
   const conflicts = findXlsxDeviceConflicts(state.items, config.items);
+  const summary = getConfigSummary(config);
   const confirmation: PendingConfirmation = {
     action: "import-config",
     title: "导入 Excel 工作簿",
-    message: `Excel 工作簿已校验：${config.items.length} 台设备、${getConfigSummary(config).accountCount} 个账号、${getConfigSummary(config).historyCount} 条密码历史。`,
+    message: `Excel 工作簿已校验：${config.items.length} 台设备、${summary.accountCount} 个账号、${summary.historyCount} 条密码历史。`,
     detail: "新设备会直接添加。设备类型和设备名称均相同的项目会列在下方；勾选即以工作簿整台替换，未勾选则保留本地设备。整台替换会删除本地该设备中未列在工作簿里的账号。",
     confirmLabel: "导入工作簿",
     xlsxImport: true,
@@ -96,8 +97,8 @@ function prepareXlsxConfigImport(
     summaryItems: [
       { label: "新增设备", value: `${config.items.length - conflicts.length} 台` },
       { label: "同名待选", value: `${conflicts.length} 台` },
-      { label: "工作簿账号", value: `${getConfigSummary(config).accountCount} 个` },
-      { label: "密码历史", value: `${getConfigSummary(config).historyCount} 条` },
+      { label: "工作簿账号", value: `${summary.accountCount} 个` },
+      { label: "密码历史", value: `${summary.historyCount} 条` },
     ],
   };
   return { config, format: "xlsx" as const, confirmation };

@@ -451,6 +451,10 @@ pub(crate) fn validate_vault_payload(content: &str) -> Result<Value, String> {
     Ok(value)
 }
 
+pub(crate) fn vault_revision(value: &Value) -> u64 {
+    value.get("revision").and_then(Value::as_u64).unwrap_or(0)
+}
+
 #[cfg(test)]
 mod vault_validation_tests {
     use super::*;
@@ -507,8 +511,4 @@ mod vault_validation_tests {
         assert!(validate_text_value("三字符", "name", 2, false).is_err());
         assert!(validate_text_value("两\n行", "notes", 3, true).is_ok());
     }
-}
-
-pub(crate) fn vault_revision(value: &Value) -> u64 {
-    value.get("revision").and_then(Value::as_u64).unwrap_or(0)
 }

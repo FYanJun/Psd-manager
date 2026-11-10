@@ -2,7 +2,6 @@ import type {
   ActiveDialog,
   ActivePopover,
   BulkPasswordMatch,
-  BulkUsernameSuggestion,
   ConfigTransferFormat,
   DeviceAccount,
   DeviceType,
@@ -26,8 +25,6 @@ export type WorkspaceSidebarView = {
 };
 
 export type WorkspaceTopbarView = {
-  backDisabled: boolean;
-  forwardDisabled: boolean;
   bulkPasswordDisabled: boolean;
   searchQuery: string;
   searchPlaceholder: string;
@@ -62,8 +59,6 @@ export type WorkspaceSidebarActions = {
 };
 
 export type WorkspaceTopbarActions = {
-  goBack(): void;
-  goForward(): void;
   updateSearchValue(value: string): void;
   openBulkPasswordDialog(): void;
   openGeneratorPanel(): void;
@@ -111,6 +106,7 @@ export type SettingsActions = {
   openSnapshotsDialog(): void;
   openExportConfigDialog(): void;
   chooseConfigFile(): void;
+  openEncryptedBackup(mode: "create" | "restore"): void;
   reset(): void;
 };
 
@@ -137,13 +133,11 @@ export type AppDialogView = {
   selectedAccountTargets: DeviceAccount[];
   selectedBulkTypeMeta: (DeviceTypeMeta & { count: number }) | undefined;
   selectedDeviceFormTypeMeta: DeviceTypeMeta;
-  bulkUsernameSuggestionsOpen: boolean;
   filteredBulkTypeRows: Array<DeviceTypeMeta & { count: number }>;
   filteredDeviceTypeOptions: DeviceTypeMeta[];
   deviceTypeOptionsLength: number;
   revealResetToken: number;
-  bulkUsernameSuggestions: BulkUsernameSuggestion[];
-  bulkPasswordMatches: BulkPasswordMatch[];
+  bulkPasswordAllMatches: BulkPasswordMatch[];
   bulkPasswordSelectedMatches: BulkPasswordMatch[];
 };
 
@@ -154,12 +148,11 @@ export type AppDialogActions = {
   setActiveDialog(dialog: ActiveDialog): void;
   toggleTypePicker(scope: TypePickerScope): void;
   setBulkPasswordDeviceType(deviceType: "全部设备" | DeviceType): void;
-  updateBulkUsernameSearch(username: string): void;
-  selectBulkUsername(suggestion: BulkUsernameSuggestion): void;
-  selectAllBulkPasswordMatches(): void;
+  clearBulkPasswordFilters(): void;
+  removeBulkPasswordSelection(keys: string[]): void;
   clearBulkPasswordMatches(): void;
   isBulkPasswordMatchSelected(match: BulkPasswordMatch): boolean;
-  toggleBulkPasswordMatch(match: BulkPasswordMatch): void;
+  setBulkPasswordMatchesSelected(matches: BulkPasswordMatch[], selected: boolean): void;
   saveBulkPasswordUpdate(): void;
   savePasswordUpdate(): void;
   saveAccount(): void;
@@ -170,11 +163,9 @@ export type AppDialogActions = {
 
 export type BulkPasswordDialogView = {
   selectedBulkTypeMeta: (DeviceTypeMeta & { count: number }) | undefined;
-  bulkUsernameSuggestionsOpen: boolean;
   filteredBulkTypeRows: Array<DeviceTypeMeta & { count: number }>;
   revealResetToken: number;
-  bulkUsernameSuggestions: BulkUsernameSuggestion[];
-  bulkPasswordMatches: BulkPasswordMatch[];
+  bulkPasswordAllMatches: BulkPasswordMatch[];
   bulkPasswordSelectedMatches: BulkPasswordMatch[];
 };
 
@@ -184,12 +175,11 @@ export type BulkPasswordDialogActions = {
   setActiveDialog(dialog: ActiveDialog): void;
   toggleTypePicker(scope: TypePickerScope): void;
   setBulkPasswordDeviceType(deviceType: "全部设备" | DeviceType): void;
-  updateBulkUsernameSearch(username: string): void;
-  selectBulkUsername(suggestion: BulkUsernameSuggestion): void;
-  selectAllBulkPasswordMatches(): void;
+  clearBulkPasswordFilters(): void;
+  removeBulkPasswordSelection(keys: string[]): void;
   clearBulkPasswordMatches(): void;
   isBulkPasswordMatchSelected(match: BulkPasswordMatch): boolean;
-  toggleBulkPasswordMatch(match: BulkPasswordMatch): void;
+  setBulkPasswordMatchesSelected(matches: BulkPasswordMatch[], selected: boolean): void;
   saveBulkPasswordUpdate(): void;
 };
 
@@ -282,6 +272,7 @@ export type DeviceDetailActions = {
 };
 
 export type PasswordGeneratorView = {
+  generatorRatio: number;
   canUseGeneratorForCurrentAccount: boolean;
   canUseGeneratorForBulkUpdate: boolean;
   selectedItem: VaultItem;
@@ -292,6 +283,8 @@ export type PasswordGeneratorView = {
 export type PasswordGeneratorActions = {
   closeGeneratorPanel(restoreDialog?: boolean): void;
   startGeneratorResize(event: PointerEvent): void;
+  cancelGeneratorResize(): boolean;
+  setGeneratorWidthRatio(ratio: number): void;
   generatePassword(): void;
   copyGeneratedPassword(): void;
   setGeneratorLength(length: number, syncInput?: boolean): void;

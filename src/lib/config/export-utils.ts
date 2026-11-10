@@ -2,7 +2,7 @@ import type { ConfigData, DeviceTypeMeta, VaultItem } from "../types";
 import { compareText } from "./shared";
 import { createUuid, isUuid } from "../uuid";
 
-export function compareVaultItemsForExport(left: VaultItem, right: VaultItem) {
+function compareVaultItemsForExport(left: VaultItem, right: VaultItem) {
   return compareText(left.deviceType, right.deviceType) ||
     compareText(left.deviceName, right.deviceName) ||
     compareText(left.ipAddress, right.ipAddress) ||

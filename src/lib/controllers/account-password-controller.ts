@@ -1,4 +1,3 @@
-import type { PendingConfirmation } from "../types";
 import { createAccountController } from "./account-controller";
 import { createPasswordController } from "./password-controller";
 import type {
@@ -26,17 +25,9 @@ export function createAccountPasswordController(port: AccountPasswordControllerP
     };
   }
 
-  async function executeConfirmation(confirmation: PendingConfirmation) {
-    if (["delete-account", "save-account", "save-account-password"].includes(confirmation.action)) {
-      return accountController.executeAccountConfirmation(confirmation);
-    }
-    return await passwordController.executePasswordConfirmation(confirmation);
-  }
-
   return {
     ...accountController,
     ...passwordController,
     derive,
-    executeConfirmation,
   };
 }

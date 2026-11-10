@@ -11,7 +11,7 @@ export type ConfirmationAccountTarget = { itemUuid: string; accountUuid: string 
 export type SortMode = "updatedDesc" | "nameAsc" | "typeAsc";
 export type DeviceTypeSortMode = "default" | "nameAsc" | "countDesc";
 export type ThemePreference = "system" | "light" | "dark";
-export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | "settings" | "security-password" | null;
+export type ActiveDialog = "device" | "type" | "password" | "account" | "bulk-password" | "export-config" | "snapshots" | "settings" | "security-password" | "backup" | null;
 export type ActivePopover =
   | "type-sort"
   | "device-sort"
@@ -90,13 +90,6 @@ export type DeviceTypeMeta = {
   color: string;
 };
 
-export type ViewState = {
-  selectedDeviceType: "全部设备" | DeviceType;
-  selectedId: number;
-  searchQuery: string;
-  sortMode: SortMode;
-};
-
 export type PasswordHistory = {
   uuid: string;
   id: number;
@@ -168,7 +161,7 @@ export type AccountForm = {
 
 export type BulkPasswordForm = {
   deviceType: "全部设备" | DeviceType;
-  username: string;
+  selectedKeys: string[];
   password: string;
   reason: string;
 };
@@ -198,10 +191,6 @@ export type BulkPasswordMatch = {
   username: string;
   tag: string;
   updatedAt: string;
-};
-
-export type BulkUsernameSuggestion = {
-  username: string;
 };
 
 export type GeneratorTarget = "current-account" | "bulk-password" | null;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { LucideIcon } from "@lucide/svelte";
+  import { Check, type LucideIcon } from "@lucide/svelte";
   import { DropdownMenu } from "bits-ui";
 
   export let icon: LucideIcon;
@@ -26,6 +26,7 @@
     <button {...props} type="button" {disabled}>
       <svelte:component this={icon} size={16} />
       <span>{label}</span>
+      {#if checked === true}<Check size={16} class="menu-item-check" aria-hidden="true" />{/if}
     </button>
   {/snippet}
 </svelte:component>

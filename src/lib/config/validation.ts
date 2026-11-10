@@ -160,7 +160,7 @@ export function assertValidConfigIdentities(config: ConfigData) {
   });
 }
 
-export function requireImportedUuid(value: unknown, label: string, used: Set<string>) {
+function requireImportedUuid(value: unknown, label: string, used: Set<string>) {
   const uuid = readString(value).trim().toLowerCase();
   if (!isUuid(uuid)) throw new ConfigImportError(`${label}缺少有效 UUID`);
   if (used.has(uuid)) throw new ConfigImportError(`${label}的 UUID 重复：${uuid}`);

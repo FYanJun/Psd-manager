@@ -7,6 +7,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
+  import { createBackupController, emptyBackupView } from "./lib/controllers/backup-controller";
+  import { backupPlatform } from "./lib/backup-platform";
   import OverlayLayer from "./components/OverlayLayer.svelte";
   import VaultLockScreen from "./components/VaultLockScreen.svelte";
   import VaultStorageStatus from "./components/VaultStorageStatus.svelte";
@@ -18,7 +20,7 @@ import { disable as disableAutostart, enable as enableAutostart, isEnabled as is
     SIDEBAR_DEFAULT_RATIO,
     initialItems,
   } from "./lib/constants";
-  import { createDefaultAppSettings, loadAppSettings, normalizeAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
+  import { createDefaultAppSettings, loadAppSettings, normalizeAppSettings, parseAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
   import {
     formatDeviceInfo,
   } from "./lib/device-commands";
@@ -50,7 +52,6 @@ import { captureEditableSelection, type EditableSelection, type EditableTarget }
     ActivePopover,
     BulkPasswordForm,
     BulkPasswordMatch,
-    BulkUsernameSuggestion,
     ConfigData,
     ConfigTransferFormat,
     ConfigImportMode,
@@ -70,10 +71,9 @@ import { captureEditableSelection, type EditableSelection, type EditableTarget }
     TypePickerScope,
     VaultItem,
     VaultSnapshot,
-    ViewState,
     VaultPasswordDialogMode,
   } from "./lib/types";
-  import { filterDeviceTypeChoices } from "./lib/utils";
+  import { filterDeviceTypeChoices, getErrorMessage } from "./lib/utils";
   import {
     normalizeDeviceTypeMetaList,
     normalizeVaultIdentityData,
@@ -97,7 +97,8 @@ import { captureEditableSelection, type EditableSelection, type EditableTarget }
   import { createAutoLockSession } from "./lib/auto-lock-session";
 import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/clipboard";
 
-  const vaultSecurity = createVaultSecurityApi(invoke);
+  let vaultPasswordWarning = "";
+  const vaultSecurity = createVaultSecurityApi(invoke, warning => (vaultPasswordWarning = warning));
   let items: VaultItem[] = initialItems;
   let customDeviceTypes: DeviceTypeMeta[] = [];
   let vaultSnapshots: VaultSnapshot[] = [];
@@ -149,10 +150,8 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   let accountForm: AccountForm = createEmptyAccountForm();
   let typeForm: TypeForm = { originalUuid: null, originalLabel: null, label: "", iconText: "", color: "blue" };
   let passwordForm = { password: "", reason: "" };
-  let bulkPasswordForm: BulkPasswordForm = { deviceType: "全部设备", username: "", password: "", reason: "" };
+  let bulkPasswordForm: BulkPasswordForm = { deviceType: "全部设备", selectedKeys: [], password: "", reason: "" };
   let bulkUsernameSearch = "";
-  let bulkUsernameSuggestionsOpen = false;
-  let bulkPasswordDeselectedKeys: string[] = [];
   let openTypePicker: TypePickerScope | null = null;
   let deviceTypeSearch = "";
   let bulkTypeSearch = "";
@@ -180,9 +179,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   let copyStatus = "";
   let statusActionLabel = "";
   let revealResetToken = 0;
-  let backStack: ViewState[] = [];
-  let forwardStack: ViewState[] = [];
-  let restoringView = false;
   let searchInput: HTMLInputElement | null = null;
   let sidebarRatio = SIDEBAR_DEFAULT_RATIO;
   let sidebarCollapsed = false;
@@ -200,6 +196,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   let canUseGeneratorForCurrentAccount = true;
   let canUseGeneratorForBulkUpdate = true;
   let bulkPasswordDisabled = true;
+  let backupView = emptyBackupView();
   let appSettings: AppSettings = createDefaultAppSettings();
   let settingsActiveSection: SettingsView["activeSection"] = "interface";
   let settingsLoaded = false;
@@ -297,12 +294,12 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   function reportSettingsSaveError(error: unknown) {
         showStatus(
-          `设置保存失败：${error instanceof Error ? error.message : String(error)}`,
+          `设置保存失败：${getErrorMessage(error ?? String(error))}`,
           6000,
           "重试保存",
           () => {
             void persistAppSettings().then(() => showStatus("应用设置已保存")).catch((retryError) => {
-              showStatus(`设置保存失败：${retryError instanceof Error ? retryError.message : String(retryError)}`, 6000);
+              showStatus(`设置保存失败：${getErrorMessage(retryError ?? String(retryError))}`, 6000);
             });
           },
         );
@@ -360,7 +357,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     beforeResize: () => {
       activePopover = null;
       openTypePicker = null;
-      bulkUsernameSuggestionsOpen = false;
     },
   });
 
@@ -418,9 +414,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       selectedAccountIds,
       searchQuery,
       sortMode,
-      backStack,
-      forwardStack,
-      restoringView,
       activePopover,
       passwordVisible,
       visibleHistoryIds,
@@ -433,9 +426,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       if (patch.selectedAccountIds) selectedAccountIds = patch.selectedAccountIds;
       if (patch.searchQuery !== undefined) searchQuery = patch.searchQuery;
       if (patch.sortMode) sortMode = patch.sortMode;
-      if (patch.backStack) backStack = patch.backStack;
-      if (patch.forwardStack) forwardStack = patch.forwardStack;
-      if (patch.restoringView !== undefined) restoringView = patch.restoringView;
       if ("activePopover" in patch) activePopover = patch.activePopover ?? null;
       if (patch.passwordVisible !== undefined) passwordVisible = patch.passwordVisible;
       if (patch.visibleHistoryIds) visibleHistoryIds = patch.visibleHistoryIds;
@@ -444,8 +434,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       searchInput?.focus();
       searchInput?.select();
     },
-    isDeviceTypeAvailable: (deviceType) => deviceType === "全部设备"
-      || getVisibleDeviceTypeOptions(customDeviceTypes).some((type) => type.label === deviceType),
   });
 
   const deviceTypeController = createDeviceTypeController({
@@ -472,7 +460,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     reportValidationError,
     createSafetySnapshot,
     offerSnapshotUndo,
-    pushNavigationState,
   });
 
   const deviceController = createDeviceController({
@@ -511,7 +498,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     openAddTypeDialog,
     showStatus,
     reportValidationError,
-    pushNavigationState,
     createSafetySnapshot,
     offerSnapshotUndo,
     setPendingConfirmation: (confirmation) => (pendingConfirmation = confirmation),
@@ -531,9 +517,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       passwordForm,
       bulkPasswordForm,
       bulkUsernameSearch,
-      bulkUsernameSuggestionsOpen,
       editableContext,
-      bulkPasswordDeselectedKeys,
       bulkTypeSearch,
       passwordVisible,
       visibleHistoryIds,
@@ -547,9 +531,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       if (patch.passwordForm !== undefined) passwordForm = patch.passwordForm;
       if (patch.bulkPasswordForm !== undefined) bulkPasswordForm = patch.bulkPasswordForm;
       if (patch.bulkUsernameSearch !== undefined) bulkUsernameSearch = patch.bulkUsernameSearch;
-      if (patch.bulkUsernameSuggestionsOpen !== undefined) bulkUsernameSuggestionsOpen = patch.bulkUsernameSuggestionsOpen;
       if ("editableContext" in patch) editableContext = patch.editableContext ?? null;
-      if (patch.bulkPasswordDeselectedKeys !== undefined) bulkPasswordDeselectedKeys = patch.bulkPasswordDeselectedKeys;
       if (patch.bulkTypeSearch !== undefined) bulkTypeSearch = patch.bulkTypeSearch;
       if (patch.passwordVisible !== undefined) passwordVisible = patch.passwordVisible;
       if (patch.visibleHistoryIds !== undefined) visibleHistoryIds = patch.visibleHistoryIds;
@@ -583,7 +565,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       passwordVisible,
       visibleHistoryIds,
       openTypePicker,
-      bulkUsernameSuggestionsOpen,
       editableContext,
     }),
     write: (patch) => {
@@ -599,7 +580,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       if (patch.passwordVisible !== undefined) passwordVisible = patch.passwordVisible;
       if (patch.visibleHistoryIds) visibleHistoryIds = patch.visibleHistoryIds;
       if ("openTypePicker" in patch) openTypePicker = patch.openTypePicker ?? null;
-      if (patch.bulkUsernameSuggestionsOpen !== undefined) bulkUsernameSuggestionsOpen = patch.bulkUsernameSuggestionsOpen;
       if ("editableContext" in patch) editableContext = patch.editableContext ?? null;
     },
     hasSelectedDevice: () => hasSelectedDevice,
@@ -617,7 +597,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     read: (): KeyboardState => ({
       vaultStorageState,
       openTypePicker,
-      bulkUsernameSuggestionsOpen,
       pendingConfirmation,
       activeDialog,
       generatorPanelOpen,
@@ -627,12 +606,9 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       selectedItemId: selectedItem.id,
       selectedAccountId: selectedAccount.id,
       hasSelectedDevice,
-      backCount: backStack.length,
-      forwardCount: forwardStack.length,
     }),
     write: (patch) => {
       if ("openTypePicker" in patch) openTypePicker = patch.openTypePicker ?? null;
-      if (patch.bulkUsernameSuggestionsOpen !== undefined) bulkUsernameSuggestionsOpen = patch.bulkUsernameSuggestionsOpen;
       if ("pendingConfirmation" in patch) pendingConfirmation = patch.pendingConfirmation ?? null;
       if ("activeDialog" in patch) activeDialog = patch.activeDialog ?? null;
       if ("activePopover" in patch) activePopover = patch.activePopover ?? null;
@@ -647,8 +623,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       saveActiveDialog,
       selectDevice,
       focusSearch: focusSearchInput,
-      goBack,
-      goForward,
       openAddAccount: openAddAccountDialog,
       openAddDevice: () => openAddDeviceDialog(),
       openGenerator: () => openGeneratorPanel(),
@@ -668,7 +642,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     isLockEnabled: () => vaultLockEnabled,
     isLocked: () => vaultLocked,
     hasPendingRecoveryFile: () => Boolean(recoveryKey && (!recoveryFileSaved || !recoveryAcknowledged)),
-    isSecurityOperationBusy: () => vaultPasswordBusy || recoveryBusy || recoveryFileBusy || confirmationBusy,
+    isSecurityOperationBusy: () => vaultPasswordBusy || recoveryBusy || recoveryFileBusy || confirmationBusy || backupView.busy,
     lock: lockVaultSession,
     clearSensitiveState: clearSensitiveVaultState,
     writeViewState: (state) => {
@@ -724,6 +698,42 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     isExportPasswordConfigured: () => vaultLockEnabled,
     verifyExportPassword: (password) => vaultSecurity.verify(password),
   });
+
+  const backupController = createBackupController({
+    available: () => isTauri() && hydrated && !vaultLocked && vaultStorageState === "ready",
+    capture: () => createPersistedVaultState(0),
+    settings: () => appSettings,
+    flushVault: () => vaultStorageController.persistImmediately(),
+    flushSettings: persistAppSettings,
+    createSafetySnapshot: () => createSafetySnapshot("恢复加密备份前自动保存"),
+    applyVault: (data) => {
+      applyPersistedVaultState(data);
+      resetWorkspaceForDataset(items);
+    },
+    persistRestored: () => vaultStorageController.persistImmediately(),
+    restoreSettings: async (content) => {
+      if (settingsReadFailed) throw new Error("资产库已恢复，但原应用设置尚未恢复，已阻止覆盖偏好");
+      settingsSaveSession.cancel();
+      await settingsSaveSession.settled();
+      const current = JSON.stringify(appSettings);
+      const merged = await invoke<string>("merge_backup_settings", { current, imported: content });
+      if (JSON.stringify(appSettings) !== current) throw new Error("资产库已恢复，但应用设置发生变化，未覆盖当前偏好");
+      appSettings = parseAppSettings(JSON.parse(merged));
+      applyAppSettings(appSettings);
+      try { await persistAppSettings(); }
+      catch (error) { reportSettingsSaveError(error); throw error; }
+    },
+    publish: (view) => (backupView = view),
+    close: () => { settingsActiveSection = "data"; activeDialog = "settings"; },
+  }, backupPlatform);
+
+  function openEncryptedBackup(mode: "create" | "restore") {
+    if (!isTauri() || vaultLocked || vaultStorageState !== "ready") return;
+    activePopover = null;
+    dataDialogReturnToSettings = false;
+    backupController.open(mode);
+    activeDialog = "backup";
+  }
 
   function applyPersistedVaultState(parsed: PersistedVaultState) {
     items = parsed.items;
@@ -785,7 +795,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       applyAppSettings(appSettings, true);
       settingsLoaded = true;
       await windowSettingsController.mount();
-      showStatus(`应用设置读取失败，已使用默认设置：${error instanceof Error ? error.message : String(error)}`, 6000);
+      showStatus(`应用设置读取失败，已使用默认设置：${getErrorMessage(error ?? String(error))}`, 6000);
     }
     if (isTauri()) {
       try {
@@ -797,7 +807,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           try {
             await enableAutostart();
           } catch (error) {
-            showStatus(`开机自启配置更新失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+            showStatus(`开机自启配置更新失败：${getErrorMessage(error ?? String(error))}`, 6000);
           }
         }
         if (!settingsReadFailed && appSettings.interface.startOnBoot !== enabled) {
@@ -808,7 +818,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           await persistAppSettings();
         }
       } catch (error) {
-        showStatus(`开机自启状态读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+        showStatus(`开机自启状态读取失败：${getErrorMessage(error ?? String(error))}`, 6000);
       }
       try {
         appVersion = await getVersion();
@@ -825,7 +835,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
         environmentStatus = "ready";
       } catch (error) {
         environmentStatus = "failed";
-        showStatus(`运行环境读取失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+        showStatus(`运行环境读取失败：${getErrorMessage(error ?? String(error))}`, 6000);
       }
     }
   }
@@ -839,7 +849,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     try {
       await platformOperation("system", () => invoke("open_storage_path", { kind }));
     } catch (error) {
-      showStatus(`打开目录失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      showStatus(`打开目录失败：${getErrorMessage(error ?? String(error))}`, 6000);
     }
   }
 
@@ -906,10 +916,10 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       initializeSettings: initializeAppSettings,
       initializeVault: initializeVaultLock,
       onTrayError: (error) => showStatus(
-        "托盘锁定监听初始化失败：" + (error instanceof Error ? error.message : String(error ?? "未知错误")), 6000,
+        "托盘锁定监听初始化失败：" + getErrorMessage(error, "未知错误"), 6000,
       ),
       onStartupError: (error) => showStatus(
-        "启动初始化失败：" + (error instanceof Error ? error.message : String(error ?? "未知错误")), 6000,
+        "启动初始化失败：" + getErrorMessage(error, "未知错误"), 6000,
       ),
     });
     void startup.start();
@@ -988,7 +998,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     passwordForm;
     bulkPasswordForm;
     bulkUsernameSearch;
-    bulkPasswordDeselectedKeys;
     bulkTypeSearch;
     passwordVisible;
     visibleHistoryIds;
@@ -1037,30 +1046,13 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     ? "搜索设备名、连接地址、资产编号或位置"
     : `在${selectedDeviceType}中搜索设备名、连接地址、资产编号或位置`;
   $: sortedHistory = sortPasswordHistory(selectedAccount, historySortDesc);
-  $: bulkUsernameSuggestions = accountPasswordDerived.bulkUsernameSuggestions;
-  $: bulkPasswordMatches = accountPasswordDerived.bulkPasswordMatches;
+  $: bulkPasswordAllMatches = accountPasswordDerived.bulkPasswordAllMatches;
   $: bulkPasswordSelectedMatches = accountPasswordDerived.bulkPasswordSelectedMatches;
   $: {
     generatorTarget;
     canUseGeneratorForCurrentAccount = accountPasswordController.canUseGeneratorForCurrentAccount();
     canUseGeneratorForBulkUpdate = accountPasswordController.canUseGeneratorForBulkUpdate();
   }
-  function pushNavigationState() {
-    navigationController.push();
-  }
-
-  function goBack() {
-    searchSession.cancel();
-    navigationController.back();
-    searchDraft = searchQuery;
-  }
-
-  function goForward() {
-    searchSession.cancel();
-    navigationController.forward();
-    searchDraft = searchQuery;
-  }
-
   function updateSearchValue(value: string) {
     searchDraft = value;
     searchSession.update(value);
@@ -1168,6 +1160,8 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   }
 
   function clearSensitiveVaultState() {
+    backupController.clear();
+    vaultPasswordWarning = "";
     searchSession.cancel();
     passwordStrengthSession.reset();
     items = initialItems;
@@ -1193,10 +1187,8 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     passwordVisible = false;
     accountForm = createEmptyAccountForm();
     passwordForm = { password: "", reason: "" };
-    bulkPasswordForm = { deviceType: "全部设备", username: "", password: "", reason: "" };
+    bulkPasswordForm = { deviceType: "全部设备", selectedKeys: [], password: "", reason: "" };
     bulkUsernameSearch = "";
-    bulkUsernameSuggestionsOpen = false;
-    bulkPasswordDeselectedKeys = [];
     bulkTypeSearch = "";
     deviceTypeSearch = "";
     openTypePicker = null;
@@ -1226,7 +1218,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   }
 
   async function lockVaultNow() {
-    if (confirmationBusy) {
+    if (confirmationBusy || backupView.busy) {
       autoLockSession.schedule();
       return;
     }
@@ -1246,13 +1238,13 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       if (vaultStorageState === "ready" && vaultStorageController.hasUnsavedChanges()) {
         await vaultStorageController.persistImmediately();
       }
-      if (confirmationBusy) {
+      if (confirmationBusy || backupView.busy) {
         autoLockSession.schedule();
         return;
       }
       await lockVaultSession();
     } catch (error) {
-      showStatus(`锁定资产库失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      showStatus(`锁定资产库失败：${getErrorMessage(error ?? String(error))}`, 6000);
       autoLockSession.schedule();
     }
   }
@@ -1280,7 +1272,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
         vaultLocked = false;
         vaultUnlockError = "";
       } else {
-        vaultUnlockError = error instanceof Error ? error.message : String(error ?? "解锁失败");
+        vaultUnlockError = getErrorMessage(error, "解锁失败");
         await vaultSecurity.lock().catch(() => undefined);
       }
       vaultUnlockPassword = "";
@@ -1314,12 +1306,13 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     } catch (error) {
       vaultLockEnabled = true;
       vaultLocked = true;
-      vaultUnlockError = `无法读取启动密码状态：${error instanceof Error ? error.message : String(error)}`;
+      vaultUnlockError = `无法读取启动密码状态：${getErrorMessage(error ?? String(error))}`;
       vaultStorageController.suspend();
     }
   }
 
   function openVaultPasswordDialog(mode: VaultPasswordDialogMode) {
+    vaultPasswordWarning = "";
     vaultPasswordDialogMode = mode;
     vaultPasswordForm = { currentPassword: "", newPassword: "", confirmPassword: "" };
     vaultPasswordError = "";
@@ -1367,7 +1360,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       settingsActiveSection = "security";
       showStatus("启动密码已关闭");
     } catch (error) {
-      vaultPasswordError = error instanceof Error ? error.message : String(error ?? "启动密码操作失败");
+      vaultPasswordError = getErrorMessage(error, "启动密码操作失败");
     } finally {
       vaultPasswordBusy = false;
     }
@@ -1403,19 +1396,22 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       vaultUnlockError = "";
       vaultUnlockPassword = "";
       autoLockSession.schedule();
-      showStatus(vaultStorageState === "ready" ? "资产库已恢复" : "恢复文件已保存，请处理资产库读取问题");
+      showStatus(vaultPasswordWarning || (vaultStorageState === "ready" ? "资产库已恢复" : "恢复文件已保存，请处理资产库读取问题"), vaultPasswordWarning ? 12000 : 2500);
+      vaultPasswordWarning = "";
       return;
     }
     activeDialog = "settings";
     settingsActiveSection = "security";
     autoLockSession.schedule();
-    showStatus(passwordMode === "set" ? "启动密码已开启" : "启动密码已修改");
+    showStatus(vaultPasswordWarning || (passwordMode === "set" ? "启动密码已开启" : "启动密码已修改"), vaultPasswordWarning ? 12000 : 2500);
+    vaultPasswordWarning = "";
   }
 
   async function recoverVaultPassword(newPassword: string, manualRecoveryKey = "") {
     const recoveryInput = manualRecoveryKey || recoveryFileContent;
     if (recoveryBusy || !recoveryInput) return;
     recoveryBusy = true;
+    vaultPasswordWarning = "";
     recoveryError = "";
     let passwordRecovered = false;
     try {
@@ -1446,7 +1442,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       } else {
         recoveryKey = "";
         recoveryFileSaved = false;
-        recoveryError = error instanceof Error ? error.message : String(error ?? "恢复失败");
+        recoveryError = getErrorMessage(error, "恢复失败");
         await vaultSecurity.lock().catch(() => undefined);
       }
     } finally {
@@ -1529,7 +1525,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           // Keep the original failure visible if the platform refuses rollback.
         }
       }
-      showStatus(`开机自启设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      showStatus(`开机自启设置失败：${getErrorMessage(error ?? String(error))}`, 6000);
     } finally {
       autostartUpdating = false;
     }
@@ -1590,7 +1586,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           }
         }
       }
-      showStatus(`恢复设置失败：${error instanceof Error ? error.message : String(error)}`, 6000);
+      showStatus(`恢复设置失败：${getErrorMessage(error ?? String(error))}`, 6000);
       return false;
     }
   }
@@ -1786,6 +1782,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   function closeOverlays() {
     if (confirmationBusy) return;
+    if (activeDialog === "backup") { backupController.close(); return; }
     const returnToSettings = dataDialogReturnToSettings
       && (activeDialog === "export-config" || activeDialog === "snapshots");
     const returnToSecuritySettings = activeDialog === "security-password";
@@ -1913,14 +1910,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     accountPasswordController.setBulkPasswordDeviceType(deviceType);
   }
 
-  function updateBulkUsernameSearch(username: string) {
-    accountPasswordController.updateBulkUsernameSearch(username);
-  }
-
-  function selectBulkUsername(suggestion: BulkUsernameSuggestion) {
-    accountPasswordController.selectBulkUsername(suggestion);
-  }
-
   function setDeviceFormType(deviceType: DeviceType) {
     deviceController.setFormType(deviceType);
   }
@@ -1931,14 +1920,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   function isBulkPasswordMatchSelected(match: BulkPasswordMatch) {
     return accountPasswordController.isBulkPasswordMatchSelected(match);
-  }
-
-  function toggleBulkPasswordMatch(match: BulkPasswordMatch) {
-    accountPasswordController.toggleBulkPasswordMatch(match);
-  }
-
-  function selectAllBulkPasswordMatches() {
-    accountPasswordController.selectAllBulkPasswordMatches();
   }
 
   function clearBulkPasswordMatches() {
@@ -2027,7 +2008,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       }
     } catch (error) {
       if (pendingConfirmation !== confirmation) return;
-      const reason = error instanceof Error ? error.message : String(error ?? "");
+      const reason = getErrorMessage(error, "");
       confirmationError = reason ? `操作失败：${reason}` : "操作失败：发生未知错误";
     } finally {
       confirmationBusy = false;
@@ -2086,12 +2067,11 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     setActiveDialog: (dialog: ActiveDialog) => (activeDialog = dialog),
     toggleTypePicker,
     setBulkPasswordDeviceType,
-    updateBulkUsernameSearch,
-    selectBulkUsername,
-    selectAllBulkPasswordMatches,
+    clearBulkPasswordFilters: () => accountPasswordController.clearBulkPasswordFilters(),
+    removeBulkPasswordSelection: (keys: string[]) => accountPasswordController.removeBulkPasswordSelection(keys),
     clearBulkPasswordMatches,
     isBulkPasswordMatchSelected,
-    toggleBulkPasswordMatch,
+    setBulkPasswordMatchesSelected: (matches: BulkPasswordMatch[], selected: boolean) => accountPasswordController.setBulkPasswordMatchesSelected(matches, selected),
     saveBulkPasswordUpdate,
     savePasswordUpdate,
     saveAccount,
@@ -2118,6 +2098,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     openSnapshotsDialog,
     openExportConfigDialog,
     chooseConfigFile,
+    openEncryptedBackup,
     reset: requestResetSettings,
   };
 
@@ -2187,8 +2168,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       openTypeContextMenu,
     },
     topbar: {
-      goBack,
-      goForward,
       updateSearchValue,
       openBulkPasswordDialog: () => openBulkPasswordDialog(),
       openGeneratorPanel: () => openGeneratorPanel(),
@@ -2209,6 +2188,8 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   const passwordGeneratorActions = {
     closeGeneratorPanel,
     startGeneratorResize: (event: PointerEvent) => startPaneResize("generator", event),
+    cancelGeneratorResize: () => layoutController.cancelResize(),
+    setGeneratorWidthRatio: (ratio: number) => layoutController.setGeneratorRatio(ratio),
     generatePassword,
     copyGeneratedPassword: () => copyText(generatedPassword, "生成密码"),
     setGeneratorLength,
@@ -2230,13 +2211,11 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     selectedAccountTargets,
     selectedBulkTypeMeta,
     selectedDeviceFormTypeMeta,
-    bulkUsernameSuggestionsOpen,
     filteredBulkTypeRows,
     filteredDeviceTypeOptions,
     deviceTypeOptionsLength: deviceTypeOptions.length,
     revealResetToken,
-    bulkUsernameSuggestions,
-    bulkPasswordMatches,
+    bulkPasswordAllMatches,
     bulkPasswordSelectedMatches,
   };
 
@@ -2301,8 +2280,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       canDeleteSelectedDeviceType,
     },
     topbar: {
-      backDisabled: backStack.length === 0,
-      forwardDisabled: forwardStack.length === 0,
       bulkPasswordDisabled,
       searchQuery: searchDraft,
       searchPlaceholder,
@@ -2320,6 +2297,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   };
 
   $: passwordGeneratorView = {
+    generatorRatio,
     canUseGeneratorForCurrentAccount,
     canUseGeneratorForBulkUpdate,
     selectedItem,
@@ -2410,11 +2388,14 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       actionLabel: statusActionLabel,
       runAction: runStatusAction,
     }}
+    {backupView}
+    backupActions={backupController}
     settingsView={settingsView}
     settingsActions={settingsActions}
     {vaultPasswordDialogMode}
     {vaultPasswordForm}
     {vaultPasswordError}
+    {vaultPasswordWarning}
     {vaultPasswordBusy}
     bind:recoveryAcknowledged
     {recoveryKey}
@@ -2440,6 +2421,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     chooseRecoveryFile={chooseRecoveryFile}
     recoveryBusy={recoveryBusy}
     recoveryError={recoveryError}
+    recoveryWarning={vaultPasswordWarning}
     recoveryResultFile={recoveryKey}
     bind:recoveryResultAcknowledged={recoveryAcknowledged}
     recoveryFileContent={recoveryFileContent}

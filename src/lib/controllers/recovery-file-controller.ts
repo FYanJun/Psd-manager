@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../utils";
 import { isTauri } from "@tauri-apps/api/core";
 import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "../platform-files";
 
@@ -101,7 +102,7 @@ export function createRecoveryFileController(port: RecoveryFilePort, io: Recover
     } catch (error) {
       port.write({
         recoveryFileSaved: false,
-        recoveryFileError: error instanceof Error ? error.message : String(error ?? "恢复文件保存失败"),
+        recoveryFileError: getErrorMessage(error, "恢复文件保存失败"),
       });
     } finally {
       busy = false;
@@ -134,7 +135,7 @@ export function createRecoveryFileController(port: RecoveryFilePort, io: Recover
       port.write({
         recoveryFileContent: "",
         recoveryFileName: "",
-        recoveryError: error instanceof Error ? error.message : String(error ?? "恢复文件读取失败"),
+        recoveryError: getErrorMessage(error, "恢复文件读取失败"),
       });
     } finally {
       busy = false;

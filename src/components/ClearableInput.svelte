@@ -171,7 +171,7 @@
 </div>
 
 <style>
-  .clearable-input-field { position: relative; isolation: isolate; border-radius: 8px; background: var(--surface-step-1); }
+  .clearable-input-field { position: relative; isolation: isolate; border-radius: 8px; background: var(--field); }
 
   .clearable-input-field :global(input) { position: relative; z-index: 1; background: transparent !important; }
   .clearable-input-actions { position: relative; z-index: 2; }

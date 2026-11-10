@@ -32,14 +32,10 @@
 
 <section class="workspace">
   <Topbar
-    backDisabled={view.topbar.backDisabled}
-    forwardDisabled={view.topbar.forwardDisabled}
     bulkPasswordDisabled={view.topbar.bulkPasswordDisabled}
     bind:searchInput
     searchQuery={view.topbar.searchQuery}
     searchPlaceholder={view.topbar.searchPlaceholder}
-    goBack={actions.topbar.goBack}
-    goForward={actions.topbar.goForward}
     updateSearchValue={actions.topbar.updateSearchValue}
     openBulkPasswordDialog={actions.topbar.openBulkPasswordDialog}
     openGeneratorPanel={actions.topbar.openGeneratorPanel}

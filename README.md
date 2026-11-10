@@ -1,153 +1,155 @@
 # Psd Manager（密码管理器）
 
-> 面向服务器、网络设备和基础设施资产的本地加密密码管理器。
+面向服务器、网络设备和基础设施资产的本地密码管理工具，使用 Tauri、Svelte 和 Rust 构建。
 
 [![最新版本](https://img.shields.io/github/v/release/FYanJun/Psd-manager?display_name=tag)](https://github.com/FYanJun/Psd-manager/releases/latest)
 [![构建发布](https://github.com/FYanJun/Psd-manager/actions/workflows/release.yml/badge.svg)](https://github.com/FYanJun/Psd-manager/actions/workflows/release.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-Psd Manager（密码管理器）用于集中管理真实设备资产、设备账号、当前密码和密码历史。它适合个人或小团队在本地维护服务器、交换机、路由器、NAS、工控机等设备的登录信息，不依赖在线账号，也不要求把资产库上传到云端。
+## 项目介绍
 
-## 功能概览
+Psd Manager 用于集中整理设备信息、登录账号、当前密码和密码修改历史，适合个人或小团队的设备运维资料管理。例如，为服务器、交换机、路由器、NAS 和工控机建立分类，在同一台设备下维护多个账号，并在需要时快速查找、复制或更新密码。
 
-### 设备与账号
+应用在本机保存加密资产库，无需注册在线账号或部署服务端。当前以单机桌面使用为主，不提供多人实时协作和云同步。
 
-- 使用三栏工作区管理设备类型、设备列表和设备详情。
-- 记录设备名称、设备类型、连接地址、资产编号、位置和备注。
-- 一台设备可以保存多个账号，每个账号独立记录用户名、密码、标签、备注和密码历史。
-- 设备类型支持预设颜色和自定义取色，方便快速区分不同类别的设备。
-- 支持按设备类型、设备名称、连接地址、资产编号和位置搜索；选择具体设备类型后，搜索范围会自动限制在当前类型内。
+## 主要功能
 
-### 密码操作
+- **设备与账号管理**：按设备类型分类，记录设备名称、连接地址、资产编号、位置和备注；一台设备可维护多个账号。
+- **搜索与整理**：搜索设备名称、类型、连接地址、编号和位置，支持分类筛选与排序。
+- **密码与历史**：查看、复制、更新密码，保留旧密码和修改原因；支持按设备和账号筛选后批量更新本地记录。
+- **密码生成器**：按长度、字符类型及相似字符排除等规则生成随机密码，可填入改密表单。
+- **本地数据保护**：加密保存资产库，支持启动主密码、闲置自动锁定和恢复密钥文件。
+- **快照与加密备份**：通过本地快照恢复误删或覆盖的数据，也可创建独立密码保护的 `.psdbackup` 文件，用于备份和跨电脑恢复。
+- **导入与导出**：支持 JSON、YAML 和 Excel（XLSX），Excel 包含设备账号和密码历史两张工作表。
+- **桌面体验**：三栏工作区，支持浅色、深色、跟随系统主题，以及系统托盘、开机自启和单实例运行。
 
-- 更新单个账号密码，自动保留旧密码和修改原因。
-- 按设备类型和用户名匹配多个账号，批量更新选中的账号密码。
-- 删除设备、账号、设备类型、替换密码和覆盖导入等高风险操作均需要二次确认。
-- 密码更新后默认保持隐藏，窗口失焦时会自动隐藏已经显示的密码。
-- 内置随机密码生成器，支持 3-24 位长度、大写字母、小写字母、数字、符号、排除相似字符、避免重复字符和最少字符数量规则。
-- 随机密码生成器只有从修改密码或批量改密流程打开时，才可以把结果填入对应表单；独立打开时只能生成和复制密码。
+密码更新功能修改的是本地资产库记录，不会自动连接设备并修改设备上的实际密码。
 
-### 数据保护
+## 支持平台与下载
 
-- 删除、导入和恢复前自动创建本地加密数据快照，支持撤销和手动恢复。
-- 支持可选的启动锁定和闲置自动锁定。
-- 支持生成恢复密钥文件，忘记主密码时可以使用恢复文件设置新密码。
-- 关闭窗口默认隐藏到系统托盘并保留进程；只有托盘菜单中的“关闭程序”才会退出应用。
-- 支持窗口最小化、托盘恢复、开机自启和单实例运行。
+前往 [GitHub Releases](https://github.com/FYanJun/Psd-manager/releases/latest) 下载对应平台的版本。
 
-### 配置文件
-
-- 支持 JSON、CSV 和 YAML 三种格式导入导出。
-- 导入文件会先完成整体解析、结构校验、名称校验、UUID 校验和重复检查。
-- 导入时可以选择“仅新增”或“全部覆盖”，确认窗口会显示实际影响的设备、账号、密码历史和设备类型数量。
-- 设备类型、设备、账号和密码历史均使用独立 UUID，改名不会导致记录被识别为新数据。
-- 导出的配置包含明文账号、密码和密码历史，请只保存到可信位置。
-
-### 界面与偏好
-
-- 支持浅色、深色和跟随系统主题。
-- 支持标准和紧凑界面密度，以及小号、标准和大号字体。
-- 支持 Tooltip、三栏宽度、设备排序、设备类型排序、上次视图和窗口大小记忆。
-- 设置独立保存在应用数据目录中，不会混入资产库或导出的配置文件。
-
-## 下载
-
-前往 [GitHub Releases](https://github.com/FYanJun/Psd-manager/releases/latest) 下载最新版本。
-
-| 平台 | 文件 | 说明 |
+| 平台 | 发布形式 | 文件名 |
 | --- | --- | --- |
-| macOS Apple Silicon | `PsdManager-{version}-macos-arm64-installer.dmg` | 打开安装包后将应用拖入“应用程序” |
-| Windows x64 安装版 | `PsdManager-{version}-windows-x64-installer.exe` | 按安装向导完成安装 |
-| Windows x64 免安装版 | `PsdManager-{version}-windows-x64-portable.exe` | 下载后双击即可运行，不需要安装 |
+| Windows x64 | 安装版 | `PsdManager-{version}-windows-x64-installer.exe` |
+| Windows x64 | 免安装版 | `PsdManager-{version}-windows-x64-portable.exe` |
+| macOS Apple Silicon（arm64） | DMG 安装包 | `PsdManager-{version}-macos-arm64-installer.dmg` |
+
+当前发布流程未提供 Linux、Intel Mac 和 Windows ARM64 安装包，也未完成这些平台的运行验证。
 
 ### Windows
 
-Windows 版本需要 Microsoft Edge WebView2 Runtime。Windows 10/11 通常已经内置；如果应用无法启动，请先安装 [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
+面向 Windows 10/11 桌面环境，需要 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。如果系统缺少此运行时，请先安装。
+
+安装版按向导安装；免安装版可直接运行，数据保存在程序同目录的 `Psd Manager/` 文件夹中。移动或备份免安装版时，请同时保留该文件夹，并将程序放在可写目录中。
 
 ### macOS
 
-当前 macOS 安装包尚未配置 Apple Developer ID 签名和公证。若系统提示“应用已损坏，无法打开”，将应用拖入“应用程序”后执行：
+打开 DMG，将应用拖入“应用程序”目录。
+
+当前发布包尚未配置 Apple Developer ID 签名和公证。如果系统提示“应用已损坏，无法打开”，请先确认文件来自本项目可信的 Release，再执行：
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Psd Manager.app"
 ```
 
-## 数据与安全
+### 使用提示
 
-桌面版资产库使用 AES-256-GCM 加密，随机密钥和加密资产库一起保存在本机应用数据目录中。启用启动锁定后，主密码只用于解锁资产库，不会保存到应用设置中，也不会发送到网络。
+关闭主窗口后，程序会驻留系统托盘；需要完全退出时，请使用托盘菜单中的“关闭程序”。
 
-应用数据目录中主要包含：
+## 数据与备份
 
-| 文件 | 作用 |
-| --- | --- |
-| `vault.enc` | 加密主资产库 |
-| `vault.enc.bak` | 最近一次成功保存前的安全备份 |
-| `vault.key` | 资产库加密密钥 |
-| `vault.lock` | 资产库读写锁及启动密码保护信息 |
-| `settings.json` | 应用界面、窗口和密码生成器设置 |
+资产库使用 AES-256-GCM 加密。启用启动主密码后，使用 Argon2 派生密钥保护资产库密钥；未启用时，资产库密钥保存在本机。应用锁不能替代操作系统账号和设备本身的安全保护。
 
-可以在应用的“关于”页面查看并打开安装路径和数据存储路径。不同系统的实际目录由应用运行环境决定，请以应用页面显示的路径为准。
+可以在“设置 → 关于”查看当前运行模式及实际数据目录。数据目录主要分为：
 
-这套方案用于避免明文资产库落盘和误读，不能抵御已经取得当前系统账号文件访问权限的攻击者。JSON、CSV、YAML 导出文件不加密，导出后请自行妥善保护。
+```text
+Psd Manager/
+├── data/      # 加密资产库、密钥配置和本地数据备份
+└── config/    # 应用偏好和本机窗口状态
+```
 
-## 导入与导出规则
+在“设置 → 数据”中可以创建加密备份或从备份恢复。加密备份使用独立备份密码，可用于跨电脑迁移；请妥善保存备份密码和恢复密钥文件。
 
-当前配置格式为 v3，使用中文字段名和独立 UUID。JSON/YAML 按设备类型分组，CSV 使用一行一个账号的扁平结构。
-
-- JSON、CSV、YAML 都使用 `连接地址` 字段，不再使用旧的 `IP地址` 或 `设备信息` 字段。
-- 当前格式必须包含设备类型 UUID、设备 UUID、账号 UUID 和密码历史 UUID。
-- “仅新增”只按 UUID 识别已有记录；已有设备字段、账号当前字段和当前密码不会被修改，只会补充本地缺少的密码历史。
-- “全部覆盖”会以导入文件整体替换当前设备、账号、密码历史和设备类型。
-- 文件解析、校验或身份冲突失败时不会执行导入，并会显示具体错误原因。
-- 当前版本不兼容旧版 INI、旧版英文 JSON、旧版分段 CSV 或缺少 UUID 的配置文件。
+**JSON、YAML 和 Excel 导出文件包含明文账号、密码和密码历史。** 请仅保存到可信位置；需要完整加密备份时，使用 `.psdbackup` 功能。
 
 ## 本地开发
 
-环境要求：
+### 环境要求
 
-- Node.js 20 或更高版本
-- Rust stable
-- macOS 或 Windows 桌面环境
+- **Node.js 24 LTS** 和 npm，推荐使用此版本进行开发。
+- **Rust stable**，建议通过 [rustup](https://rustup.rs/) 安装。
+- **macOS**：安装 Xcode Command Line Tools，可执行 `xcode-select --install`。
+- **Windows**：安装 Visual Studio Build Tools，勾选“使用 C++ 的桌面开发”及 Windows SDK，并安装 WebView2 Runtime。
 
-安装依赖：
+桌面构建环境的完整要求见 [Tauri 2 开发前置条件](https://v2.tauri.app/start/prerequisites/)。
 
-```bash
-npm install
-```
-
-启动 Tauri 桌面开发环境：
+### 获取代码并启动
 
 ```bash
+git clone https://github.com/FYanJun/Psd-manager.git
+cd Psd-manager
+npm ci
 npm run tauri:dev
 ```
 
-构建前端资源：
+该命令会同时启动 Vite 开发服务和 Tauri 桌面窗口。首次启动需要下载并编译 Rust 依赖，耗时会较长。
+
+只调试前端界面时，可以运行：
 
 ```bash
-npm run build
+npm run dev
 ```
 
-构建当前系统的桌面安装包：
+然后访问 <http://127.0.0.1:5173>。浏览器预览用于界面开发；加密资产库存取、系统托盘、开机自启和备份恢复等原生能力需要在 Tauri 桌面环境中验证。
 
-```bash
-npm run tauri -- build
+### 检查与构建
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run check:type` | TypeScript 类型检查 |
+| `npm run check:rust-format` | Rust 格式检查 |
+| `npm run check:rust` | Rust 编译检查 |
+| `npm run test:rust` | Rust 库测试 |
+| `npm run build` | 仅构建前端资源，输出到 `dist/` |
+| `npm run tauri -- build` | 构建当前平台的桌面应用及安装包 |
+
+桌面构建产物位于 `src-tauri/target/release/`，安装包位于其中的 `bundle/` 目录。跨平台发布由 [GitHub Actions](.github/workflows/release.yml) 在对应系统上分别构建，当前工作流通过 `v*` 标签触发。
+
+### 项目结构与开发约定
+
+```text
+src/
+├── components/       # 工作区、弹窗和通用界面组件
+├── lib/              # 数据模型、业务控制器和前后端接口
+└── styles/           # 主题、语义样式和布局
+src-tauri/
+├── src/              # Rust 原生命令、加密、存储和备份
+└── tauri.conf.json   # Tauri 应用及打包配置
 ```
 
-常用检查命令：
-
-```bash
-npx tsc --noEmit
-cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo check --manifest-path src-tauri/Cargo.toml
-```
-
-浏览器开发预览只用于界面调试，资产库不会作为完整持久化数据保存在浏览器本地存储中。需要验证加密存储、系统托盘、窗口行为和恢复文件时，请使用 Tauri 桌面开发环境。
+修改后建议先执行类型检查和前端构建，再执行 Rust 格式、编译检查及库测试。涉及原生能力、数据安全或恢复流程时，还需在桌面应用中验证启动锁定、保存与重启、备份恢复和托盘行为；浏览器预览不能替代这些验证。
 
 ## 技术栈
 
-- Rust
-- Tauri 2
-- Svelte 5
-- Vite
-- TypeScript
-- AES-256-GCM / Argon2
-- Lucide Icons
+| 领域 | 技术 |
+| --- | --- |
+| 桌面框架 | Tauri 2 |
+| 前端 | Svelte 5、TypeScript、Vite |
+| 界面组件与图标 | Bits UI、Floating UI、Lucide |
+| 原生逻辑 | Rust、Serde |
+| 加密与密钥派生 | AES-256-GCM、Argon2 |
+| 文件交换 | JSON、YAML、SheetJS（XLSX） |
+| 持续集成与发布 | GitHub Actions |
+
+## 问题反馈与贡献
+
+欢迎通过 [Issues](https://github.com/FYanJun/Psd-manager/issues) 提交问题或功能建议，通过 Pull Request 参与改进。报告问题时，请附上应用版本、操作系统、复现步骤及相关错误信息；示例数据和截图请使用虚构设备与账号，避免包含真实密码、恢复密钥或其他敏感信息。
+
+## 开源协议
+
+Copyright (C) 2026 FanYanJun。
+
+本项目采用 [GNU Affero General Public License v3.0 only（AGPL-3.0-only）](LICENSE)。允许使用、修改和商用；分发本项目或修改版本时，须遵守协议的许可证保留、对应源码提供等要求。若修改后的程序支持通过网络与用户交互，还须按协议第 13 条向这些用户提供获取对应源码的机会。
+
+本软件按“现状”提供，不提供任何担保，具体条款以 LICENSE 全文为准。第三方依赖和素材保留各自的许可证及版权声明。

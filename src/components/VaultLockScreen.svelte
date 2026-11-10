@@ -12,6 +12,7 @@
   export let chooseRecoveryFile: () => void;
   export let recoveryBusy = false;
   export let recoveryError = "";
+  export let recoveryWarning = "";
   export let recoveryFileContent = "";
   export let recoveryResultFile = "";
   export let recoveryResultAcknowledged = false;
@@ -40,7 +41,8 @@
       <span class="vault-lock-icon" aria-hidden="true"><LockKeyhole size={30} /></span>
       <h1 id="vault-lock-title">请保存新的恢复文件</h1>
       <p>恢复成功。旧恢复文件已经失效，请保存下面新生成的文件。</p>
-      <RecoveryFileConfirmation
+      {#if recoveryWarning}<p class="vault-lock-error" role="alert">{recoveryWarning}</p>{/if}
+    <RecoveryFileConfirmation
         bind:acknowledged={recoveryResultAcknowledged}
         fileName={recoveryFileName}
         fileSaved={recoveryFileSaved}

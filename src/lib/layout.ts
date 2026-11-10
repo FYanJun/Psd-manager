@@ -9,25 +9,9 @@ import {
   SIDEBAR_MAX_RATIO,
   SIDEBAR_MIN_RATIO,
 } from "./constants";
-import type { DeviceTypeMeta, DeviceTypeSortMode, ResizePane, VaultItem } from "./types";
+import type { ResizePane } from "./types";
 
-export function sortDeviceTypeOptions(types: DeviceTypeMeta[], mode: DeviceTypeSortMode, vaultItems: VaultItem[]) {
-  const rows = types.map((type, index) => ({
-    ...type,
-    count: vaultItems.filter((item) => item.deviceType === type.label).length,
-    index,
-  }));
-  if (mode === "nameAsc") {
-    rows.sort((left, right) => left.label.localeCompare(right.label, "zh-Hans-CN"));
-  } else if (mode === "countDesc") {
-    rows.sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "zh-Hans-CN"));
-  } else {
-    rows.sort((left, right) => left.index - right.index);
-  }
-  return rows.map(({ index, count, ...type }) => type);
-}
-
-export function getDefaultPaneRatio(pane: ResizePane) {
+function getDefaultPaneRatio(pane: ResizePane) {
   if (pane === "sidebar") return SIDEBAR_DEFAULT_RATIO;
   if (pane === "list") return LIST_DEFAULT_RATIO;
   return GENERATOR_DEFAULT_RATIO;

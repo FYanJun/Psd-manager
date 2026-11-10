@@ -32,6 +32,7 @@
   export let vaultPasswordDialogMode: VaultPasswordDialogMode = "set";
   export let vaultPasswordForm: { currentPassword: string; newPassword: string; confirmPassword: string };
   export let vaultPasswordError = "";
+  export let vaultPasswordWarning = "";
   export let vaultPasswordBusy = false;
   export let recoveryKey = "";
   export let recoveryAcknowledged = false;
@@ -63,11 +64,9 @@
 
   $: bulkPasswordView = {
     selectedBulkTypeMeta: view.selectedBulkTypeMeta,
-    bulkUsernameSuggestionsOpen: view.bulkUsernameSuggestionsOpen,
     filteredBulkTypeRows: view.filteredBulkTypeRows,
     revealResetToken: view.revealResetToken,
-    bulkUsernameSuggestions: view.bulkUsernameSuggestions,
-    bulkPasswordMatches: view.bulkPasswordMatches,
+    bulkPasswordAllMatches: view.bulkPasswordAllMatches,
     bulkPasswordSelectedMatches: view.bulkPasswordSelectedMatches,
   };
   $: dialogDescription = activeDialog === "settings" ? "管理界面、数据、安全和应用信息。"
@@ -75,7 +74,7 @@
     : activeDialog === "device" ? "设备属性与账号凭据分别管理。"
     : activeDialog === "account" ? "维护当前设备下的账号、密码和备注。"
     : activeDialog === "password" ? "保存后，原密码会保留在当前账号的历史记录中。"
-    : activeDialog === "bulk-password" ? "先选择匹配的账号，再统一更新密码。"
+    : activeDialog === "bulk-password" ? "按账号或设备筛选，勾选目标后统一更新密码。"
     : activeDialog === "export-config" ? "选择配置格式，并将导出文件保存在可信位置。"
     : "管理资产库的本地启动密码与恢复信息。";
   $: canClose = activeDialog !== "security-password" || (
@@ -89,12 +88,11 @@
     setActiveDialog: actions.setActiveDialog,
     toggleTypePicker: actions.toggleTypePicker,
     setBulkPasswordDeviceType: actions.setBulkPasswordDeviceType,
-    updateBulkUsernameSearch: actions.updateBulkUsernameSearch,
-    selectBulkUsername: actions.selectBulkUsername,
-    selectAllBulkPasswordMatches: actions.selectAllBulkPasswordMatches,
+    clearBulkPasswordFilters: actions.clearBulkPasswordFilters,
+    removeBulkPasswordSelection: actions.removeBulkPasswordSelection,
     clearBulkPasswordMatches: actions.clearBulkPasswordMatches,
     isBulkPasswordMatchSelected: actions.isBulkPasswordMatchSelected,
-    toggleBulkPasswordMatch: actions.toggleBulkPasswordMatch,
+    setBulkPasswordMatchesSelected: actions.setBulkPasswordMatchesSelected,
     saveBulkPasswordUpdate: actions.saveBulkPasswordUpdate,
   };
 </script>
@@ -143,6 +141,7 @@
           bind:newPassword={vaultPasswordForm.newPassword}
           bind:confirmPassword={vaultPasswordForm.confirmPassword}
           error={vaultPasswordError}
+          warning={vaultPasswordWarning}
           busy={vaultPasswordBusy}
           revealResetToken={view.revealResetToken}
           {recoveryKey}

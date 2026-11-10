@@ -104,27 +104,30 @@ fn migrate_legacy_settings(data_directory: &Path, config_directory: &Path) -> Re
     Ok(())
 }
 
-fn ensure_storage_directories(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
-    let container = data_container_directory(app)?;
-    fs::create_dir_all(&container).map_err(|error| format!("无法创建应用数据根目录：{error}"))?;
-    restrict_private_directory(&container, "应用数据根目录")?;
-
-    let data = container.join(DATA_DIRECTORY_NAME);
-    let config = container.join(CONFIG_DIRECTORY_NAME);
-    fs::create_dir_all(&data).map_err(|error| format!("无法创建资产库目录：{error}"))?;
-    fs::create_dir_all(&config).map_err(|error| format!("无法创建应用配置目录：{error}"))?;
-    restrict_private_directory(&data, "资产库目录")?;
-    restrict_private_directory(&config, "应用配置目录")?;
-    migrate_legacy_settings(&data, &config)?;
-    Ok((data, config))
+fn ensure_storage_directory(container: &Path, name: &str, label: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(container).map_err(|error| format!("无法创建应用数据根目录：{error}"))?;
+    restrict_private_directory(container, "应用数据根目录")?;
+    let directory = container.join(name);
+    fs::create_dir_all(&directory).map_err(|error| format!("无法创建{label}目录：{error}"))?;
+    restrict_private_directory(&directory, label)?;
+    Ok(directory)
 }
 
 pub(crate) fn ensure_vault_directory(app: &AppHandle) -> Result<PathBuf, String> {
-    ensure_storage_directories(app).map(|(data, _)| data)
+    // Vault access depends only on its own directory, never settings migration.
+    ensure_storage_directory(
+        &data_container_directory(app)?,
+        DATA_DIRECTORY_NAME,
+        "资产库",
+    )
 }
 
 fn ensure_config_directory(app: &AppHandle) -> Result<PathBuf, String> {
-    ensure_storage_directories(app).map(|(_, config)| config)
+    let container = data_container_directory(app)?;
+    let config = ensure_storage_directory(&container, CONFIG_DIRECTORY_NAME, "应用配置")?;
+    let data = ensure_storage_directory(&container, DATA_DIRECTORY_NAME, "资产库")?;
+    migrate_legacy_settings(&data, &config)?;
+    Ok(config)
 }
 
 pub(crate) fn app_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -181,6 +184,27 @@ mod settings_migration_tests {
         }
         assert!(data.join("vault.enc").exists());
         assert!(!config.join("vault.enc").exists());
+    }
+    #[test]
+    fn vault_directory_creation_does_not_run_settings_migration() {
+        let dir = Scratch::new();
+        let data = dir.0.join("data");
+        let config = dir.0.join("config");
+        fs::write(data.join("settings.json"), "old").unwrap();
+        fs::write(config.join("settings.json"), "new").unwrap();
+        assert_eq!(
+            ensure_storage_directory(&dir.0, DATA_DIRECTORY_NAME, "资产库").unwrap(),
+            data
+        );
+        assert_eq!(
+            fs::read_to_string(data.join("settings.json")).unwrap(),
+            "old"
+        );
+        assert_eq!(
+            fs::read_to_string(config.join("settings.json")).unwrap(),
+            "new"
+        );
+        assert!(migrate_legacy_settings(&data, &config).is_err());
     }
     #[test]
     fn conflict_preflight_preserves_all_old_and_new_files() {

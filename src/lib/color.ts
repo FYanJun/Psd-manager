@@ -7,7 +7,7 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR_PATTERN.test(value.trim());
 }
 
-export function isNamedTypeColor(value: string): boolean {
+function isNamedTypeColor(value: string): boolean {
   return NAMED_COLOR_VALUES.has(value.trim());
 }
 
@@ -16,12 +16,22 @@ export function typeColorClass(value: string): string {
   return isNamedTypeColor(color) ? `type-${color}` : isHexColor(color) ? "type-custom" : "type-blue";
 }
 
+function relativeLuminance(hex: string): number {
+  const channels = [1, 3, 5].map(index => {
+    const channel = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
 function readableTextColor(hex: string) {
-  const red = Number.parseInt(hex.slice(1, 3), 16);
-  const green = Number.parseInt(hex.slice(3, 5), 16);
-  const blue = Number.parseInt(hex.slice(5, 7), 16);
-  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
-  return luminance >= 160 ? "#26313b" : "#ffffff";
+  const background = relativeLuminance(hex);
+  const dark = relativeLuminance("#26313b");
+  const darkContrast = (Math.max(background, dark) + 0.05) / (Math.min(background, dark) + 0.05);
+  if (darkContrast >= 4.5) return "#26313b";
+  if (1.05 / (background + 0.05) >= 4.5) return "#ffffff";
+  // Midtone backgrounds can fail both existing foregrounds; black then meets AA.
+  return "#000000";
 }
 
 export function typeColorStyle(value: string): string {

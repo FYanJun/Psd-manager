@@ -11,7 +11,7 @@
 
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
   border-color: transparent !important;
-  background-color: var(--surface-step-1) !important;
+  background-color: var(--field) !important;
 }
 
 :where(button:not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)) {
@@ -23,15 +23,15 @@
   background-color: var(--surface-step-1);
 }
 
-:where(.field-group, .history-section, .account-list, .bulk-preview, .type-preview-card,
+:where(.field-group, .history-section, .account-list, .type-preview-card,
   .type-combo-empty-state, .export-config-note) {
   border-color: transparent !important;
   background-color: var(--surface-step-1);
 }
 
-:where(.form-grid input, .form-grid textarea, .type-editor-fields input, .settings-auto-lock-config > input,
+:where(.form-grid input, .form-grid textarea, .type-editor-fields input, .bulk-cascade-popover .clearable-input input, .settings-auto-lock-config > input,
   .vault-password-body input, .vault-lock-card input, .vault-lock-card textarea,
-  .type-combo-trigger, .type-combo-option, .app-select-trigger, .username-combobox input):focus {
+  .type-combo-trigger, .type-combo-option):focus {
   outline: 0 !important;
   border-color: transparent !important;
   box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
@@ -42,19 +42,83 @@
   box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
 }
 
+/* A composite field owns one focus indicator, including its inner actions. */
+:where(.type-combo-trigger) {
+  border-color: transparent !important;
+  background-color: var(--field);
+}
+
+:where(.type-combo-trigger input, .search-box input) {
+  background-color: transparent !important;
+}
+
+:where(.type-combo-trigger input, .search-box input):focus,
+:where(.type-combo-trigger input, .type-combo-trigger button, .search-box input, .search-box button):focus-visible {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+:where(.type-combo-trigger button, .search-box button):focus-visible {
+  background-color: var(--control-hover);
+}
+
 :where(.settings-switch:has(button:focus-visible), .settings-action-row:focus-visible,
   .settings-reset:focus-visible, .settings-path-button:focus-visible) {
   outline: 0 !important;
   box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
 }
 
-:where(button:not(:disabled):not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):hover {
-  background-color: var(--surface-step-1) !important;
+/* Stateful controls supply their own fills instead of losing their meaning
+   under the shared hover and press treatment. */
+:where(.primary-button, .update-password-action, .drawer-action.primary-action) {
+  --button-hover-fill: var(--primary-fill-hover);
+  --button-pressed-fill: color-mix(in oklch, var(--primary-fill-hover) 90%, black);
 }
 
-:where(button:not(:disabled):not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):active {
+:where(.item-row.selected, .quick-lengths button.selected,
+  .menu-item.selected, [role="menuitemradio"][aria-checked="true"],
+  .settings-segmented-option[data-state="checked"], .account-row.selected,
+  .format-choice-list button.selected, .import-mode-control button.selected) {
+  --button-selected-fill: var(--selection-fill);
+}
+
+:where(.device-type-row.selected) {
+  --button-selected-fill: var(--sidebar-active);
+}
+
+:where(.settings-nav button.active) {
+  --button-selected-fill: var(--selected);
+}
+
+:where(.item-row.selected, .device-type-row.selected, .settings-nav button.active,
+  .menu-item.selected, [role="menuitemradio"][aria-checked="true"],
+  .quick-lengths button.selected, .settings-segmented-option[data-state="checked"],
+  .account-row.selected, .format-choice-list button.selected,
+  .import-mode-control button.selected) {
+  --button-hover-fill: color-mix(in oklch, var(--button-selected-fill) 90%, var(--blue));
+  --button-pressed-fill: color-mix(in oklch, var(--button-selected-fill) 85%, var(--blue));
+}
+
+:where(button:not(:disabled):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):hover {
+  background-color: var(--button-hover-fill, var(--surface-step-1)) !important;
+}
+
+:where(button:not(:disabled):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):active {
   animation: button-press-spring 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
-  background-color: var(--surface-step-2) !important;
+  background-color: var(--button-pressed-fill, var(--surface-step-2)) !important;
+}
+
+/* Account controls share the row surface in selected, hover and press states. */
+.account-row > :is(.account-select-box, .account-tab) {
+  background-color: transparent !important;
+}
+
+:where(.account-row:has(> button:not(:disabled):hover)) {
+  background-color: var(--button-hover-fill, var(--surface-step-1)) !important;
+}
+
+:where(.account-row:has(> button:not(:disabled):active)) {
+  background-color: var(--button-pressed-fill, var(--surface-step-2)) !important;
 }
 
 :where(button.selected, [role="option"].selected, [role="option"][aria-selected="true"],
@@ -62,6 +126,25 @@
   input[type="checkbox"]:checked + *, input[type="radio"]:checked + *) {
   animation: selection-settle 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
   background-color: var(--surface-step-2);
+}
+
+/* Bulk updates keep visible action boundaries and one surface per data row. */
+.bulk-password-form .bulk-password-controls .bulk-random-password {
+  --button-hover-fill: var(--selection-fill);
+  --button-pressed-fill: color-mix(in srgb, var(--selection-fill) 85%, var(--blue));
+  border-color: var(--selection-border) !important;
+  color: var(--blue);
+  background: var(--accent-subtle);
+  font-weight: var(--weight-semibold);
+}
+
+.bulk-password-form .bulk-selection-actions .compact-button,
+.modal:has(.bulk-password-form) .modal-actions .secondary-button {
+  --button-hover-fill: var(--surface-subtle);
+  --button-pressed-fill: var(--field);
+  border-color: var(--field-border) !important;
+  color: var(--text-strong);
+  background: var(--surface);
 }
 
 @keyframes button-press-spring {

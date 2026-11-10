@@ -6,7 +6,6 @@ import type {
   ActivePopover,
   BulkPasswordForm,
   BulkPasswordMatch,
-  BulkUsernameSuggestion,
   DeviceAccount,
   DeviceType,
   GeneratorTarget,
@@ -34,8 +33,6 @@ export type AccountPasswordState = {
   passwordForm: PasswordUpdateForm;
   bulkPasswordForm: BulkPasswordForm;
   bulkUsernameSearch: string;
-  bulkUsernameSuggestionsOpen: boolean;
-  bulkPasswordDeselectedKeys: string[];
   bulkTypeSearch: string;
   passwordVisible: boolean;
   visibleHistoryIds: number[];
@@ -51,8 +48,6 @@ export type AccountPasswordPatch = Partial<Pick<
   | "passwordForm"
   | "bulkPasswordForm"
   | "bulkUsernameSearch"
-  | "bulkUsernameSuggestionsOpen"
-  | "bulkPasswordDeselectedKeys"
   | "bulkTypeSearch"
   | "passwordVisible"
   | "visibleHistoryIds"
@@ -65,8 +60,7 @@ export type AccountSelectionState = {
 };
 
 export type AccountPasswordDerivedState = AccountSelectionState & {
-  bulkUsernameSuggestions: BulkUsernameSuggestion[];
-  bulkPasswordMatches: BulkPasswordMatch[];
+  bulkPasswordAllMatches: BulkPasswordMatch[];
   bulkPasswordSelectedMatches: BulkPasswordMatch[];
 };
 

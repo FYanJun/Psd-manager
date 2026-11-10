@@ -25,7 +25,6 @@ export type OverlayState = {
   passwordVisible: boolean;
   visibleHistoryIds: number[];
   openTypePicker: TypePickerScope | null;
-  bulkUsernameSuggestionsOpen: boolean;
   editableContext: {
     kind: EditableContextKind;
     canCopy: boolean;
@@ -188,7 +187,6 @@ export function createOverlayController(port: OverlayControllerPort) {
       pendingConfirmation: null,
       pendingImportedConfig: null,
       openTypePicker: null,
-      bulkUsernameSuggestionsOpen: false,
     });
   }
 
@@ -199,7 +197,6 @@ export function createOverlayController(port: OverlayControllerPort) {
       pendingConfirmation: null,
       pendingImportedConfig: null,
       openTypePicker: null,
-      bulkUsernameSuggestionsOpen: false,
       ...(state.activeDialog ? {} : { activeDialog: null }),
     });
   }

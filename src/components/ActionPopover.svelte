@@ -237,6 +237,11 @@
     color: var(--text-secondary);
   }
 
+  .action-popover-host :global(.action-popover button.menu-item .menu-item-check) {
+    margin-left: auto;
+    color: var(--blue);
+  }
+
   .action-popover-host :global(.action-popover button.menu-item.danger-menu-item svg) {
     color: currentColor;
   }

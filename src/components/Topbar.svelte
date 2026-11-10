@@ -1,17 +1,13 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, Search, Settings, UsersRound, WandSparkles } from "@lucide/svelte";
+  import { Search, Settings, UsersRound, WandSparkles } from "@lucide/svelte";
   import ClearableInput from "./ClearableInput.svelte";
   import { INPUT_LIMITS, sanitizeSingleLineTextInput } from "../lib/input-validation";
 
-  export let backDisabled = false;
-  export let forwardDisabled = false;
   export let bulkPasswordDisabled = false;
   export let searchInput: HTMLInputElement | null = null;
   export let searchQuery = "";
   export let searchPlaceholder = "";
 
-  export let goBack: () => void;
-  export let goForward: () => void;
   export let updateSearchValue: (value: string) => void;
   export let openBulkPasswordDialog: () => void;
   export let openGeneratorPanel: () => void;
@@ -19,15 +15,6 @@
 </script>
 
 <header class="topbar">
-  <div class="history-buttons">
-    <button class="icon-button" aria-label="后退" data-tooltip="后退" aria-keyshortcuts="Meta+ArrowLeft Control+ArrowLeft" disabled={backDisabled} on:click={() => goBack()}>
-      <ChevronLeft size={24} />
-    </button>
-    <button class="icon-button" aria-label="前进" data-tooltip="前进" aria-keyshortcuts="Meta+ArrowRight Control+ArrowRight" disabled={forwardDisabled} on:click={() => goForward()}>
-      <ChevronRight size={24} />
-    </button>
-  </div>
-
   <label class="search-box">
     <Search size={22} />
     <ClearableInput

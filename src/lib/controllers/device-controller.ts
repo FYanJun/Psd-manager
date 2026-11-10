@@ -61,7 +61,6 @@ export type DeviceControllerPort = {
   openAddTypeDialog(): void;
   showStatus(message: string, duration?: number): void;
   reportValidationError?: ReportFormValidationError;
-  pushNavigationState(): void;
   createSafetySnapshot(reason: string): Promise<{ id: string } | null>;
   offerSnapshotUndo(snapshotId: string, message: string): void;
   setPendingConfirmation(confirmation: PendingConfirmation): void;
@@ -276,7 +275,6 @@ export function createDeviceController(port: DeviceControllerPort) {
       history: [],
       accounts: [],
     };
-    port.pushNavigationState();
     port.write({
       items: [nextItem, ...state.items],
       selectedId: nextItem.id,
@@ -326,9 +324,6 @@ export function createDeviceController(port: DeviceControllerPort) {
       ? state.selectedDeviceType
       : "全部设备";
     const deletingCurrentDevice = state.selectedItem.uuid === itemUuid;
-    if (deletingCurrentDevice || nextDeviceType !== state.selectedDeviceType) {
-      port.pushNavigationState();
-    }
     const patch: DeviceControllerPatch = {
       items: remainingItems,
       selectedDeviceType: nextDeviceType,

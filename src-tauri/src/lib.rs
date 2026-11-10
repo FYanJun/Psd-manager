@@ -1,7 +1,9 @@
 mod vault_store;
 use storage_paths::data_container_directory;
 use vault_store::VaultSession;
+mod backup_commands;
 mod commands;
+mod encrypted_backup;
 #[cfg(desktop)]
 mod native_window;
 #[cfg(desktop)]
@@ -175,8 +177,8 @@ pub fn run() {
         builder = builder.on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Prevent the native close action immediately. The frontend then
-                // flushes pending data, locks the vault when enabled, and either
-                // hides or destroys the window so the process remains available
+                // flushes pending data, locks the vault when enabled, and
+                // destroys the window so the process remains available
                 // from the tray.
                 api.prevent_close();
                 let _ = window.emit("window-close-requested", ());
@@ -217,6 +219,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            backup_commands::create_encrypted_backup,
+            backup_commands::open_encrypted_backup,
+            backup_commands::merge_backup_settings,
             commands::load_secure_vault,
             commands::save_secure_vault,
             commands::get_vault_lock_status,

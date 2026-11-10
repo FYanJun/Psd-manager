@@ -99,8 +99,10 @@
         <p class="settings-security-warning">主密码不会保存到应用设置中。忘记主密码后无法直接找回，请提前保留安全备份。托盘菜单中的“立即锁定”会直接进入锁屏页面。</p>
       {/if}
     {:else if view.activeSection === "data"}
-      <div class="settings-heading"><h3>数据</h3><p>管理资产库快照和配置文件。</p></div>
+      <div class="settings-heading"><h3>数据</h3><p>管理加密备份、资产库快照和配置文件。</p></div>
       <div class="settings-action-list">
+        <SettingsActionRow icon={DatabaseBackup} label="创建加密备份" description="用独立备份密码保存完整资产库和可选偏好。" disabled={view.environmentStatus !== "ready"} onSelect={() => actions.openEncryptedBackup("create")} />
+        <SettingsActionRow icon={ArchiveRestore} label="从加密备份恢复" description="读取备份并预览，确认后恢复设备、账号和快照。" disabled={view.environmentStatus !== "ready"} onSelect={() => actions.openEncryptedBackup("restore")} />
         <SettingsActionRow icon={ArchiveRestore} label="数据快照" description="查看、恢复或管理本地数据快照。" onSelect={actions.openSnapshotsDialog} />
         <SettingsActionRow icon={Download} label="导出配置" description="导出 JSON、YAML 或 Excel 工作簿。" onSelect={actions.openExportConfigDialog} />
         <SettingsActionRow icon={Upload} label="导入配置" description="从 JSON、YAML 或 Excel 工作簿导入资产库。" onSelect={actions.chooseConfigFile} />
@@ -159,8 +161,7 @@
   .settings-heading { display: grid; gap: 6px; padding: 0 0 20px; border-bottom: 1px solid var(--border); }
   .settings-heading h3 { margin: 0; color: var(--text-strong); font-size: var(--type-section); font-weight: var(--weight-semibold); letter-spacing: 0; }
   .settings-heading p { margin: 0; color: var(--muted); font-size: var(--font-size-13); line-height: 1.4; }
-  .settings-content > .settings-field { border-bottom: 1px solid var(--border); }
-  .settings-content > .settings-field { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 66px; padding: 13px 0; }
+  .settings-content > .settings-field { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 66px; padding: 13px 0; border-bottom: 1px solid var(--border); }
   .settings-content > .settings-field > span:first-child { display: inline-flex; align-items: baseline; gap: 6px; flex: 1 1 auto; min-width: 0; color: var(--text-strong); font-size: var(--font-size-14); font-weight: var(--weight-medium); line-height: 1.35; }
   .settings-content > .settings-field > :global(.settings-segmented) { flex: 0 1 360px; width: min(100%, 360px); min-width: 0; }
   .settings-auto-lock-config { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); align-items: center; gap: 28px; padding: 12px 0 14px 20px; border-bottom: 1px solid var(--border); }
@@ -184,7 +185,6 @@
   .settings-about-title strong { color: var(--text-strong); font-size: var(--font-size-18); }
   .settings-about-title small { color: var(--muted); font-size: var(--font-size-13); font-weight: var(--weight-medium); }
   .settings-about-version { align-self: center; border: 1px solid var(--field-border); border-radius: 999px; padding: 4px 8px; color: var(--text-secondary); background: var(--surface-subtle); font-size: var(--font-size-12); font-weight: var(--weight-semibold); white-space: nowrap; }
-  .settings-about-description { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--font-size-13); line-height: 1.5; }
   .settings-about-section { display: grid; gap: 12px; margin-top: 24px; }
   .settings-about-section-heading { display: flex; align-items: center; gap: 7px; color: var(--text-strong); font-size: var(--font-size-14); }
   .settings-about-heading-icon { display: inline-flex; align-items: center; color: var(--blue); }
