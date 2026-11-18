@@ -272,6 +272,7 @@ export type DeviceDetailActions = {
 };
 
 export type PasswordGeneratorView = {
+  revealResetToken: number;
   generatorRatio: number;
   canUseGeneratorForCurrentAccount: boolean;
   canUseGeneratorForBulkUpdate: boolean;

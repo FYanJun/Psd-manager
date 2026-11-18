@@ -26,11 +26,11 @@ import {
 export function createPasswordController(port: AccountPasswordControllerPort) {
   function validateNewPassword(password: string) {
     if (!password) {
-      port.showStatus("请输入新密码");
+      port.showStatus("请输入新密码", undefined, "", null, { tone: "warning", operation: "password" });
       return false;
     }
     if (!hasValidPasswordCharacters(password)) {
-      port.showStatus(PASSWORD_CHARACTER_ERROR, 5000);
+      port.showStatus(PASSWORD_CHARACTER_ERROR, 5000, "", null, { tone: "warning", operation: "password" });
       return false;
     }
     return true;
@@ -39,7 +39,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
   function validatePasswordReason(reason: string) {
     const error = getTextInputValidationError(reason, INPUT_LIMITS.passwordReason);
     if (error) {
-      port.showStatus(`更新原因${error}`, 5000);
+      port.showStatus(`更新原因${error}`, 5000, "", null, { tone: "warning", operation: "password" });
       return false;
     }
     return true;
@@ -84,47 +84,36 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
 
   function useGeneratedPasswordForCurrentDevice() {
     if (!canUseGeneratorForCurrentAccount()) {
-      port.showStatus("请从修改密码窗口打开随机密码生成器");
+      port.showStatus("请从修改密码窗口打开随机密码生成器", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     const generatedPassword = ensureGeneratedPassword();
     if (!generatedPassword) return;
     port.write({ passwordForm: { ...port.read().passwordForm, password: generatedPassword } });
     port.closeGeneratorPanel(true);
-    port.setActiveDialog("password");
   }
 
   function useGeneratedPasswordForBulkUpdate() {
     if (!canUseGeneratorForBulkUpdate()) {
-      port.showStatus("请从批量改密窗口打开随机密码生成器");
+      port.showStatus("请从批量改密窗口打开随机密码生成器", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     if (!canOpenBulkPasswordDialog()) {
-      port.showStatus("请先新增设备类型、设备和账号后再使用批量改密");
+      port.showStatus("请先新增设备类型、设备和账号后再使用批量改密", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     const generatedPassword = ensureGeneratedPassword();
     if (!generatedPassword) return;
-    const target = port.getGeneratorState().target;
+    const { bulkPasswordForm } = port.read();
+    port.write({ bulkPasswordForm: { ...bulkPasswordForm, password: generatedPassword } });
     port.closeGeneratorPanel(true);
-    if (target === "bulk-password") {
-      const { bulkPasswordForm } = port.read();
-      port.write({
-        bulkPasswordForm: {
-          ...bulkPasswordForm,
-          password: generatedPassword,
-          reason: bulkPasswordForm.reason,
-        },
-      });
-      port.setActiveDialog("bulk-password");
-    }
   }
 
   function openPasswordDialog() {
     port.setActivePopover(null);
     const state = port.read();
     if (!state.hasSelectedDevice || getAccountSelectionState(state).selectedAccountTargets.length === 0) {
-      port.showStatus("请先选择账号");
+      port.showStatus("请先选择账号", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     port.write({ passwordForm: { password: "", reason: "" } });
@@ -136,7 +125,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const { selectedAccount } = getAccountSelectionState(state);
     if (!state.hasSelectedDevice || !selectedAccount.id) return;
     if (!hasValidPasswordCharacters(history.password)) {
-      port.showStatus(`这条历史${PASSWORD_CHARACTER_ERROR}`, 5000);
+      port.showStatus(`这条历史${PASSWORD_CHARACTER_ERROR}`, 5000, "", null, { tone: "warning", operation: "password" });
       return;
     }
     port.setPendingConfirmation({
@@ -162,16 +151,16 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const account = item && getAccounts(item).find((candidate) => candidate.uuid === confirmation.accountUuid);
     const history = account?.history.find((candidate) => candidate.uuid === confirmation.historyUuid);
     if (!item || !account || !history) {
-      port.showStatus("要恢复的密码历史已经不存在", 5000);
+      port.showStatus("要恢复的密码历史已经不存在", 5000, "", null, { tone: "error", operation: "restore" });
       return false;
     }
     const password = confirmation.passwordValue ?? "";
     if (!hasValidPasswordCharacters(password)) {
-      port.showStatus(`这条历史${PASSWORD_CHARACTER_ERROR}`, 5000);
+      port.showStatus(`这条历史${PASSWORD_CHARACTER_ERROR}`, 5000, "", null, { tone: "warning", operation: "password" });
       return false;
     }
     if (account.password === password) {
-      port.showStatus("当前密码已经与这条历史记录相同");
+      port.showStatus("当前密码已经与这条历史记录相同", undefined, "", null, { tone: "info", operation: "password" });
       return false;
     }
     const changedAt = formatDateTime(new Date());
@@ -194,14 +183,14 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       passwordVisible: false,
       visibleHistoryIds: [],
     });
-    port.showStatus("历史密码已恢复");
+    port.showStatus("历史密码已恢复", undefined, "", null, { tone: "success", operation: "restore" });
     return true;
   }
 
   function openBulkPasswordDialog(useGenerated = false) {
     const state = port.read();
     if (!canOpenBulkPasswordDialog(state)) {
-      port.showStatus("请先新增设备类型、设备和账号后再使用批量改密");
+      port.showStatus("请先新增设备类型、设备和账号后再使用批量改密", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     port.setActivePopover(null);
@@ -269,7 +258,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const state = port.read();
     const { selectedAccountTargets } = getAccountSelectionState(state);
     if (!state.hasSelectedDevice || selectedAccountTargets.length === 0) {
-      port.showStatus("请先选择账号");
+      port.showStatus("请先选择账号", undefined, "", null, { tone: "warning", operation: "password" });
       port.setActiveDialog(null);
       return;
     }
@@ -277,7 +266,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     if (!validatePasswordReason(state.passwordForm.reason)) return;
     const changedAccountTargets = selectedAccountTargets.filter((account) => account.password !== state.passwordForm.password);
     if (changedAccountTargets.length === 0) {
-      port.showStatus("新密码与当前密码相同，没有可保存的修改");
+      port.showStatus("密码未变更，无需保存", undefined, "", null, { tone: "info", operation: "password" });
       return;
     }
     const updatesMultipleAccounts = changedAccountTargets.length > 1;
@@ -319,7 +308,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const accountUuids = confirmation.accountUuids ?? [];
     const password = confirmation.passwordValue ?? "";
     if (!item || accountUuids.length === 0) {
-      port.showStatus("更新失败：密码目标已不存在", 5000);
+      port.showStatus("更新失败：密码目标已不存在", 5000, "", null, { tone: "error", operation: "password" });
       return false;
     }
     if (!validateNewPassword(password)) return false;
@@ -327,7 +316,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     const selectedAccounts = getAccounts(item);
     const selectedAccountTargets = selectedAccounts.filter((account) => accountUuids.includes(account.uuid));
     if (selectedAccountTargets.length !== accountUuids.length) {
-      port.showStatus("更新失败：部分账号已不存在，请重新选择", 5000);
+      port.showStatus("更新失败：部分账号已不存在，请重新选择", 5000, "", null, { tone: "error", operation: "password" });
       return false;
     }
     const changedAccountUuids = new Set(
@@ -336,7 +325,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
         .map((account) => account.uuid),
     );
     if (changedAccountUuids.size === 0) {
-      port.showStatus("新密码与当前密码相同，没有可保存的修改");
+      port.showStatus("密码未变更，无需保存", undefined, "", null, { tone: "info", operation: "password" });
       return false;
     }
     const changedAt = formatDateTime(new Date());
@@ -356,11 +345,10 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       passwordVisible: false,
       visibleHistoryIds: [],
     });
-    const selectedAccount = selectedAccountTargets[0];
     port.showStatus(
       changedAccountUuids.size > 1
         ? `${changedAccountUuids.size} 个账号密码已更新`
-        : `${selectedAccount.username || selectedAccount.title || "当前账号"}密码已更新`,
+        : "账号密码已更新", undefined, "", null, { tone: "success", operation: "password" },
     );
     return true;
   }
@@ -370,7 +358,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     if (!validateNewPassword(state.bulkPasswordForm.password)) return null;
     if (!validatePasswordReason(state.bulkPasswordForm.reason)) return null;
     if (derived.bulkPasswordSelectedMatches.length === 0) {
-      port.showStatus("请选择需要改密的账号");
+      port.showStatus("请选择需要改密的账号", undefined, "", null, { tone: "warning", operation: "password" });
       return null;
     }
     return derived.bulkPasswordSelectedMatches;
@@ -387,7 +375,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
         !== state.bulkPasswordForm.password;
     });
     if (changedMatches.length === 0) {
-      port.showStatus("新密码与所选账号的当前密码相同，没有可保存的修改");
+      port.showStatus("所选账号密码未变更", undefined, "", null, { tone: "info", operation: "password" });
       return;
     }
     const historyCount = changedMatches.filter((match) => {
@@ -428,7 +416,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
     if (!validateNewPassword(password)) return false;
     if (!validatePasswordReason(confirmation.reasonValue ?? "")) return false;
     if (targets.length === 0) {
-      port.showStatus("更新失败：批量改密目标不完整", 5000);
+      port.showStatus("更新失败：批量改密目标不完整", 5000, "", null, { tone: "error", operation: "password" });
       return false;
     }
     const targetAccountUuidsByItem = new Map<string, Set<string>>();
@@ -443,7 +431,7 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       return count + getAccounts(item).filter((account) => accountUuids.has(account.uuid)).length;
     }, 0);
     if (existingTargetCount !== targets.length) {
-      port.showStatus("更新失败：部分批量改密目标已不存在，请重新选择", 5000);
+      port.showStatus("更新失败：部分批量改密目标已不存在，请重新选择", 5000, "", null, { tone: "error", operation: "password" });
       return false;
     }
     const reason = (confirmation.reasonValue ?? "").trim();
@@ -460,13 +448,13 @@ export function createPasswordController(port: AccountPasswordControllerPort) {
       return syncItemWithAccounts(item, nextAccounts);
     });
     if (changedCount === 0) {
-      port.showStatus("新密码与所选账号的当前密码相同，没有可保存的修改");
+      port.showStatus("所选账号密码未变更", undefined, "", null, { tone: "info", operation: "password" });
       return false;
     }
     port.write({ items: nextItems });
     port.setActiveDialog(null);
     port.write({ passwordVisible: false, visibleHistoryIds: [] });
-    port.showStatus(`已更新 ${changedCount} 个账号`);
+    port.showStatus(`已更新 ${changedCount} 个账号的密码`, undefined, "", null, { tone: "success", operation: "password" });
     return true;
   }
 

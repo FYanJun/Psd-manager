@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, setContext, tick } from "svelte";
+  import { writable } from "svelte/store";
+  import { feedbackAlertKey, type FeedbackAlert } from "./lib/feedback-alert";
+  const feedbackAlert = writable<FeedbackAlert | null>(null);
+  setContext(feedbackAlertKey, feedbackAlert);
   import type { FormValidationFeedback, ReportFormValidationError } from "./lib/form-validation";
   import { version as packageVersion } from "../package.json";
   import type { SettingsView, StorageInfo } from "./lib/view-models";
@@ -40,7 +44,8 @@ import { disable as disableAutostart, enable as enableAutostart, isEnabled as is
 import { captureEditableSelection, type EditableSelection, type EditableTarget } from "./lib/editable-context";
   import { createPasswordGeneratorController, type PasswordGeneratorState } from "./lib/controllers/password-generator-controller";
   import { createSnapshotController } from "./lib/controllers/snapshot-controller";
-  import { createStatusController } from "./lib/controllers/status-controller";
+  import { createStatusController, type StatusViewState } from "./lib/controllers/status-controller";
+  import type { StatusOperation, StatusPresentation } from "./lib/status-presentation";
   import { createVaultStorageController, type VaultStorageState } from "./lib/controllers/vault-storage-controller";
   import { createWorkspaceLayoutController } from "./lib/controllers/workspace-layout-controller";
   import { createWindowSettingsController } from "./lib/controllers/window-settings-controller";
@@ -129,11 +134,12 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   let confirmationBusy = false;
   let confirmationError = "";
   let confirmationReportedStatus = "";
+  let deferredStatusAlert: StatusViewState | null = null;
   let formValidationFeedback: FormValidationFeedback | null = null;
   let formValidationRevision = 0;
   const reportValidationError: ReportFormValidationError = (form, field, message) => {
     if (confirmationBusy || activeDialog !== form) {
-      showStatus(message);
+      showStatus(message, undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     formValidationFeedback = { form, field, message, revision: ++formValidationRevision };
@@ -176,7 +182,8 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   let minimumSymbols = 2;
   let allowedSymbols = "!@#$%^&*+-_=?.";
   let excludedCharacters = "";
-  let copyStatus = "";
+  let statusMessage = "";
+  let statusPresentation: StatusPresentation = { tone: "info", operation: "general" };
   let statusActionLabel = "";
   let revealResetToken = 0;
   let searchInput: HTMLInputElement | null = null;
@@ -298,10 +305,10 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           6000,
           "重试保存",
           () => {
-            void persistAppSettings().then(() => showStatus("应用设置已保存")).catch((retryError) => {
-              showStatus(`设置保存失败：${getErrorMessage(retryError ?? String(retryError))}`, 6000);
+            void persistAppSettings().then(() => showStatus("应用设置已保存", undefined, "", null, { tone: "success", operation: "settings" })).catch((retryError) => {
+              showStatus(`设置保存失败：${getErrorMessage(retryError ?? String(retryError))}`, 6000, "", null, { tone: "error", operation: "settings" });
             });
-          },
+          }, { tone: "error", operation: "settings" },
         );
   }
 
@@ -360,9 +367,31 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     },
   });
 
+  let statusAlertRevision = 0;
+  function publishStatusAlert(state: StatusViewState) {
+    const revision = ++statusAlertRevision;
+    if (!state.message) {
+      feedbackAlert.set(null);
+      deferredStatusAlert = null;
+      return;
+    }
+    if (confirmationBusy) {
+      feedbackAlert.set(null);
+      deferredStatusAlert = state;
+      return;
+    }
+    void tick().then(() => {
+      if (revision !== statusAlertRevision) return;
+      const dialogs = document.querySelectorAll<HTMLElement>("[data-modal-id][data-state='open']");
+      const owner = dialogs[dialogs.length - 1]?.dataset.modalId ?? "";
+      feedbackAlert.set({ ...state, owner, dismiss: () => statusController.dismissAlert(), runAction: () => statusController.runAlertAction() });
+    });
+  }
   const statusController = createStatusController({
+    writeAlert: publishStatusAlert,
     write: (state) => {
-      copyStatus = state.message;
+      statusMessage = state.message;
+      statusPresentation = state.presentation;
       statusActionLabel = state.actionLabel;
     },
   });
@@ -702,37 +731,24 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   const backupController = createBackupController({
     available: () => isTauri() && hydrated && !vaultLocked && vaultStorageState === "ready",
     capture: () => createPersistedVaultState(0),
-    settings: () => appSettings,
     flushVault: () => vaultStorageController.persistImmediately(),
-    flushSettings: persistAppSettings,
     createSafetySnapshot: () => createSafetySnapshot("恢复加密备份前自动保存"),
     applyVault: (data) => {
       applyPersistedVaultState(data);
       resetWorkspaceForDataset(items);
     },
     persistRestored: () => vaultStorageController.persistImmediately(),
-    restoreSettings: async (content) => {
-      if (settingsReadFailed) throw new Error("资产库已恢复，但原应用设置尚未恢复，已阻止覆盖偏好");
-      settingsSaveSession.cancel();
-      await settingsSaveSession.settled();
-      const current = JSON.stringify(appSettings);
-      const merged = await invoke<string>("merge_backup_settings", { current, imported: content });
-      if (JSON.stringify(appSettings) !== current) throw new Error("资产库已恢复，但应用设置发生变化，未覆盖当前偏好");
-      appSettings = parseAppSettings(JSON.parse(merged));
-      applyAppSettings(appSettings);
-      try { await persistAppSettings(); }
-      catch (error) { reportSettingsSaveError(error); throw error; }
-    },
     publish: (view) => (backupView = view),
     close: () => { settingsActiveSection = "data"; activeDialog = "settings"; },
   }, backupPlatform);
 
-  function openEncryptedBackup(mode: "create" | "restore") {
+  async function openEncryptedBackup(mode: "create" | "restore") {
     if (!isTauri() || vaultLocked || vaultStorageState !== "ready") return;
     activePopover = null;
     dataDialogReturnToSettings = false;
-    backupController.open(mode);
-    activeDialog = "backup";
+    const opened = await backupController.open(mode);
+    if (opened) activeDialog = "backup";
+    else if (backupView.error) showStatus(backupView.error, 6000, "", null, { tone: "error", operation: "restore" });
   }
 
   function applyPersistedVaultState(parsed: PersistedVaultState) {
@@ -795,7 +811,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       applyAppSettings(appSettings, true);
       settingsLoaded = true;
       await windowSettingsController.mount();
-      showStatus(`应用设置读取失败，已使用默认设置：${getErrorMessage(error ?? String(error))}`, 6000);
+      showStatus(`应用设置读取失败，已使用默认设置：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "settings" });
     }
     if (isTauri()) {
       try {
@@ -807,7 +823,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           try {
             await enableAutostart();
           } catch (error) {
-            showStatus(`开机自启配置更新失败：${getErrorMessage(error ?? String(error))}`, 6000);
+            showStatus(`开机自启配置更新失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "settings" });
           }
         }
         if (!settingsReadFailed && appSettings.interface.startOnBoot !== enabled) {
@@ -818,7 +834,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           await persistAppSettings();
         }
       } catch (error) {
-        showStatus(`开机自启状态读取失败：${getErrorMessage(error ?? String(error))}`, 6000);
+        showStatus(`开机自启状态读取失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "settings" });
       }
       try {
         appVersion = await getVersion();
@@ -835,21 +851,21 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
         environmentStatus = "ready";
       } catch (error) {
         environmentStatus = "failed";
-        showStatus(`运行环境读取失败：${getErrorMessage(error ?? String(error))}`, 6000);
+        showStatus(`运行环境读取失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "general" });
       }
     }
   }
 
   async function openStoragePath(kind: "installation" | "app-data") {
     if (!isTauri()) {
-      showStatus("浏览器预览模式不支持打开本地目录");
+      showStatus("浏览器预览模式不支持打开本地目录", undefined, "", null, { tone: "info", operation: "general" });
       return;
     }
     if (environmentStatus !== "ready") return;
     try {
       await platformOperation("system", () => invoke("open_storage_path", { kind }));
     } catch (error) {
-      showStatus(`打开目录失败：${getErrorMessage(error ?? String(error))}`, 6000);
+      showStatus(`打开目录失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "general" });
     }
   }
 
@@ -878,7 +894,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     return true;
   }
 
-  function offerSnapshotUndo(snapshotId: string, message: string) {
+  function offerSnapshotUndo(snapshotId: string, message: string, operation: StatusOperation) {
     // Importing from settings closes the data dialog before the toast is shown.
     // Keep that context with the undo action so restoring from the toast does
     // not unexpectedly drop the user back into the workspace.
@@ -888,7 +904,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
         settingsActiveSection = "data";
         activeDialog = "settings";
       }
-    });
+    }, operation);
   }
 
   function requestRestoreSnapshot(snapshot: VaultSnapshot) {
@@ -916,10 +932,10 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       initializeSettings: initializeAppSettings,
       initializeVault: initializeVaultLock,
       onTrayError: (error) => showStatus(
-        "托盘锁定监听初始化失败：" + getErrorMessage(error, "未知错误"), 6000,
+        "托盘锁定监听初始化失败：" + getErrorMessage(error, "未知错误"), 6000, "", null, { tone: "error", operation: "security" },
       ),
       onStartupError: (error) => showStatus(
-        "启动初始化失败：" + getErrorMessage(error, "未知错误"), 6000,
+        "启动初始化失败：" + getErrorMessage(error, "未知错误"), 6000, "", null, { tone: "error", operation: "general" },
       ),
     });
     void startup.start();
@@ -1100,15 +1116,15 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   async function copyText(text: string, label: string) {
     if (!text) {
-      showStatus(`${label}没有可复制的内容`);
+      showStatus(`${label}没有可复制的内容`, undefined, "", null, { tone: "warning", operation: "copy" });
       return false;
     }
     try {
       await writeClipboardText(text);
-      showStatus(`${label}已复制`);
+      showStatus(`${label}已复制`, undefined, "", null, { tone: "success", operation: "copy" });
       return true;
     } catch {
-      showStatus("复制失败");
+      showStatus(`${label}复制失败`, undefined, "", null, { tone: "error", operation: "copy" });
       return false;
     }
   }
@@ -1131,11 +1147,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     passwordVisible = false;
     visibleHistoryIds = [];
     revealResetToken += 1;
-    if (generatorPanelOpen) {
-      generatedPassword = "";
-      generatorPanelOpen = false;
-      generatorTarget = null;
-    }
   }
 
   function handleUserActivity() {
@@ -1161,6 +1172,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   function clearSensitiveVaultState() {
     backupController.clear();
+    statusController.destroy();
     vaultPasswordWarning = "";
     searchSession.cancel();
     passwordStrengthSession.reset();
@@ -1223,12 +1235,12 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       return;
     }
     if (!vaultLockEnabled) {
-      showStatus("请先开启启动密码");
+      showStatus("请先开启启动密码", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     if (vaultLocked) return;
     if (recoveryKey && !recoveryFileSaved) {
-      showStatus("请先保存启动密码恢复文件", 6000);
+      showStatus("请先保存启动密码恢复文件", 6000, "", null, { tone: "warning", operation: "restore" });
       return;
     }
     try {
@@ -1244,7 +1256,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       }
       await lockVaultSession();
     } catch (error) {
-      showStatus(`锁定资产库失败：${getErrorMessage(error ?? String(error))}`, 6000);
+      showStatus(`锁定资产库失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "security" });
       autoLockSession.schedule();
     }
   }
@@ -1358,7 +1370,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       }
       activeDialog = "settings";
       settingsActiveSection = "security";
-      showStatus("启动密码已关闭");
+      showStatus("启动密码已关闭", undefined, "", null, { tone: "success", operation: "password" });
     } catch (error) {
       vaultPasswordError = getErrorMessage(error, "启动密码操作失败");
     } finally {
@@ -1396,14 +1408,14 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       vaultUnlockError = "";
       vaultUnlockPassword = "";
       autoLockSession.schedule();
-      showStatus(vaultPasswordWarning || (vaultStorageState === "ready" ? "资产库已恢复" : "恢复文件已保存，请处理资产库读取问题"), vaultPasswordWarning ? 12000 : 2500);
+      showStatus(vaultPasswordWarning || (vaultStorageState === "ready" ? "资产库已恢复" : "恢复文件已保存，请处理资产库读取问题"), vaultPasswordWarning ? 12000 : 2500, "", null, { tone: vaultPasswordWarning || vaultStorageState !== "ready" ? "warning" : "success", operation: "security" });
       vaultPasswordWarning = "";
       return;
     }
     activeDialog = "settings";
     settingsActiveSection = "security";
     autoLockSession.schedule();
-    showStatus(vaultPasswordWarning || (passwordMode === "set" ? "启动密码已开启" : "启动密码已修改"), vaultPasswordWarning ? 12000 : 2500);
+    showStatus(vaultPasswordWarning || (passwordMode === "set" ? "启动密码已开启" : "启动密码已修改"), vaultPasswordWarning ? 12000 : 2500, "", null, { tone: vaultPasswordWarning ? "warning" : "success", operation: "security" });
     vaultPasswordWarning = "";
   }
 
@@ -1456,7 +1468,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   function setAutoLockEnabled(value: boolean) {
     if (!vaultLockEnabled) {
-      showStatus("请先开启启动密码");
+      showStatus("请先开启启动密码", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     updateAppSettings({
@@ -1489,7 +1501,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   async function setStartOnBootSetting(value: boolean) {
     if (!isTauri()) {
-      showStatus("浏览器预览模式不支持开机自启");
+      showStatus("浏览器预览模式不支持开机自启", undefined, "", null, { tone: "info", operation: "settings" });
       return;
     }
     if (autostartUpdating) return;
@@ -1508,7 +1520,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       applyAppSettings(appSettings);
       await persistAppSettings();
       autostartAvailable = true;
-      showStatus(enabled ? "已开启开机自启" : "已关闭开机自启");
+      showStatus(enabled ? "已开启开机自启" : "已关闭开机自启", undefined, "", null, { tone: "success", operation: "settings" });
     } catch (error) {
       appSettings = previousSettings;
       applyAppSettings(appSettings);
@@ -1525,7 +1537,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           // Keep the original failure visible if the platform refuses rollback.
         }
       }
-      showStatus(`开机自启设置失败：${getErrorMessage(error ?? String(error))}`, 6000);
+      showStatus(`开机自启设置失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "settings" });
     } finally {
       autostartUpdating = false;
     }
@@ -1567,7 +1579,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       await persistAppSettings();
       defaultsApplied = true;
       autoLockSession.schedule();
-      showStatus("应用设置已恢复默认值");
+      showStatus("应用设置已恢复默认值", undefined, "", null, { tone: "success", operation: "restore" });
       return true;
     } catch (error) {
       if (!defaultsApplied) {
@@ -1586,14 +1598,14 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
           }
         }
       }
-      showStatus(`恢复设置失败：${getErrorMessage(error ?? String(error))}`, 6000);
+      showStatus(`恢复设置失败：${getErrorMessage(error ?? String(error))}`, 6000, "", null, { tone: "error", operation: "restore" });
       return false;
     }
   }
 
-  function showStatus(message: string, duration = 2200, actionLabel = "", action: (() => void) | null = null) {
+  function showStatus(message: string, duration = 2500, actionLabel = "", action: (() => void) | null = null, presentation?: StatusPresentation) {
     if (confirmationBusy) confirmationReportedStatus = message;
-    statusController.show(message, duration, actionLabel, action);
+    statusController.show(message, duration, actionLabel, action, presentation);
   }
 
   function dismissStatus() {
@@ -1617,11 +1629,14 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   }
 
   function openGeneratorPanel(target: GeneratorTarget = null) {
+    activePopover = null;
+    openTypePicker = null;
     applyGeneratorSettings(appSettings.passwordGenerator);
     passwordGeneratorController.open(target);
   }
 
-  function closeGeneratorPanel(restoreDialog = false) {
+  function closeGeneratorPanel(restoreDialog = true) {
+    layoutController.cancelResize();
     passwordGeneratorController.close(restoreDialog);
   }
 
@@ -1706,7 +1721,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   function copySelectedDeviceInfo() {
     activePopover = null;
     if (!hasSelectedDevice) {
-      showStatus("请先选择设备");
+      showStatus("请先选择设备", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     copyText(formatDeviceInfo(selectedItem), "设备信息");
@@ -1788,7 +1803,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     const returnToSecuritySettings = activeDialog === "security-password";
     if (returnToSecuritySettings && (vaultPasswordBusy || recoveryFileBusy)) return;
     if (returnToSecuritySettings && recoveryKey && (!recoveryFileSaved || !recoveryAcknowledged)) {
-      showStatus("请先保存恢复文件");
+      showStatus("请先保存恢复文件", undefined, "", null, { tone: "warning", operation: "restore" });
       return;
     }
     if (returnToSecuritySettings) {
@@ -2012,6 +2027,11 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
       confirmationError = reason ? `操作失败：${reason}` : "操作失败：发生未知错误";
     } finally {
       confirmationBusy = false;
+      const deferred = deferredStatusAlert;
+      deferredStatusAlert = null;
+      if (!pendingConfirmation && deferred) {
+        publishStatusAlert(deferred);
+      }
       confirmationReportedStatus = "";
     }
   }
@@ -2297,6 +2317,7 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
   };
 
   $: passwordGeneratorView = {
+    revealResetToken,
     generatorRatio,
     canUseGeneratorForCurrentAccount,
     canUseGeneratorForBulkUpdate,
@@ -2381,7 +2402,8 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     passwordGeneratorView={passwordGeneratorView}
     passwordGeneratorActions={passwordGeneratorActions}
     status={{
-      message: copyStatus,
+      message: statusMessage,
+      presentation: statusPresentation,
       pause: pauseStatusDismiss,
       resume: resumeStatusDismiss,
       dismiss: dismissStatus,

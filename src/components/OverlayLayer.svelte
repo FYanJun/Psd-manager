@@ -32,7 +32,7 @@
   import type { FormValidationFeedback } from "../lib/form-validation";
 
   export let backupView: BackupView = emptyBackupView();
-  export let backupActions: { close(): void; submit(password: string, confirmation?: string): Promise<void>; confirmRestore(): Promise<void>; setIncludeSettings(value: boolean): void };
+  export let backupActions: { close(): void; submit(password: string, confirmation?: string): Promise<void>; confirmRestore(): Promise<void> };
   export let validationFeedback: FormValidationFeedback | null = null;
   export let popover: { model: ActionPopoverModel; actions: ActionPopoverActions };
   export let activeDialog: ActiveDialog = null;
@@ -79,6 +79,7 @@
   export let passwordGeneratorActions: PasswordGeneratorActions;
   export let status: {
     message: string;
+    presentation: import("../lib/status-presentation").StatusPresentation;
     pause: () => void;
     resume: () => void;
     dismiss: () => void;
@@ -184,7 +185,9 @@
 {/if}
 
 <StatusToast
-  copyStatus={status.message}
+  message={status.message}
+  tone={status.presentation.tone}
+  operation={status.presentation.operation}
   pauseStatusDismiss={status.pause}
   resumeStatusDismiss={status.resume}
   dismissStatus={status.dismiss}

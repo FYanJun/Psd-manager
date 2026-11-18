@@ -69,7 +69,7 @@
     bulkPasswordAllMatches: view.bulkPasswordAllMatches,
     bulkPasswordSelectedMatches: view.bulkPasswordSelectedMatches,
   };
-  $: dialogDescription = activeDialog === "settings" ? "管理界面、数据、安全和应用信息。"
+  $: dialogDescription = activeDialog === "settings" ? "管理通用设置、数据、安全和应用信息。"
     : activeDialog === "type" ? "设置类型名称、图标和颜色，便于归类查找。"
     : activeDialog === "device" ? "设备属性与账号凭据分别管理。"
     : activeDialog === "account" ? "维护当前设备下的账号、密码和备注。"
@@ -118,7 +118,6 @@
           revealResetToken={view.revealResetToken}
           closeOverlays={actions.closeOverlays}
           openGeneratorPanel={actions.openGeneratorPanel}
-          setActiveDialog={actions.setActiveDialog}
           savePasswordUpdate={actions.savePasswordUpdate}
         />
       {:else if activeDialog === "bulk-password"}

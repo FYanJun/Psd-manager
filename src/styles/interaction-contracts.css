@@ -1,21 +1,26 @@
 /* Shared visual contracts applied after component and theme styles. */
+:where(*, *::before, *::after) {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
 :where(body, p, li, dd, dt, label, .toast span) {
   widows: 2;
   orphans: 2;
   text-wrap: pretty;
 }
 
-:where(h1, h2, h3, h4, h5, h6) {
+:where(h1, h2, h3, h4, h5, h6, [role="heading"],
+  .empty-list strong, .account-empty-state strong, .settings-action-copy strong,
+  .confirmation-warning-copy > strong, .confirmation-target-copy > strong,
+  .confirmation-recovery strong, .confirmation-body > strong,
+  .vault-directory > strong, #vault-storage-confirm-title) {
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
   border-color: transparent !important;
   background-color: var(--field) !important;
-}
-
-:where(button:not(.primary-button):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)) {
-  border-color: transparent !important;
 }
 
 :where(.generator-result, .drawer-section, .password-target-card, .readonly-field strong, .type-readonly-value) {
@@ -68,8 +73,48 @@
   box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
 }
 
-/* Stateful controls supply their own fills instead of losing their meaning
-   under the shared hover and press treatment. */
+/* Expand compact action targets through their existing gutters. Each sibling
+   claims half of the gap, so adjacent controls meet without stealing clicks. */
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button {
+  position: relative;
+}
+
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button::before {
+  position: absolute;
+  z-index: 1;
+  inset-inline: 0;
+  inset-block: 0;
+  border-radius: inherit;
+  content: "";
+}
+
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button:not(:first-child)::before {
+  inset-inline-start: calc(var(--action-hit-gap, 0px) / -2);
+}
+
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button:not(:last-child)::before {
+  inset-inline-end: calc(var(--action-hit-gap, 0px) / -2);
+}
+
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button:first-child::before {
+  inset-inline-start: 0;
+}
+
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button:last-child::before {
+  inset-inline-end: 0;
+}
+
+.topbar { --action-hit-gap: 8px; }
+.pane-actions { --action-hit-gap: 4px; }
+.toolbar-actions,
+.detail-actions { --action-hit-gap: 4px; }
+.account-heading-actions { --action-hit-gap: 8px; }
+
+:where(.topbar, .pane-actions, .toolbar-actions, .detail-actions, .account-heading-actions) > button:disabled::before {
+  content: none;
+}
+
+/* Components own state colors; these tokens also support neutral fallbacks. */
 :where(.primary-button, .update-password-action, .drawer-action.primary-action) {
   --button-hover-fill: var(--primary-fill-hover);
   --button-pressed-fill: color-mix(in oklch, var(--primary-fill-hover) 90%, black);
@@ -78,7 +123,8 @@
 :where(.item-row.selected, .quick-lengths button.selected,
   .menu-item.selected, [role="menuitemradio"][aria-checked="true"],
   .settings-segmented-option[data-state="checked"], .account-row.selected,
-  .format-choice-list button.selected, .import-mode-control button.selected) {
+  .format-choice-list button.selected, .import-mode-control button.selected,
+  .bulk-cascade-modes button[aria-pressed="true"]) {
   --button-selected-fill: var(--selection-fill);
 }
 
@@ -94,18 +140,19 @@
   .menu-item.selected, [role="menuitemradio"][aria-checked="true"],
   .quick-lengths button.selected, .settings-segmented-option[data-state="checked"],
   .account-row.selected, .format-choice-list button.selected,
-  .import-mode-control button.selected) {
+  .import-mode-control button.selected, .bulk-cascade-modes button[aria-pressed="true"]) {
   --button-hover-fill: color-mix(in oklch, var(--button-selected-fill) 90%, var(--blue));
   --button-pressed-fill: color-mix(in oklch, var(--button-selected-fill) 85%, var(--blue));
 }
 
-:where(button:not(:disabled):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):hover {
-  background-color: var(--button-hover-fill, var(--surface-step-1)) !important;
+/* Element specificity beats the reset, but never a component class. */
+button:where(:not(:disabled):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer):hover) {
+  background-color: var(--button-hover-fill, var(--control-hover));
 }
 
-:where(button:not(:disabled):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer)):active {
+button:where(:not(:disabled):not(.danger-button):not(.tool-button.accent):not(.drawer-resizer):active) {
   animation: button-press-spring 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
-  background-color: var(--button-pressed-fill, var(--surface-step-2)) !important;
+  background-color: var(--button-pressed-fill, var(--control-hover));
 }
 
 /* Account controls share the row surface in selected, hover and press states. */
@@ -125,11 +172,10 @@
   [role="menuitemradio"][aria-checked="true"], [role="tab"][aria-selected="true"],
   input[type="checkbox"]:checked + *, input[type="radio"]:checked + *) {
   animation: selection-settle 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
-  background-color: var(--surface-step-2);
 }
 
-/* Bulk updates keep visible action boundaries and one surface per data row. */
-.bulk-password-form .bulk-password-controls .bulk-random-password {
+/* Random-password actions share one appearance in single and bulk updates. */
+.random-password-button {
   --button-hover-fill: var(--selection-fill);
   --button-pressed-fill: color-mix(in srgb, var(--selection-fill) 85%, var(--blue));
   border-color: var(--selection-border) !important;
@@ -145,6 +191,18 @@
   border-color: var(--field-border) !important;
   color: var(--text-strong);
   background: var(--surface);
+}
+
+.random-password-button:not(:disabled):hover,
+.bulk-password-form .bulk-selection-actions .compact-button:not(:disabled):hover,
+.modal:has(.bulk-password-form) .modal-actions .secondary-button:not(:disabled):hover {
+  background-color: var(--button-hover-fill);
+}
+
+.random-password-button:not(:disabled):active,
+.bulk-password-form .bulk-selection-actions .compact-button:not(:disabled):active,
+.modal:has(.bulk-password-form) .modal-actions .secondary-button:not(:disabled):active {
+  background-color: var(--button-pressed-fill);
 }
 
 @keyframes button-press-spring {

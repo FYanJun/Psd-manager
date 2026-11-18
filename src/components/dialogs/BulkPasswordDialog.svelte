@@ -241,7 +241,7 @@
                     </Checkbox.Root>
                     <button type="button" class="bulk-cascade-expand" aria-label={`展开分组 ${group.label}`}
                       aria-expanded={activeCascadeGroup?.key === group.key} aria-controls="bulk-cascade-leaves"
-                      on:click={() => expandedGroupKey = group.key}>
+                      on:click={() => { expandedGroupKey = group.key; }}>
                       <span>{group.label}<small>{count} / {group.matches.length} 个账号</small></span><ChevronRight size={16} aria-hidden="true" />
                     </button>
                   </div>
@@ -293,9 +293,9 @@
   </section>
 
   <div class="bulk-password-controls wide-field">
-    <label><span>新密码</span><ClearableInput bind:value={bulkPasswordForm.password} type="password" ariaLabel="批量改密新密码" validateAccountPassword={true} revealResetToken={view.revealResetToken} /></label>
+    <label><span>新密码</span><ClearableInput bind:value={bulkPasswordForm.password} type="password" modalAutofocus={true} ariaLabel="批量改密新密码" validateAccountPassword={true} revealResetToken={view.revealResetToken} /></label>
     <label><span>更新原因</span><ClearableInput bind:value={bulkPasswordForm.reason} ariaLabel="批量改密更新原因" maxlength={INPUT_LIMITS.passwordReason} transformValue={sanitizeSingleLineTextInput} /></label>
-    <button type="button" class="secondary-button bulk-random-password" on:click={() => { actions.openGeneratorPanel("bulk-password"); actions.setActiveDialog(null); }}><WandSparkles size={18} aria-hidden="true" /><span>使用随机密码</span></button>
+    <button type="button" class="secondary-button random-password-button" on:click={() => actions.openGeneratorPanel("bulk-password")}><WandSparkles size={18} aria-hidden="true" /><span>使用随机密码</span></button>
   </div>
 </div>
 <footer class="modal-actions">

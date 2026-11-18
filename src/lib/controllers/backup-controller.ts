@@ -1,6 +1,6 @@
 import { validatePersistedVaultState } from "../persisted-vault";
 import { getErrorMessage } from "../utils";
-import type { AppSettings, PersistedVaultState, VaultSnapshot } from "../types";
+import type { PersistedVaultState, VaultSnapshot } from "../types";
 
 export type BackupMode = "create" | "restore";
 export type BackupView = {
@@ -10,22 +10,18 @@ export type BackupView = {
   error: string;
   message: string;
   fileName: string;
-  includeSettings: boolean;
-  summary: { devices: number; accounts: number; snapshots: number; hasSettings: boolean } | null;
+  summary: { devices: number; accounts: number; snapshots: number } | null;
 };
 export const emptyBackupView = (): BackupView => ({ mode: null, stage: "password", busy: false,
-  error: "", message: "", fileName: "", includeSettings: true, summary: null });
+  error: "", message: "", fileName: "", summary: null });
 
 type BackupPort = {
   available(): boolean;
   capture(): PersistedVaultState;
-  settings(): AppSettings;
   flushVault(): Promise<void>;
-  flushSettings(): Promise<void>;
   createSafetySnapshot(): Promise<VaultSnapshot | null>;
   applyVault(data: PersistedVaultState): void;
   persistRestored(): Promise<void>;
-  restoreSettings(content: string): Promise<void>;
   publish(view: BackupView): void;
   close(): void;
 };
@@ -42,16 +38,32 @@ export type BackupPlatform = {
 export function createBackupController(port: BackupPort, platform: BackupPlatform) {
   let view = emptyBackupView();
   let generation = 0;
-  let preview: { data: PersistedVaultState; settings: string | null; baseline: string } | null = null;
+  let restorePath: string | null = null;
+  let preview: { data: PersistedVaultState; baseline: string } | null = null;
   const publish = (patch: Partial<BackupView>) => { view = { ...view, ...patch }; port.publish(view); };
   const signature = () => JSON.stringify(port.capture());
   const current = (id: number) => generation === id && view.mode !== null;
   const ensureAvailable = () => { if (!port.available()) throw new Error("资产库当前不可用，请先解锁并完成保存后重试"); };
 
-  function clear() { generation += 1; preview = null; view = emptyBackupView(); port.publish(view); }
-  function open(mode: BackupMode) {
-    if (view.busy || !port.available()) return;
-    clear(); publish({ mode });
+  function clear() { generation += 1; restorePath = null; preview = null; view = emptyBackupView(); port.publish(view); }
+  async function open(mode: BackupMode): Promise<boolean> {
+    if (view.busy || !port.available()) return false;
+    clear();
+    if (mode === "create") { publish({ mode }); return true; }
+    const id = generation;
+    publish({ mode, busy: true });
+    try {
+      const path = await platform.chooseOpen();
+      if (!current(id)) return false;
+      if (!path) { clear(); return false; }
+      ensureAvailable();
+      restorePath = path;
+      publish({ fileName: path.split(/[\\/]/).pop() || path });
+      return true;
+    } catch (error) {
+      if (current(id)) { clear(); publish({ error: getErrorMessage(error, "无法选择备份文件") }); }
+      return false;
+    } finally { if (current(id)) publish({ busy: false }); }
   }
   function close() { if (view.busy) return; clear(); port.close(); }
 
@@ -64,7 +76,6 @@ export function createBackupController(port: BackupPort, platform: BackupPlatfor
     if (view.mode === "create" && password !== confirmation) { publish({ error: "两次输入的备份密码不一致" }); return; }
     const id = generation;
     const mode = view.mode;
-    const includeSettings = view.includeSettings;
     publish({ busy: true, error: "", message: "" });
     try {
       ensureAvailable();
@@ -73,30 +84,27 @@ export function createBackupController(port: BackupPort, platform: BackupPlatfor
         if (!current(id) || !path) return;
         await port.flushVault();
         if (!current(id)) return;
-        if (includeSettings) await port.flushSettings();
-        if (!current(id)) return;
         ensureAvailable();
         const vault = JSON.stringify(port.capture());
-        const settings = includeSettings ? JSON.stringify(port.settings()) : null;
-        const encoded = await platform.encode(vault, settings, password);
+        const encoded = await platform.encode(vault, null, password);
         if (!current(id)) return;
         await platform.write(path, encoded);
         if (!current(id)) return;
         publish({ stage: "done", fileName: path.split(/[\\/]/).pop() || path,
           message: "加密备份已保存。请将文件保存在独立位置，并妥善保管备份密码。" });
       } else {
-        const path = await platform.chooseOpen();
-        if (!current(id) || !path) return;
+        const path = restorePath;
+        if (!path) throw new Error("请先选择备份文件");
         const content = await platform.read(path);
         if (!current(id)) return;
         const decoded = await platform.decode(content, password);
         if (!current(id)) return;
         ensureAvailable();
         const data = validatePersistedVaultState(JSON.parse(decoded.vault));
-        preview = { data, settings: decoded.settings, baseline: signature() };
+        preview = { data, baseline: signature() };
         publish({ stage: "review", fileName: path.split(/[\\/]/).pop() || path,
           summary: { devices: data.items.length, accounts: data.items.reduce((n, item) => n + item.accounts.length, 0),
-            snapshots: data.snapshots.length, hasSettings: decoded.settings !== null } });
+            snapshots: data.snapshots.length } });
       }
     } catch (error) {
       if (current(id)) publish({ error: getErrorMessage(error, "备份操作失败") });
@@ -107,7 +115,6 @@ export function createBackupController(port: BackupPort, platform: BackupPlatfor
     if (view.busy || view.stage !== "review" || !preview) return;
     const id = generation;
     const selected = preview;
-    const includeSettings = view.includeSettings;
     let applied = false;
     publish({ busy: true, error: "" });
     try {
@@ -132,10 +139,6 @@ export function createBackupController(port: BackupPort, platform: BackupPlatfor
       await port.persistRestored();
       if (!current(id)) return;
       publish({ stage: "done", message: "资产库已恢复；恢复前的数据保留在“数据快照”中。" });
-      if (includeSettings && selected.settings !== null) {
-        await port.restoreSettings(selected.settings);
-        if (current(id)) publish({ message: "资产库和应用偏好已恢复；本机窗口、自启和主密码保护保持原设置。" });
-      }
     } catch (error) {
       if (!current(id)) return;
       if (applied) {
@@ -147,7 +150,5 @@ export function createBackupController(port: BackupPort, platform: BackupPlatfor
       }
     } finally { if (current(id)) publish({ busy: false }); }
   }
-  return { open, close, clear, submit, confirmRestore,
-    setIncludeSettings(value: boolean) { if (!view.busy) publish({ includeSettings: value }); },
-  };
+  return { open, close, clear, submit, confirmRestore };
 }

@@ -12,7 +12,7 @@
   export let close: () => void;
 
   const sections = [
-    { key: "interface", label: "界面", icon: Palette },
+    { key: "interface", label: "通用", icon: Palette },
     { key: "data", label: "数据", icon: DatabaseBackup },
     { key: "security", label: "安全", icon: ShieldCheck },
     { key: "about", label: "关于", icon: BadgeInfo },
@@ -59,7 +59,7 @@
 
   <section class="settings-content">
     {#if view.activeSection === "interface"}
-      <div class="settings-heading"><h3>界面</h3><p>调整主题和提示信息。</p></div>
+      <div class="settings-heading"><h3>通用</h3><p>调整主题和提示信息。</p></div>
       <div class="settings-field"><span>主题</span><SettingsSegmented value={view.theme} options={themeOptions} ariaLabel="主题" onChange={(value) => actions.setTheme(value as ThemePreference)} /></div>
       <SettingsSwitch label="显示 Tooltip" description="鼠标悬停在按钮上时显示操作说明。" checked={view.tooltipEnabled} onChange={actions.setTooltipEnabled} />
       <SettingsSwitch
@@ -72,7 +72,7 @@
       />
     {:else if view.activeSection === "security"}
       <div class="settings-heading"><h3>安全</h3><p>保护应用启动和托盘恢复时的资产库访问。</p></div>
-      <SettingsSwitch label="启动时要求密码" description={view.startupLock ? "应用启动或从托盘恢复时需要输入主密码。" : "开启后，资产库会在应用启动前保持锁定。"} checked={view.startupLock} onChange={actions.setStartupLock} />
+      <SettingsSwitch label="启动时要求密码" description={view.startupLock ? "应用启动或从托盘恢复时需要输入主密码。" : "免密码模式下，取得完整库目录的人可使用其中密钥解密数据。开启后使用主密码保护当前库。"} checked={view.startupLock} onChange={actions.setStartupLock} />
       <SettingsSwitch
         label="闲置自动锁定"
         description={view.startupLock ? "超过设定时间没有操作后自动锁定资产库。" : "请先开启启动密码后使用闲置自动锁定。"}
@@ -101,7 +101,7 @@
     {:else if view.activeSection === "data"}
       <div class="settings-heading"><h3>数据</h3><p>管理加密备份、资产库快照和配置文件。</p></div>
       <div class="settings-action-list">
-        <SettingsActionRow icon={DatabaseBackup} label="创建加密备份" description="用独立备份密码保存完整资产库和可选偏好。" disabled={view.environmentStatus !== "ready"} onSelect={() => actions.openEncryptedBackup("create")} />
+        <SettingsActionRow icon={DatabaseBackup} label="创建加密备份" description="用独立备份密码保存当前密码库的设备、账号、历史和快照。" disabled={view.environmentStatus !== "ready"} onSelect={() => actions.openEncryptedBackup("create")} />
         <SettingsActionRow icon={ArchiveRestore} label="从加密备份恢复" description="读取备份并预览，确认后恢复设备、账号和快照。" disabled={view.environmentStatus !== "ready"} onSelect={() => actions.openEncryptedBackup("restore")} />
         <SettingsActionRow icon={ArchiveRestore} label="数据快照" description="查看、恢复或管理本地数据快照。" onSelect={actions.openSnapshotsDialog} />
         <SettingsActionRow icon={Download} label="导出配置" description="导出 JSON、YAML 或 Excel 工作簿。" onSelect={actions.openExportConfigDialog} />

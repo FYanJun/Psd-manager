@@ -1,3 +1,4 @@
+import type { StatusOperation, StatusReporter } from "../status-presentation";
 import type { ReportFormValidationError } from "../form-validation";
 import { formatDateTime } from "../utils";
 import {
@@ -59,17 +60,17 @@ export type DeviceControllerPort = {
   getTypeMeta(deviceType: string): DeviceTypeMeta;
   iconClassForType(deviceType: string): string;
   openAddTypeDialog(): void;
-  showStatus(message: string, duration?: number): void;
+  showStatus: StatusReporter;
   reportValidationError?: ReportFormValidationError;
   createSafetySnapshot(reason: string): Promise<{ id: string } | null>;
-  offerSnapshotUndo(snapshotId: string, message: string): void;
+  offerSnapshotUndo(snapshotId: string, message: string, operation: StatusOperation): void;
   setPendingConfirmation(confirmation: PendingConfirmation): void;
 };
 
 export function createDeviceController(port: DeviceControllerPort) {
   function reportFieldError(field: string, message: string) {
     if (port.reportValidationError) port.reportValidationError("device", field, message);
-    else port.showStatus(message, 5000);
+    else port.showStatus(message, 5000, "", null, { tone: "warning", operation: "general" });
   }
 
   function openAddDialog(deviceType = port.read().selectedDeviceType) {
@@ -77,7 +78,7 @@ export function createDeviceController(port: DeviceControllerPort) {
     port.write({ activePopover: null, openTypePicker: null, deviceTypeSearch: "" });
     if (state.deviceTypeOptions.length === 0) {
       port.openAddTypeDialog();
-      port.showStatus("请先新增设备类型");
+      port.showStatus("请先新增设备类型", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     const form = createEmptyDeviceForm();
@@ -89,7 +90,7 @@ export function createDeviceController(port: DeviceControllerPort) {
     const state = port.read();
     port.write({ activePopover: null });
     if (!state.hasSelectedDevice) {
-      port.showStatus("请先选择设备");
+      port.showStatus("请先选择设备", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     port.write({
@@ -129,7 +130,7 @@ export function createDeviceController(port: DeviceControllerPort) {
       return null;
     }
     if (!form.deviceType.trim()) {
-      port.showStatus("请先新增设备类型");
+      port.showStatus("请先新增设备类型", undefined, "", null, { tone: "warning", operation: "general" });
       return null;
     }
     const textFields: Array<[string, string, string, number, boolean]> = [
@@ -181,12 +182,12 @@ export function createDeviceController(port: DeviceControllerPort) {
     if (form.id) {
       const currentItem = state.items.find((item) => item.id === form.id);
       if (!currentItem) {
-        port.showStatus("保存失败：待修改的设备已不存在", 5000);
+        port.showStatus("保存失败：待修改的设备已不存在", 5000, "", null, { tone: "error", operation: "save" });
         return;
       }
       const changes = getDeviceChanges(currentItem, form);
       if (changes.length === 0) {
-        port.showStatus("没有可保存的修改");
+        port.showStatus("设备没有可保存的修改", undefined, "", null, { tone: "info", operation: "save" });
         return;
       }
       port.write({ activePopover: null });
@@ -220,13 +221,13 @@ export function createDeviceController(port: DeviceControllerPort) {
         : state.items.find((item) => item.id === form.id)
       : undefined;
     if (form.id && !currentItem) {
-      port.showStatus("保存失败：待修改的设备已不存在", 5000);
+      port.showStatus("保存失败：待修改的设备已不存在", 5000, "", null, { tone: "error", operation: "save" });
       return false;
     }
 
     if (currentItem) {
       if (getDeviceChanges(currentItem, form).length === 0) {
-        port.showStatus("没有可保存的修改");
+        port.showStatus("设备没有可保存的修改", undefined, "", null, { tone: "info", operation: "save" });
         return false;
       }
       const updatedAt = formatDateTime(new Date());
@@ -252,6 +253,7 @@ export function createDeviceController(port: DeviceControllerPort) {
         selectedAccountIds: [],
         activeDialog: null,
       });
+      port.showStatus("设备资料已保存", undefined, "", null, { tone: "success", operation: "save" });
       return true;
     }
 
@@ -283,6 +285,7 @@ export function createDeviceController(port: DeviceControllerPort) {
       selectedAccountIds: [],
       activeDialog: null,
     });
+    port.showStatus("设备已新增", undefined, "", null, { tone: "success", operation: "create" });
     return true;
   }
 
@@ -299,14 +302,14 @@ export function createDeviceController(port: DeviceControllerPort) {
   async function deleteSelected(target: Pick<PendingConfirmation, "itemUuid">) {
     const itemUuid = target.itemUuid;
     if (!itemUuid) {
-      port.showStatus("删除失败：设备目标信息不完整，请重新选择");
+      port.showStatus("删除失败：设备目标信息不完整，请重新选择", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
 
     const initialState = port.read();
     const initialItem = initialState.items.find((item) => item.uuid === itemUuid);
     if (!initialItem) {
-      port.showStatus("删除失败：待删除的设备已不存在");
+      port.showStatus("删除失败：待删除的设备已不存在", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
     const snapshot = await port.createSafetySnapshot(`删除设备“${initialItem.deviceName}”前`);
@@ -315,7 +318,7 @@ export function createDeviceController(port: DeviceControllerPort) {
     const state = port.read();
     const targetItem = state.items.find((item) => item.uuid === itemUuid);
     if (!targetItem) {
-      port.showStatus("删除失败：待删除的设备已不存在");
+      port.showStatus("删除失败：待删除的设备已不存在", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
     const remainingItems = state.items.filter((item) => item.uuid !== itemUuid);
@@ -335,7 +338,7 @@ export function createDeviceController(port: DeviceControllerPort) {
       patch.selectedAccountIds = [];
     }
     port.write(patch);
-    port.offerSnapshotUndo(snapshot.id, "设备已删除");
+    port.offerSnapshotUndo(snapshot.id, "设备已删除", "delete");
     return true;
   }
 

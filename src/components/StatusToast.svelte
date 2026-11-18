@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { afterUpdate } from "svelte";
-  import { X } from "@lucide/svelte";
+  import { afterUpdate, onMount } from "svelte";
+  import { CircleCheck, Info } from "@lucide/svelte";
+  import type { StatusTone, StatusOperation } from "../lib/status-presentation";
 
-  export let copyStatus = "";
+  export let message = "";
+  export let tone: StatusTone = "info";
+  export let operation: StatusOperation = "general";
   export let pauseStatusDismiss: () => void;
   export let resumeStatusDismiss: () => void;
   export let dismissStatus: () => void;
@@ -12,16 +15,14 @@
   let toastElement: HTMLDivElement | null = null;
   let pointerInside = false;
   let focusInside = false;
-
-  // Content can be replaced while this same toast remains under the pointer or focus.
-  $: if (copyStatus && (pointerInside || focusInside)) pauseStatusDismiss();
-  $: if (!copyStatus) {
+  $: visible = Boolean(message) && (tone === "success" || tone === "info");
+  $: if (visible && (pointerInside || focusInside)) pauseStatusDismiss();
+  $: if (!visible) {
     pointerInside = false;
     focusInside = false;
   }
 
   afterUpdate(() => {
-    // Replacing the action can remove its focused button without a focusout event.
     if (focusInside && toastElement && !toastElement.contains(document.activeElement)) {
       focusInside = false;
       updatePause();
@@ -34,76 +35,99 @@
   }
 
   function handleFocusOut(event: FocusEvent) {
-    if (event.relatedTarget instanceof Node && event.currentTarget instanceof HTMLElement && event.currentTarget.contains(event.relatedTarget)) return;
+    if (event.relatedTarget instanceof Node && toastElement?.contains(event.relatedTarget)) return;
     focusInside = false;
     updatePause();
   }
+
+  onMount(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !visible || event.isComposing) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismissStatus();
+    };
+    window.addEventListener("keydown", escape, true);
+    return () => window.removeEventListener("keydown", escape, true);
+  });
 </script>
 
-{#if copyStatus}
-  <div bind:this={toastElement} class="toast" role="status" on:pointerenter={() => { pointerInside = true; updatePause(); }} on:pointerleave={() => { pointerInside = false; updatePause(); }}
-    on:focusin={() => { focusInside = true; updatePause(); }} on:focusout={handleFocusOut}>
-    <span>{copyStatus}</span>
-    {#if actionLabel}<button class="toast-action" on:click={() => runAction()}>{actionLabel}</button>{/if}
-    <button class="toast-close" aria-label="关闭提示" on:click={dismissStatus}>
-      <X size={16} />
-    </button>
-  </div>
-{/if}
+<div class="toast-region" role="status" aria-live="polite" aria-atomic="true" aria-relevant="additions text">
+  {#if visible}
+    <div bind:this={toastElement} class="toast" role="group" data-tone={tone} data-operation={operation}
+      on:pointerenter={() => { pointerInside = true; updatePause(); }} on:pointerleave={() => { pointerInside = false; updatePause(); }}
+      on:focusin={() => { focusInside = true; updatePause(); }} on:focusout={handleFocusOut}>
+      <span class="toast-icon" aria-hidden="true">
+        {#if tone === "success"}<CircleCheck size={18} />{:else}<Info size={18} />{/if}
+      </span>
+      <span class="toast-message">{message}</span>
+      {#if actionLabel}
+        <button type="button" class="toast-action" on:click={runAction}>{actionLabel}</button>
+      {/if}
+    </div>
+  {/if}
+</div>
 
 <style>
-  .toast {
+  .toast-region {
     position: fixed;
-    top: 54px;
+    bottom: 24px;
     left: 50%;
     z-index: 90;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+  }
+
+  .toast {
     display: flex;
     align-items: center;
     gap: 10px;
-    max-width: clamp(32%, var(--toast-share), 92%);
-    padding: 10px 10px 10px 16px;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 10px 14px;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--app-text);
+    border-radius: calc(var(--radius-md) + 10px + var(--radius-nested-inset));
     background: var(--surface-elevated);
+    color: var(--app-text);
     box-shadow: var(--popover-shadow);
     font-size: var(--font-size-14);
-    font-weight: var(--weight-semibold);
-    transform: translateX(-50%);
+    font-weight: var(--weight-medium);
+    cursor: default;
+    pointer-events: auto;
   }
 
-  .toast span {
+  .toast-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+  }
+
+  .toast[data-tone="success"] .toast-icon {
+    color: var(--toast-success);
+  }
+
+  .toast-message {
     min-width: 0;
-    line-height: 1.45;
+    line-height: 1.5;
     overflow-wrap: anywhere;
     white-space: normal;
-  }
-
-  .toast-close {
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 8px;
-    color: var(--app-text);
-    background: var(--surface-subtle);
   }
 
   .toast-action {
     flex: 0 0 auto;
     min-height: 28px;
-    padding: 0 10px;
-    border: 1px solid var(--field-border);
-    border-radius: 7px;
-    color: var(--app-text);
-    background: var(--surface-subtle);
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--blue);
+    background: transparent;
     font-weight: var(--weight-semibold);
   }
 
-  .toast-action:hover,
-  .toast-close:hover {
+  .toast-action:hover {
     background: var(--control-hover);
   }
 </style>

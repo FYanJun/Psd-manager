@@ -44,7 +44,8 @@
     event.preventDefault();
     // A restored password form owns its own initial focus.
     if (document.querySelector('[role="dialog"][data-state="open"]')) return;
-    if (returnFocusTarget?.isConnected) returnFocusTarget.focus({ preventScroll: true });
+    const trigger = document.querySelector<HTMLElement>("[data-generator-trigger]");
+    (trigger ?? (returnFocusTarget?.isConnected ? returnFocusTarget : null))?.focus({ preventScroll: true });
   }
 
   function handleEscapeKeydown(event: KeyboardEvent) {
@@ -137,7 +138,7 @@
     </div>
   </header>
 
-  <GeneratorResult {generatedPassword} {generatePassword} {copyGeneratedPassword} />
+  <GeneratorResult {generatedPassword} {generatePassword} {copyGeneratedPassword} revealResetToken={view.revealResetToken} />
 
   <div class="drawer-body">
     <BasicRulesSection
@@ -175,6 +176,7 @@
 
   <GeneratorFooterActions
     {generatedPassword}
+    {closeGeneratorPanel}
     {canUseGeneratorForCurrentAccount}
     {canUseGeneratorForBulkUpdate}
     {selectedItem}

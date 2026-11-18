@@ -52,6 +52,7 @@ html[data-theme="dark"] {
   --tooltip-border: #6e8194;
   --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --focus-ring: 0 0 0 3px #79b8ff;
+  --toast-success: #7ed9a6;
   --danger-subtle: #3f282d;
   --danger-subtle-hover: #5b3034;
   --danger-panel: #3f282d;
@@ -124,6 +125,7 @@ html[data-theme="dark"] {
     --tooltip-border: #6e8194;
     --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
     --focus-ring: 0 0 0 3px #79b8ff;
+    --toast-success: #7ed9a6;
     --danger-subtle: #3f282d;
     --danger-subtle-hover: #5b3034;
     --danger-panel: #3f282d;
@@ -500,10 +502,10 @@ html[data-theme="system"] .color-picker-swatch.active {
   border-color: var(--blue);
   background: var(--accent-subtle);
 }
-html[data-theme="dark"] .format-choice-list button:hover,
-html[data-theme="system"] .format-choice-list button:hover {
+html[data-theme="dark"] .format-choice-list button:not(:disabled):not(.selected):hover,
+html[data-theme="system"] .format-choice-list button:not(:disabled):not(.selected):hover {
   border-color: var(--blue);
-  background: var(--accent-subtle);
+  background: var(--control-hover);
 }
 
 html[data-theme="dark"] .format-choice-list button.selected,
@@ -537,8 +539,8 @@ html[data-theme="system"] .import-mode-control {
   background: var(--surface-subtle);
 }
 
-html[data-theme="dark"] .import-mode-control button:hover,
-html[data-theme="system"] .import-mode-control button:hover {
+html[data-theme="dark"] .import-mode-control button:not(:disabled):not(.selected):hover,
+html[data-theme="system"] .import-mode-control button:not(:disabled):not(.selected):hover {
   background: var(--control-hover);
 }
 
@@ -571,8 +573,6 @@ html[data-theme="system"] .confirmation-summary {
   background: var(--surface-muted);
 }
 
-html[data-theme="dark"] .format-choice-list button:hover,
-html[data-theme="system"] .format-choice-list button:hover,
 html[data-theme="dark"] .format-choice-list button.selected,
 html[data-theme="system"] .format-choice-list button.selected,
 html[data-theme="dark"] .import-mode-control button.selected,
@@ -926,6 +926,7 @@ html[data-theme="system"] textarea::placeholder {
     --tooltip-border: #4c5b6a;
     --tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     --focus-ring: 0 0 0 3px #b9dcff;
+    --toast-success: #187548;
     --danger-subtle: transparent;
     --danger-subtle-hover: #fff2f0;
     --danger-panel: #fff2f0;

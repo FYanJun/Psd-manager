@@ -19,6 +19,8 @@
   export let className = "";
   export let inputClass = "";
   export let inputRef: HTMLInputElement | null = null;
+  export let modalAutofocus = false;
+  export let fixedPasswordMask = false;
   export let revealResetToken = 0;
   export let transformValue: ((value: string) => string) | undefined = undefined;
   export let validateAccountPassword = false;
@@ -56,6 +58,7 @@
   $: currentType = isPassword ? (passwordVisible ? "text" : "password") : type;
   $: stringValue = value == null ? "" : String(value);
   $: hasValue = stringValue.length > 0;
+  $: showFixedMask = fixedPasswordMask && isPassword && !passwordVisible && hasValue;
   $: showClearButton = clearable && hasValue;
   $: passwordError = validateAccountPassword && (rejectedPasswordPaste || !hasValidPasswordCharacters(stringValue));
   // Native maxlength counts UTF-16 units and can truncate a valid Unicode
@@ -122,9 +125,11 @@
   <input
     bind:this={inputRef}
     class={inputClass}
+    class:fixed-password-mask={showFixedMask}
     type={currentType}
     data-editable-context={isPassword ? "password" : className.includes("topbar-search-input") ? "search" : undefined}
     data-account-password={validateAccountPassword ? "true" : undefined}
+    data-modal-autofocus={modalAutofocus ? "true" : undefined}
     value={stringValue}
     {placeholder}
     aria-label={ariaLabel || undefined}
@@ -144,6 +149,9 @@
     on:blur={() => onBlur?.()}
     on:keydown={(event) => onKeydown?.(event)}
   />
+  {#if showFixedMask}
+    <span class="password-mask" aria-hidden="true">••••••••</span>
+  {/if}
   {#if showClearButton || isPassword}
     <span class="clearable-input-actions">
       {#if showClearButton}
@@ -175,6 +183,31 @@
 
   .clearable-input-field :global(input) { position: relative; z-index: 1; background: transparent !important; }
   .clearable-input-actions { position: relative; z-index: 2; }
+
+  .clearable-input-field input.fixed-password-mask {
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+    caret-color: transparent;
+    text-shadow: none;
+  }
+
+  .clearable-input-field input.fixed-password-mask::selection {
+    color: transparent;
+    background: transparent;
+  }
+
+  .password-mask {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    padding-inline: 11px 74px;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--text-strong);
+    pointer-events: none;
+  }
 
   .clearable-input-field :global(.ink-wash) {
     position: absolute;

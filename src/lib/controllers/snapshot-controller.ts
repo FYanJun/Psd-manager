@@ -1,3 +1,4 @@
+import type { StatusOperation, StatusReporter } from "../status-presentation";
 import type { DeviceTypeMeta, PendingConfirmation, VaultItem, VaultSnapshot } from "../types";
 import { createVaultSnapshot } from "../vault-recovery";
 import { getErrorMessage } from "../utils";
@@ -14,7 +15,7 @@ type SnapshotControllerPort = {
   applySnapshot(snapshot: VaultSnapshot): void;
   setActiveDialog(dialog: null): void;
   setPendingConfirmation(confirmation: PendingConfirmation | null): void;
-  showStatus(message: string, duration?: number, actionLabel?: string, action?: (() => void) | null): void;
+  showStatus: StatusReporter;
   persistImmediately(): Promise<void>;
   refreshDirtyState(): void;
 };
@@ -41,7 +42,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
         reason
           ? `安全快照保存失败，操作已取消：${reason}`
           : "安全快照保存失败，操作已取消",
-        7000,
+        7000, "", null, { tone: "error", operation: "save" },
       );
       return null;
     }
@@ -50,7 +51,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
   async function restoreSnapshot(snapshotId: string, createCurrentBackup: boolean): Promise<boolean> {
     const snapshot = port.read().snapshots.find((candidate) => candidate.id === snapshotId);
     if (!snapshot) {
-      port.showStatus("找不到要恢复的数据快照", 5000);
+      port.showStatus("找不到要恢复的数据快照", 5000, "", null, { tone: "error", operation: "restore" });
       return false;
     }
     if (createCurrentBackup) {
@@ -61,7 +62,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
     port.setActiveDialog(null);
     try {
       await port.persistImmediately();
-      port.showStatus("数据快照已恢复");
+      port.showStatus("数据快照已恢复", undefined, "", null, { tone: "success", operation: "restore" });
     } catch (error) {
       const reason = getErrorMessage(error, "未知错误");
       // The restored state remains in memory and dirty so the storage retry path
@@ -70,24 +71,24 @@ export function createSnapshotController(port: SnapshotControllerPort) {
         reason
           ? `快照已应用，但保存失败：${reason}；请重试保存后再关闭程序`
           : "快照已应用，但保存失败；请重试保存后再关闭程序",
-        8000,
+        8000, "", null, { tone: "error", operation: "restore" },
       );
     }
     port.setPendingConfirmation(null);
     return true;
   }
 
-  function offerUndo(snapshotId: string, message: string, onRestored?: () => void) {
+  function offerUndo(snapshotId: string, message: string, onRestored?: () => void, operation: StatusOperation = "restore") {
     const expectedState = dataSignature();
     port.showStatus(message, 8000, "撤销", () => {
       if (dataSignature() !== expectedState) {
-        port.showStatus("数据已继续变化，请从“数据快照”中选择恢复", 5000);
+        port.showStatus("数据已继续变化，请从“数据快照”中选择恢复", 5000, "", null, { tone: "warning", operation: "restore" });
         return;
       }
       void restoreSnapshot(snapshotId, false).then((restored) => {
         if (restored) onRestored?.();
       });
-    });
+    }, { tone: "success", operation });
   }
 
   function requestRestore(snapshot: VaultSnapshot) {

@@ -72,6 +72,8 @@
 }
 
 .secondary-button.danger-outline {
+  --button-hover-fill: var(--danger-subtle-hover);
+  --button-pressed-fill: color-mix(in srgb, var(--danger-subtle-hover) 85%, var(--red-500));
   border-color: var(--red-200);
   color: var(--red-500);
   background: var(--red-50);
@@ -81,6 +83,16 @@
   border-color: var(--red-500);
   color: var(--red-600);
   background: var(--red-50);
+}
+
+.secondary-button.danger-outline:not(:disabled):active {
+  background: var(--button-pressed-fill);
+}
+
+.primary-button:not(:disabled):active,
+.update-password-action:not(:disabled):active,
+.drawer-action.primary-action:not(:disabled):active {
+  background: var(--button-pressed-fill);
 }
 
 button:disabled {

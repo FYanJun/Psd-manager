@@ -75,6 +75,8 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  /* Nested surfaces add the actual padding and border to their child radius. */
+  --radius-nested-inset: 1px;
   --radius-pill: 999px;
   --weight-regular: 400;
   --weight-medium: 500;
@@ -140,7 +142,6 @@
   --generator-share: 32%;
   --generator-min-share: 24%;
   --generator-max-share: 48%;
-  --toast-share: 44%;
   --app-text: #1e293b;
   --app-background: var(--surface-canvas);
   --surface-muted: #f8fafc;
@@ -167,6 +168,7 @@
   --tooltip-border: #4c5b6a;
   --tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   --focus-ring: 0 0 0 3px #b9dcff;
+  --toast-success: #187548;
   --danger-subtle: transparent;
   --danger-subtle-hover: var(--red-50);
   --danger-panel: var(--red-50);
@@ -188,7 +190,7 @@
 }
 
 :root {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 @supports (corner-shape: squircle) {

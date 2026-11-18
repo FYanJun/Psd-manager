@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SlidersHorizontal } from "@lucide/svelte";
-  import ClearableInput from "../ClearableInput.svelte";
+  import NumberStepper from "./NumberStepper.svelte";
   import type { PasswordGeneratorActions } from "../../lib/view-models";
 
   export let generatorLength = 8;
@@ -30,7 +30,7 @@
     {/each}
   </div>
 
-  <label class="range-control drawer-range">
+  <div class="range-control drawer-range">
     <span>长度</span>
     <input
       type="range"
@@ -40,48 +40,21 @@
       aria-label="拖动调整密码长度"
       on:input={updateGeneratorLengthFromSlider}
     />
-    <ClearableInput
-      className="length-input-shell"
-      inputClass="length-input"
-      type="number"
-      min="3"
-      max="24"
-      clearable={false}
-      fallbackValue={generatorLength}
-      value={generatorLengthInput}
-      ariaLabel="密码长度"
-      onValueChange={handleGeneratorLengthInput}
-      onBlur={commitGeneratorLengthInput}
-      onKeydown={handleGeneratorLengthKeydown}
-    />
-  </label>
+    <NumberStepper label="密码长度" value={generatorLengthInput} current={generatorLength} min={3} max={24}
+      onInput={handleGeneratorLengthInput} onStep={setGeneratorLength}
+      onBlur={commitGeneratorLengthInput} onKeydown={handleGeneratorLengthKeydown} />
+  </div>
 
   <div class="stepper-grid">
-    <label class="number-control">
+    <div class="number-control">
       <span>最少数字</span>
-      <ClearableInput
-        type="number"
-        min="0"
-        max={generatorLength}
-        clearable={false}
-        fallbackValue={minimumNumbers}
-        value={minimumNumbers}
-        disabled={!useNumbers}
-        onValueChange={setGeneratorMinimumNumbers}
-      />
-    </label>
-    <label class="number-control">
+      <NumberStepper label="最少数字" value={minimumNumbers} current={minimumNumbers} min={0} max={generatorLength}
+        disabled={!useNumbers} onInput={setGeneratorMinimumNumbers} onStep={setGeneratorMinimumNumbers} />
+    </div>
+    <div class="number-control">
       <span>最少符号</span>
-      <ClearableInput
-        type="number"
-        min="0"
-        max={generatorLength}
-        clearable={false}
-        fallbackValue={minimumSymbols}
-        value={minimumSymbols}
-        disabled={!useSymbols}
-        onValueChange={setGeneratorMinimumSymbols}
-      />
-    </label>
+      <NumberStepper label="最少符号" value={minimumSymbols} current={minimumSymbols} min={0} max={generatorLength}
+        disabled={!useSymbols} onInput={setGeneratorMinimumSymbols} onStep={setGeneratorMinimumSymbols} />
+    </div>
   </div>
 </section>

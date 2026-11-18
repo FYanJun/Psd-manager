@@ -95,7 +95,6 @@
 <div class="action-popover-host">
 {#if activePopover}
   {#key `${activePopover}`}
-  {#key popoverPosition}
   <svelte:component this={activePopover === "editable-context" ? EditableMenu : BusinessMenu} position={popoverPosition} close={closeMenu}>
     {#if activePopover === "editable-context" && editableContext}
       <div class="context-menu-title">
@@ -151,7 +150,6 @@
     {/if}
   </svelte:component>
   {/key}
-  {/key}
 {/if}
 </div>
 
@@ -164,13 +162,13 @@
     position: fixed;
     z-index: 70;
     display: grid;
-    gap: 4px;
+    gap: 0;
     width: min(236px, calc(100vw - 24px));
     max-height: min(330px, var(--bits-dropdown-menu-content-available-height, calc(100vh - 24px)));
     overflow: auto;
     padding: 8px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: calc(var(--radius-sm) + 8px + var(--radius-nested-inset));
     color: var(--app-text);
     background: var(--surface);
     box-shadow: var(--popover-shadow);
@@ -184,7 +182,7 @@
 
   .action-popover-host :global(.action-popover [data-dropdown-menu-radio-group]) {
     display: grid;
-    gap: 4px;
+    gap: 0;
     min-width: 0;
   }
 
@@ -221,7 +219,7 @@
     gap: 12px;
     min-height: 34px;
     width: 100%;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     padding: 0 9px;
     text-align: left;
     font-size: var(--font-size-14);

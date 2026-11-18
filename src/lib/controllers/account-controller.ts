@@ -17,7 +17,7 @@ import {
 export function createAccountController(port: AccountPasswordControllerPort) {
   function reportFieldError(field: string, message: string) {
     if (port.reportValidationError) port.reportValidationError("account", field, message);
-    else port.showStatus(message, 5000);
+    else port.showStatus(message, 5000, "", null, { tone: "warning", operation: "general" });
   }
 
   function deriveAccountState(state = port.read()) {
@@ -50,12 +50,12 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     const state = port.read();
     const { selectedAccountTargets } = deriveAccountState(state);
     if (!state.hasSelectedDevice || selectedAccountTargets.length === 0) {
-      port.showStatus("请先选择账号");
+      port.showStatus("请先选择账号", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     const accountsWithPassword = selectedAccountTargets.filter((account) => account.password);
     if (accountsWithPassword.length === 0) {
-      port.showStatus(selectedAccountTargets.length > 1 ? "选中的账号都没有密码" : "当前账号没有密码");
+      port.showStatus(selectedAccountTargets.length > 1 ? "选中的账号都没有密码" : "当前账号没有密码", undefined, "", null, { tone: "warning", operation: "password" });
       return;
     }
     void port.copyText(
@@ -98,7 +98,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
   function openAddAccountDialog() {
     port.setActivePopover(null);
     if (!port.read().hasSelectedDevice) {
-      port.showStatus("请先选择设备");
+      port.showStatus("请先选择设备", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     port.write({ accountForm: createEmptyAccountForm() });
@@ -109,12 +109,12 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     port.setActivePopover(null);
     const state = port.read();
     if (state.selectedAccountIds.length > 1) {
-      port.showStatus("编辑账号前请只选择一个账号");
+      port.showStatus("编辑账号前请只选择一个账号", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     const { selectedAccount } = deriveAccountState(state);
     if (!state.hasSelectedDevice || !selectedAccount.id) {
-      port.showStatus("请先选择账号");
+      port.showStatus("请先选择账号", undefined, "", null, { tone: "warning", operation: "general" });
       return;
     }
     port.write({
@@ -147,7 +147,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     currentAccountUuid: string | null,
   ) {
     if (!item) {
-      port.showStatus("请先选择设备");
+      port.showStatus("请先选择设备", undefined, "", null, { tone: "warning", operation: "general" });
       return false;
     }
     const username = form.username.trim();
@@ -212,7 +212,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     if (currentAccount) {
       const changes = getAccountChanges(currentAccount, state.accountForm);
       if (changes.length === 0) {
-        port.showStatus("没有可保存的修改");
+        port.showStatus("账号没有可保存的修改", undefined, "", null, { tone: "info", operation: "save" });
         return;
       }
       const passwordChanged = currentAccount.password !== state.accountForm.password;
@@ -258,12 +258,12 @@ export function createAccountController(port: AccountPasswordControllerPort) {
         ? selectedAccounts.find((account) => account.id === form.id)
         : null;
     if (target?.accountUuid && !currentAccount) {
-      port.showStatus("保存失败：待修改的账号已不存在", 5000);
+      port.showStatus("保存失败：待修改的账号已不存在", 5000, "", null, { tone: "error", operation: "save" });
       return false;
     }
     if (!validateAccountForSave(item, selectedAccounts, form, currentAccount?.uuid ?? null)) return false;
     if (currentAccount && getAccountChanges(currentAccount, form).length === 0) {
-      port.showStatus("没有可保存的修改");
+      port.showStatus("账号没有可保存的修改", undefined, "", null, { tone: "info", operation: "save" });
       return false;
     }
     const now = formatDateTime(new Date());
@@ -299,6 +299,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
       port.write({ selectedAccountId: nextId, selectedAccountIds: [] });
     }
     port.setActiveDialog(null);
+    port.showStatus(currentAccount ? "账号资料已保存" : "账号已新增", undefined, "", null, { tone: "success", operation: currentAccount ? "save" : "create" });
     return true;
   }
 
@@ -308,19 +309,19 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     const itemUuid = target.itemUuid;
     const accountUuids = target.accountUuids ?? [];
     if (!itemUuid || accountUuids.length === 0) {
-      port.showStatus("删除失败：账号目标信息不完整，请重新选择");
+      port.showStatus("删除失败：账号目标信息不完整，请重新选择", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
 
     const initialState = port.read();
     const initialItem = initialState.items.find((item) => item.uuid === itemUuid);
     if (!initialItem) {
-      port.showStatus("删除失败：待删除的设备已不存在");
+      port.showStatus("删除失败：待删除的设备已不存在", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
     const initialAccounts = getAccounts(initialItem);
     if (accountUuids.some((uuid) => !initialAccounts.some((account) => account.uuid === uuid))) {
-      port.showStatus("删除失败：待删除的账号已不存在，请重新选择");
+      port.showStatus("删除失败：待删除的账号已不存在，请重新选择", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
 
@@ -330,12 +331,12 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     const state = port.read();
     const targetItem = state.items.find((item) => item.uuid === itemUuid);
     if (!targetItem) {
-      port.showStatus("删除失败：待删除的设备已不存在");
+      port.showStatus("删除失败：待删除的设备已不存在", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
     const targetAccounts = getAccounts(targetItem);
     if (accountUuids.some((uuid) => !targetAccounts.some((account) => account.uuid === uuid))) {
-      port.showStatus("删除失败：待删除的账号已不存在，请重新选择");
+      port.showStatus("删除失败：待删除的账号已不存在，请重新选择", undefined, "", null, { tone: "error", operation: "delete" });
       return false;
     }
 
@@ -362,6 +363,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     port.offerSnapshotUndo(
       snapshot.id,
       accountUuids.length > 1 ? `${accountUuids.length} 个账号已删除` : "账号已删除",
+      "delete",
     );
     return true;
   }
@@ -370,7 +372,7 @@ export function createAccountController(port: AccountPasswordControllerPort) {
     const state = port.read();
     const { selectedAccounts, selectedAccountTargets } = deriveAccountState(state);
     if (!state.hasSelectedDevice || selectedAccountTargets.length === 0) {
-      port.showStatus("请先选择账号");
+      port.showStatus("请先选择账号", undefined, "", null, { tone: "warning", operation: "general" });
       port.setActivePopover(null);
       return;
     }

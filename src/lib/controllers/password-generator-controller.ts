@@ -80,10 +80,11 @@ export function createPasswordGeneratorController(port: PasswordGeneratorPort) {
 
   function open(target: GeneratorTarget = null) {
     update({ target, panelOpen: true });
+    if (target) port.openDialog(null);
     generate();
   }
 
-  function close(restoreDialog = false) {
+  function close(restoreDialog = true) {
     const target = port.read().target;
     update({ target: null, panelOpen: false });
     if (!restoreDialog) return;

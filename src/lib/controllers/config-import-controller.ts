@@ -1,3 +1,4 @@
+import type { StatusOperation, StatusReporter } from "../status-presentation";
 import { ensureDeviceTypeMetadata } from "../device-type-meta";
 import { getConfigDiffSummary, mergeMissingImportedConfig, mergeXlsxImportedConfig } from "../vault-recovery";
 import type { ConfigData, ConfigDiffSummary, ConfigTransferFormat, ConfigImportMode, DeviceTypeMeta, VaultItem } from "../types";
@@ -6,16 +7,15 @@ type ImportState = { items: VaultItem[]; customDeviceTypes: DeviceTypeMeta[] };
 export type ConfigImportPort = {
   read(): ImportState;
   write(patch: ImportState): void;
-  showStatus(message: string): void;
+  showStatus: StatusReporter;
   createSafetySnapshot(reason: string): Promise<{ id: string } | null>;
   resetWorkspaceAfterReplace(items: VaultItem[]): void;
-  offerSnapshotUndo(snapshotId: string, message: string): void;
+  offerSnapshotUndo(snapshotId: string, message: string, operation: StatusOperation): void;
 };
 
 export function formatImportResultSummary(format: ConfigTransferFormat, modeLabel: string, diff: ConfigDiffSummary): string {
-  const changes = (label: string, added: number, removed: number, changed: number) =>
-    `${label}：新增 ${added} / 删除 ${removed} / 修改 ${changed}`;
-  return `${format.toUpperCase()} 配置已按“${modeLabel}”导入：${changes("设备", diff.devicesAdded, diff.devicesRemoved, diff.devicesChanged)}；${changes("账号", diff.accountsAdded, diff.accountsRemoved, diff.accountsChanged)}；${changes("类型", diff.typesAdded, diff.typesRemoved, diff.typesChanged)}`;
+  const changed = Object.values(diff).some(count => count > 0);
+  return `${format.toUpperCase()} ${modeLabel}导入完成${changed ? "" : "，无变更"}`;
 }
 
 export function createConfigImportController(port: ConfigImportPort) {
@@ -35,7 +35,7 @@ export function createConfigImportController(port: ConfigImportPort) {
     const diff = getConfigDiffSummary(state.items, state.customDeviceTypes, nextConfig);
     const hasChanges = Object.values(diff).some((count) => count > 0);
     if ((mode === "add-missing" || format === "xlsx") && !hasChanges) {
-      port.showStatus(format === "xlsx" ? "没有新设备或已选择覆盖的设备" : "没有可新增的数据");
+      port.showStatus(format === "xlsx" ? "没有新设备或已选择覆盖的设备" : "没有可新增的数据", undefined, "", null, { tone: "info", operation: "import" });
       return false;
     }
 
@@ -44,7 +44,7 @@ export function createConfigImportController(port: ConfigImportPort) {
     if (!snapshot) return false;
     const current = port.read();
     if (JSON.stringify({ items: current.items, customDeviceTypes: current.customDeviceTypes }) !== beforeSnapshot) {
-      port.showStatus("数据在保存安全快照期间发生变化，导入已取消，请重新确认");
+      port.showStatus("数据在保存安全快照期间发生变化，导入已取消，请重新确认", undefined, "", null, { tone: "warning", operation: "import" });
       return false;
     }
 
@@ -55,7 +55,7 @@ export function createConfigImportController(port: ConfigImportPort) {
       customDeviceTypes: normalized.customDeviceTypes,
     });
     if (mode === "replace" && format !== "xlsx") port.resetWorkspaceAfterReplace(nextItems);
-    port.offerSnapshotUndo(snapshot.id, formatImportResultSummary(format, modeLabel, diff));
+    port.offerSnapshotUndo(snapshot.id, formatImportResultSummary(format, modeLabel, diff), "import");
     return true;
   }
 

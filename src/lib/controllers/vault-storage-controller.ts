@@ -1,3 +1,4 @@
+import type { StatusReporter } from "../status-presentation";
 import { StorageError, normalizeStorageError } from "../storage-error";
 import { createMemoryVaultStore, type VaultContentStore } from "../vault-content-store";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -30,7 +31,7 @@ type VaultStoragePort = {
   capture(revision: number): PersistedVaultState;
   applyLoaded(state: PersistedVaultState): void;
   clampLayout(): void;
-  showStatus(message: string, duration?: number): void;
+  showStatus: StatusReporter;
   persistAppSettings(): Promise<void>;
   captureWindowBounds(): Promise<void>;
   isLockEnabled(): boolean;
@@ -323,7 +324,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
     publish();
     try {
       await enqueue(content, true);
-      port.showStatus("未保存的数据已重新写入资产库");
+      port.showStatus("未保存的数据已重新写入资产库", undefined, "", null, { tone: "success", operation: "save" });
     } catch {
       // flushQueue keeps the latest dirty payload and publishes the error state.
     }
@@ -385,7 +386,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       else {
         const reason = getErrorMessage(error);
         const prefix = lockAttempted ? "锁定失败" : "关闭失败";
-        port.showStatus(reason ? `${prefix}：${reason}` : `${prefix}：资产库尚未安全保存，请先重试保存`, 7000);
+        port.showStatus(reason ? `${prefix}：${reason}` : `${prefix}：资产库尚未安全保存，请先重试保存`, 7000, "", null, { tone: "error", operation: "save" });
       }
     } finally {
       exitInProgress = false;
@@ -459,11 +460,11 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       if (storageState === "save-error") {
         showExitFailure(error);
       } else if (backgroundReleaseAttempted) {
-        port.showStatus(reason ? `释放后台窗口失败，窗口保持打开：${reason}` : "释放后台窗口失败，窗口保持打开", 7000);
+        port.showStatus(reason ? `释放后台窗口失败，窗口保持打开：${reason}` : "释放后台窗口失败，窗口保持打开", 7000, "", null, { tone: "error", operation: "security" });
       } else if (lockAttempted) {
-        port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000);
+        port.showStatus(reason ? `锁定失败，窗口保持打开：${reason}` : "锁定失败，窗口保持打开", 7000, "", null, { tone: "error", operation: "security" });
       } else {
-        port.showStatus(reason ? `保存失败，窗口保持打开：${reason}` : "保存失败，窗口保持打开", 7000);
+        port.showStatus(reason ? `保存失败，窗口保持打开：${reason}` : "保存失败，窗口保持打开", 7000, "", null, { tone: "error", operation: "save" });
       }
     } finally {
       closeInProgress = false;
@@ -518,7 +519,7 @@ export function createVaultStorageController(port: VaultStoragePort, contentStor
       ] = removeListeners;
     })().catch((error) => {
       closeProtectionPromise = null;
-      port.showStatus(`窗口关闭保护初始化失败：${getErrorMessage(error, "未知错误")}`, 7000);
+      port.showStatus(`窗口关闭保护初始化失败：${getErrorMessage(error, "未知错误")}`, 7000, "", null, { tone: "error", operation: "security" });
     });
     return closeProtectionPromise;
   }

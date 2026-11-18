@@ -1,3 +1,4 @@
+import type { StatusOperation, StatusReporter } from "../status-presentation";
 import type { ReportFormValidationError } from "../form-validation";
 import { getSelectedAccountTargets, resolveSelectedAccount } from "../selectors/account-selectors";
 import type {
@@ -67,11 +68,11 @@ export type AccountPasswordDerivedState = AccountSelectionState & {
 export type AccountPasswordControllerPort = {
   read(): AccountPasswordState;
   write(patch: AccountPasswordPatch): void;
-  showStatus(message: string, duration?: number): void;
+  showStatus: StatusReporter;
   reportValidationError?: ReportFormValidationError;
   copyText(text: string, label: string): void | Promise<void>;
   createSafetySnapshot(reason: string): Promise<VaultSnapshot | null>;
-  offerSnapshotUndo(snapshotId: string, message: string): void;
+  offerSnapshotUndo(snapshotId: string, message: string, operation: StatusOperation): void;
   setActiveDialog(dialog: ActiveDialog): void;
   getActiveDialog(): ActiveDialog;
   setActivePopover(popover: ActivePopover): void;

@@ -1,3 +1,4 @@
+import type { StatusOperation, StatusReporter } from "../status-presentation";
 import { prepareConfigImport, prepareConfigImportData } from "../config-import-preview";
 import { isTauri } from "@tauri-apps/api/core";
 import { openFileDialog, saveFileDialog, readBinaryFile, readTextFile, writeBinaryFile, writeTextFile } from "../platform-files";
@@ -39,9 +40,9 @@ export type ConfigTransferPort = {
   setActiveDialog(dialog: ActiveDialog): void;
   setActivePopover(popover: ActivePopover): void;
   setPendingConfirmation(confirmation: PendingConfirmation | null): void;
-  showStatus(message: string, duration?: number): void;
+  showStatus: StatusReporter;
   createSafetySnapshot(reason: string): Promise<SafetySnapshot | null>;
-  offerSnapshotUndo(snapshotId: string, message: string): void;
+  offerSnapshotUndo(snapshotId: string, message: string, operation: StatusOperation): void;
   resetWorkspaceAfterReplace(items: VaultItem[]): void;
   isExportPasswordConfigured(): boolean;
   verifyExportPassword(password: string): Promise<void>;
@@ -103,15 +104,15 @@ export function createConfigTransferController(port: ConfigTransferPort) {
           filters: [{ name: formatLabel, extensions: [format] }],
         });
         if (!path) {
-          port.showStatus("已取消导出");
+          port.showStatus("已取消导出", undefined, "", null, { tone: "info", operation: "export" });
           return null;
         }
         if (payload instanceof Uint8Array) await writeBinaryFile(path, payload);
         else await writeTextFile(path, payload);
         port.setActiveDialog(null);
-        port.showStatus(`${formatLabel} 配置已导出`);
+        port.showStatus(`${formatLabel} 配置已导出`, undefined, "", null, { tone: "success", operation: "export" });
       } catch (error) {
-        port.showStatus(formatFileError("导出", error), 5000);
+        port.showStatus(formatFileError("导出", error), 5000, "", null, { tone: "error", operation: "export" });
       }
       return null;
     }
@@ -127,7 +128,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
     anchor.click();
     URL.revokeObjectURL(url);
     port.setActiveDialog(null);
-    port.showStatus(`${formatLabel} 配置已导出`);
+    port.showStatus(`${formatLabel} 配置已导出`, undefined, "", null, { tone: "success", operation: "export" });
     return null;
   }
 
@@ -141,7 +142,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
           filters: [{ name: "配置文件", extensions: ["json", "yaml", "yml", "xlsx"] }],
         });
         if (!path || Array.isArray(path)) {
-          port.showStatus("已取消导入");
+          port.showStatus("已取消导入", undefined, "", null, { tone: "info", operation: "import" });
           return;
         }
         const format = inferConfigFormat(path);
@@ -149,10 +150,10 @@ export function createConfigTransferController(port: ConfigTransferPort) {
           if (format === "xlsx") await tryRequestApplyXlsxConfig(await readBinaryFile(path));
           else tryRequestApplyConfig(await readTextFile(path), format);
         } catch (error) {
-          port.showStatus(formatFileError("导入", error), 5000);
+          port.showStatus(formatFileError("导入", error), 5000, "", null, { tone: "error", operation: "import" });
         }
       } catch (error) {
-        port.showStatus(formatFileError("导入", error), 5000);
+        port.showStatus(formatFileError("导入", error), 5000, "", null, { tone: "error", operation: "import" });
       }
       return;
     }
@@ -169,7 +170,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
       const reason = error instanceof ConfigImportError
         ? error.message
         : "无法识别配置结构或文件内容存在语法错误";
-      port.showStatus(`配置导入失败：${reason}`, 7000);
+      port.showStatus(`配置导入失败：${reason}`, 7000, "", null, { tone: "error", operation: "import" });
     }
   }
 
@@ -183,7 +184,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
       const reason = error instanceof ConfigImportError
         ? error.message
         : "无法识别 Excel 工作簿结构或文件内容存在错误";
-      port.showStatus(`配置导入失败：${reason}`, 7000);
+      port.showStatus(`配置导入失败：${reason}`, 7000, "", null, { tone: "error", operation: "import" });
     }
   }
 
@@ -220,7 +221,7 @@ export function createConfigTransferController(port: ConfigTransferPort) {
       if (format === "xlsx") await tryRequestApplyXlsxConfig(await file.arrayBuffer());
       else tryRequestApplyConfig(await file.text(), format);
     } catch (error) {
-      port.showStatus(formatFileError("导入", error), 5000);
+      port.showStatus(formatFileError("导入", error), 5000, "", null, { tone: "error", operation: "import" });
     } finally {
       input.value = "";
     }

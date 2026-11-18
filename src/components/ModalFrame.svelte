@@ -5,6 +5,7 @@
 <script lang="ts">
   import { Dialog } from "bits-ui";
   import { X } from "@lucide/svelte";
+  import FeedbackAlert from "./FeedbackAlert.svelte";
 
   export let title: string;
   export let description = "";
@@ -13,9 +14,11 @@
   export let canClose = true;
 
   let dialogElement: HTMLDivElement | null = null;
+  let opener: Element | null = null;
   const modalId = `modal-${nextModalId++}`;
 
   function handleOpenAutoFocus(event: Event) {
+    opener = document.activeElement;
     const initialElement = dialogElement?.querySelector<HTMLElement>("[data-modal-autofocus]");
     if (initialElement) {
       event.preventDefault();
@@ -31,6 +34,16 @@
 
   function requestClose() {
     if (canClose) close();
+  }
+
+  function handleCloseAutoFocus(event: Event) {
+    const dialogs = Array.from(document.querySelectorAll('[role="dialog"][data-state="open"]'))
+      .filter(dialog => dialog !== dialogElement);
+    const remainingDialog = dialogs[dialogs.length - 1];
+    // Bits restores its captured opener; only allow it inside the remaining top layer.
+    if (remainingDialog && (!opener?.isConnected || !remainingDialog.contains(opener))) {
+      event.preventDefault();
+    }
   }
 
   function allowOwnedEditingMenuFocus(event: FocusEvent) {
@@ -51,6 +64,7 @@
         <Dialog.Content
           bind:ref={dialogElement}
           onOpenAutoFocus={handleOpenAutoFocus}
+          onCloseAutoFocus={handleCloseAutoFocus}
           onEscapeKeydown={handleEscapeKeydown}
           interactOutsideBehavior="ignore"
         >
@@ -68,6 +82,7 @@
                 <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" type="button" disabled={!canClose} on:click={requestClose}>
                   <X size={20} />
                 </button>
+                <FeedbackAlert owner={modalId} />
               </header>
               <slot></slot>
             </div>
@@ -104,6 +119,7 @@
 
   .modal-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 16px;

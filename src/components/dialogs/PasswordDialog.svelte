@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { WandSparkles } from "@lucide/svelte";
   import ClearableInput from "../ClearableInput.svelte";
   import { formatAccountTag } from "../../lib/vault";
   import {
     INPUT_LIMITS,
     sanitizeSingleLineTextInput,
   } from "../../lib/input-validation";
-  import type { ActiveDialog, DeviceAccount, VaultItem } from "../../lib/types";
+  import type { DeviceAccount, VaultItem } from "../../lib/types";
   import { iconColorStyle } from "../../lib/color";
 
   export let passwordForm: { password: string; reason: string };
@@ -15,7 +16,6 @@
   export let revealResetToken = 0;
   export let closeOverlays: () => void;
   export let openGeneratorPanel: (target?: "current-account" | "bulk-password" | null) => void;
-  export let setActiveDialog: (dialog: ActiveDialog) => void;
   export let savePasswordUpdate: () => void;
 </script>
 
@@ -29,13 +29,13 @@
   </section>
   <label class="wide-field">
     <span>新密码</span>
-    <ClearableInput bind:value={passwordForm.password} type="password" maxlength={INPUT_LIMITS.password} validateAccountPassword={true} {revealResetToken} />
+    <ClearableInput bind:value={passwordForm.password} type="password" modalAutofocus={true} maxlength={INPUT_LIMITS.password} validateAccountPassword={true} {revealResetToken} />
   </label>
   <label class="wide-field">
     <span>更新原因</span>
     <ClearableInput bind:value={passwordForm.reason} maxlength={INPUT_LIMITS.passwordReason} transformValue={sanitizeSingleLineTextInput} />
   </label>
-  <button class="secondary-button wide-field" on:click={() => { openGeneratorPanel("current-account"); setActiveDialog(null); }}>使用随机密码</button>
+  <button type="button" class="secondary-button wide-field random-password-button" on:click={() => openGeneratorPanel("current-account")}><WandSparkles size={18} aria-hidden="true" /><span>使用随机密码</span></button>
 </div>
 <footer class="modal-actions">
   <button class="secondary-button" on:click={() => closeOverlays()}>取消</button>

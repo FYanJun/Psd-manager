@@ -34,6 +34,7 @@
     <span>密码</span>
     <ClearableInput
       bind:value={accountForm.password}
+      fixedPasswordMask={true}
       ariaLabel="密码"
       errorMessage={formFeedback?.field === "password" ? formFeedback.message : ""}
       errorFocusToken={formFeedback?.revision ?? 0}

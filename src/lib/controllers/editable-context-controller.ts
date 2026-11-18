@@ -1,3 +1,4 @@
+import type { StatusReporter } from "../status-presentation";
 import { replaceEditableSelection, restoreEditableSelection, selectedEditableText, type EditableSelection, type EditableTarget } from "../editable-context";
 import type { OverlayState } from "./overlay-controller";
 
@@ -11,7 +12,7 @@ type EditableContextPort = {
   write(patch: Partial<Pick<EditableContextState, "activePopover" | "editableContext" | "editableSelection">>): void;
   copyText(text: string, label: string): Promise<boolean>;
   readClipboardText(): Promise<string>;
-  showStatus(message: string): void;
+  showStatus: StatusReporter;
   clearSearch(): void;
 };
 
@@ -70,7 +71,7 @@ export function createEditableContextController(port: EditableContextPort) {
       if (isCurrentAction(target, context, originalValue, "canPaste")) {
         port.write({ editableContext: { ...context, canPaste: false } });
       }
-      port.showStatus("粘贴失败");
+      port.showStatus("粘贴失败", undefined, "", null, { tone: "error", operation: "paste" });
     }
   }
 

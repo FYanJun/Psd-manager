@@ -1,3 +1,4 @@
+import type { StatusReporter } from "../status-presentation";
 import { getErrorMessage } from "../utils";
 import { isTauri } from "@tauri-apps/api/core";
 import { openFileDialog, saveFileDialog, readTextFile, writeTextFile } from "../platform-files";
@@ -16,7 +17,7 @@ type RecoveryFileState = {
 type RecoveryFilePort = {
   read(): Pick<RecoveryFileState, "recoveryKey" | "recoveryFileBusy">;
   write(patch: Partial<Omit<RecoveryFileState, "recoveryKey">>): void;
-  showStatus(message: string): void;
+  showStatus: StatusReporter;
 };
 
 type RecoveryFileIO = {
@@ -98,7 +99,7 @@ export function createRecoveryFileController(port: RecoveryFilePort, io: Recover
         io.downloadFile(content, defaultFileName);
       }
       port.write({ recoveryFileName: name, recoveryFileSaved: true, recoveryAcknowledged: false });
-      port.showStatus("恢复文件已保存");
+      port.showStatus("恢复文件已保存", undefined, "", null, { tone: "success", operation: "save" });
     } catch (error) {
       port.write({
         recoveryFileSaved: false,
@@ -130,7 +131,7 @@ export function createRecoveryFileController(port: RecoveryFilePort, io: Recover
       if (!file) return;
       if (!file.content.trim()) throw new Error("恢复文件为空");
       port.write({ recoveryFileContent: file.content, recoveryFileName: file.name, recoveryFileSaved: false });
-      port.showStatus(`已选择恢复文件：${file.name}`);
+      port.showStatus("恢复文件已选择", undefined, "", null, { tone: "info", operation: "restore" });
     } catch (error) {
       port.write({
         recoveryFileContent: "",

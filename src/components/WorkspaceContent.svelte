@@ -3,6 +3,7 @@
   import DeviceListPane from "./DeviceListPane.svelte";
   import SidebarPane from "./SidebarPane.svelte";
   import Topbar from "./Topbar.svelte";
+  import FeedbackAlert from "./FeedbackAlert.svelte";
   import type { WorkspaceActions, WorkspaceView } from "../lib/view-models";
 
   export let view: WorkspaceView;
@@ -42,6 +43,7 @@
     openSettings={actions.topbar.openSettings}
   />
 
+  <div class="workspace-feedback"><FeedbackAlert /></div>
   <div class="content-grid">
     <DeviceListPane
       filteredItems={view.deviceList.filteredItems}
