@@ -75,7 +75,6 @@ export type StorageInfo = {
 
 export type SettingsView = {
   activeSection: "interface" | "data" | "security" | "about";
-  tooltipEnabled: boolean;
   startOnBoot: boolean;
   startupLock: boolean;
   autoLockMinutes: number;
@@ -93,7 +92,6 @@ export type SettingsView = {
 
 export type SettingsActions = {
   setSection(section: SettingsView["activeSection"]): void;
-  setTooltipEnabled(value: boolean): void;
   setStartOnBoot(value: boolean): void | Promise<void>;
   setStartupLock(value: boolean): void | Promise<void>;
   setAutoLockEnabled(value: boolean): void;

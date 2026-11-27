@@ -19,7 +19,7 @@
 }
 
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
-  border-color: transparent !important;
+  border-color: var(--editable-border, transparent) !important;
   background-color: var(--field) !important;
 }
 
@@ -38,7 +38,7 @@
   .vault-password-body input, .vault-lock-card input, .vault-lock-card textarea,
   .type-combo-trigger, .type-combo-option):focus {
   outline: 0 !important;
-  border-color: transparent !important;
+  border-color: var(--editable-focus-border, transparent) !important;
   box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
 }
 
@@ -47,10 +47,25 @@
   box-shadow: inset 0 0 0 2px var(--accent-focus) !important;
 }
 
+/* Preserve existing read-only and warning edges in dark mode. Decorative
+   groups above keep their original border widths and light-mode appearance. */
+:where(.readonly-field strong, .type-readonly-value) {
+  border-color: var(--readonly-border, transparent) !important;
+}
+
+:where(.export-config-note) {
+  border-color: var(--notice-border, transparent) !important;
+}
+
 /* A composite field owns one focus indicator, including its inner actions. */
 :where(.type-combo-trigger) {
-  border-color: transparent !important;
+  border-color: var(--editable-border, transparent) !important;
   background-color: var(--field);
+}
+
+/* Theme-owned boundaries keep dark editable fields visible without changing light mode. */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select, .type-combo-trigger):hover:not(:focus):not(:disabled) {
+  border-color: var(--editable-hover-border, transparent) !important;
 }
 
 :where(.type-combo-trigger input, .search-box input) {

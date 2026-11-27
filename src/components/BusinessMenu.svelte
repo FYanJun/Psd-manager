@@ -34,6 +34,7 @@
     event.preventDefault();
     queueMicrotask(restoreOriginFocus);
   }
+
 </script>
 
 <DropdownMenu.Root open onOpenChange={(open: boolean) => { if (!open) { close(); queueMicrotask(restoreOriginFocus); } }}>
@@ -62,3 +63,4 @@
     <slot />
   </DropdownMenu.Content>
 </DropdownMenu.Root>
+

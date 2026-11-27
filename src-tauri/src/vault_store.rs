@@ -164,7 +164,7 @@ fn read_password_lock_path(path: &Path) -> Result<Option<PasswordLockFile>, Stri
             .is_some_and(|current| current != &bytes)
         {
             return Err(
-                "发现多份不同的有效启动密码配置恢复文件，请保留文件并检查，未自动选择".to_string(),
+                "发现多个不同的有效启动密码配置恢复文件，请保留文件并检查，未自动选择".to_string(),
             );
         }
         valid_content = Some(bytes);
@@ -497,7 +497,7 @@ mod password_lock_recovery_tests {
         fs::write(dir.candidate("first"), lock_bytes(5)).unwrap();
         fs::write(dir.candidate("second"), lock_bytes(6)).unwrap();
         let error = read_password_lock_path(&dir.target()).err().unwrap();
-        assert!(error.contains("多份不同"));
+        assert!(error.contains("多个不同"));
         assert!(!dir.target().exists());
         assert_eq!(fs::read(dir.candidate("first")).unwrap(), lock_bytes(5));
         assert_eq!(fs::read(dir.candidate("second")).unwrap(), lock_bytes(6));

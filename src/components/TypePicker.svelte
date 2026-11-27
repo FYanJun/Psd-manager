@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Check, ChevronsUpDown, X } from "@lucide/svelte";
   import { Combobox } from "bits-ui";
+  import { preferAvailableSide } from "../lib/floating-side";
+  let popoverSide: "top" | "bottom" = "bottom";
   import type { DeviceType, DeviceTypeMeta, TypePickerScope } from "../lib/types";
   import { INPUT_LIMITS, sanitizeSingleLineTextInput } from "../lib/input-validation";
   import { typeColorClass, typeColorStyle } from "../lib/color";
@@ -78,7 +80,7 @@
     items={options.map(option => ({ value: option.label, label: option.label }))}
     allowDeselect={false}
   >
-    <div class="type-combo-trigger" bind:this={anchorElement}>
+    <div class="type-combo-trigger" bind:this={anchorElement} use:preferAvailableSide={{ anchor: anchorElement, preferredHeight: 220, padding: 8, offset: 8, onSide: side => { popoverSide = side; } }}>
       {#if selectedMeta}
         <span class={`type-combo-icon ${typeColorClass(selectedMeta.color)}`} style={typeColorStyle(selectedMeta.color)}>{selectedMeta.iconText}</span>
       {/if}
@@ -103,10 +105,10 @@
             <input {...props} value={open ? search : selectedMeta?.label ?? selectedValue} />
           {/snippet}
         </Combobox.Input>
-        {#if showCount && selectedMeta?.count !== undefined}<small>{selectedMeta.count} 个设备</small>{/if}
+        {#if showCount && selectedMeta?.count !== undefined}<small>{selectedMeta.count} 台设备</small>{/if}
       </span>
       {#if open && search}
-        <button type="button" class="type-combo-clear" aria-label="清空输入" data-tooltip="清空输入" onclick={clearSearch}><X size={15} /></button>
+        <button type="button" class="type-combo-clear" aria-label="清空输入" onclick={clearSearch}><X size={15} /></button>
       {/if}
       <Combobox.Trigger class="type-combo-toggle" aria-label={ariaLabel} aria-expanded={open} aria-controls={optionsId}>
         <ChevronsUpDown size={18} aria-hidden="true" />
@@ -118,6 +120,7 @@
       class="type-combo-popover"
       aria-label={ariaLabel}
       sideOffset={8}
+      side={popoverSide}
       align="start"
       collisionPadding={8}
       strategy="fixed"
@@ -133,7 +136,7 @@
                 <span class={`type-combo-icon ${typeColorClass(type.color)}`} style={typeColorStyle(type.color)}>{type.iconText}</span>
                 <span class="type-combo-copy">
                   <strong>{type.label}</strong>
-                  {#if showCount && type.count !== undefined}<small>{type.count} 个设备</small>{/if}
+                  {#if showCount && type.count !== undefined}<small>{type.count} 台设备</small>{/if}
                 </span>
                 <span class="type-combo-check" aria-hidden="true">{#if selected}<Check size={16} />{/if}</span>
               {/snippet}

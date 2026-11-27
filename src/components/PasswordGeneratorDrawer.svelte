@@ -132,7 +132,7 @@
       <Dialog.Title>{#snippet child({ props })}<h2 {...props}>密码生成器</h2>{/snippet}</Dialog.Title>
     </div>
     <div class="drawer-header-actions">
-    <button class="icon-button" data-generator-close aria-label="关闭密码生成器" data-tooltip="关闭密码生成器" on:click={() => closeGeneratorPanel(true)}>
+    <button class="icon-button" data-generator-close aria-label="关闭密码生成器" on:click={() => closeGeneratorPanel(true)}>
       <X size={21} />
     </button>
     </div>

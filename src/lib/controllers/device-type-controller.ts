@@ -125,7 +125,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     }
     const deviceCount = getDeviceTypeCount(deviceType);
     if (deviceCount > 0) {
-      port.showStatus(`该类型下还有 ${deviceCount} 个设备，请先移动或删除设备`, undefined, "", null, { tone: "warning", operation: "delete" });
+      port.showStatus(`该类型下还有 ${deviceCount} 台设备，请先移动或删除设备`, undefined, "", null, { tone: "warning", operation: "delete" });
       port.setActivePopover(null);
       return;
     }
@@ -172,7 +172,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     const state = port.read();
     const deviceCount = state.items.filter((item) => item.deviceTypeUuid === typeMeta.uuid).length;
     if (deviceCount > 0) {
-      port.showStatus(`该类型下还有 ${deviceCount} 个设备，请先移动或删除设备`, undefined, "", null, { tone: "warning", operation: "delete" });
+      port.showStatus(`该类型下还有 ${deviceCount} 台设备，请先移动或删除设备`, undefined, "", null, { tone: "warning", operation: "delete" });
       port.setActivePopover(null);
       return false;
     }
@@ -188,7 +188,7 @@ export function createDeviceTypeController(port: DeviceTypeControllerPort) {
     }
     const currentDeviceCount = current.items.filter((item) => item.deviceTypeUuid === typeMeta.uuid).length;
     if (currentDeviceCount > 0) {
-      port.showStatus(`该类型下已有 ${currentDeviceCount} 个设备，已取消删除`, undefined, "", null, { tone: "warning", operation: "delete" });
+      port.showStatus(`该类型下已有 ${currentDeviceCount} 台设备，已取消删除`, undefined, "", null, { tone: "warning", operation: "delete" });
       return false;
     }
     port.write({

@@ -77,12 +77,37 @@
   onMount(() => {
     let nextTargetId = 0;
     let knownTargets = new Map<HTMLElement, TooltipTarget>();
+    const observedElements = new Set<HTMLElement>();
+    const resizeObserver = new ResizeObserver(discoverTargets);
+
+    function isTruncated(element: HTMLElement) {
+      return [element, ...element.querySelectorAll<HTMLElement>("*")].some(node => {
+        const style = getComputedStyle(node);
+        return node.clientWidth > 0 && node.clientHeight > 0
+          && ((/hidden|clip/.test(style.overflowX) && node.scrollWidth > node.clientWidth + 1)
+            || (/hidden|clip/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1));
+      });
+    }
+
+    function needsTooltip(element: HTMLElement) {
+      if (!element.getClientRects().length || element.closest('[inert], [aria-hidden="true"]')) return false;
+      if (element.hasAttribute("data-value-tooltip")) return isTruncated(element);
+      if (element.matches(":disabled, [aria-disabled='true']")
+        && element.dataset.tooltipReason === "true") return true;
+      if (element.dataset.tooltipIcon === "true") return true;
+      return !element.innerText.trim() || isTruncated(element);
+    }
 
     function discoverTargets() {
       const nextTargets = new Map<HTMLElement, TooltipTarget>();
+      const nextObserved = new Set<HTMLElement>();
       for (const element of document.querySelectorAll<HTMLElement>(tooltipSelector)) {
         const text = (element.dataset.tooltip || element.dataset.valueTooltip || "").trim();
-        if (!text) continue;
+        for (const node of [element, ...element.querySelectorAll<HTMLElement>("*")]) {
+          nextObserved.add(node);
+          if (!observedElements.has(node)) resizeObserver.observe(node);
+        }
+        if (!text || !needsTooltip(element)) continue;
         const previous = knownTargets.get(element);
         const side = element.closest(belowPreferredSelector) ? "bottom" : "top";
         nextTargets.set(element, previous?.text === text && previous.side === side ? previous : {
@@ -95,25 +120,33 @@
       const next = [...nextTargets.values()];
       if (next.length !== targets.length || next.some((target, index) => target !== targets[index])) targets = next;
       knownTargets = nextTargets;
+      for (const node of observedElements) {
+        if (!nextObserved.has(node)) resizeObserver.unobserve(node);
+      }
+      observedElements.clear();
+      for (const node of nextObserved) observedElements.add(node);
     }
 
     discoverTargets();
     const observer = new MutationObserver(discoverTargets);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-tooltip", "data-value-tooltip"] });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["data-tooltip", "data-value-tooltip", "data-tooltip-reason", "data-tooltip-icon", "class", "disabled", "aria-disabled"] });
     const closeTooltip = () => tether.close();
     document.addEventListener("scroll", closeTooltip, true);
     window.addEventListener("resize", closeTooltip);
+    window.addEventListener("blur", closeTooltip);
 
     return () => {
       observer.disconnect();
+      resizeObserver.disconnect();
       document.removeEventListener("scroll", closeTooltip, true);
       window.removeEventListener("resize", closeTooltip);
+      window.removeEventListener("blur", closeTooltip);
     };
   });
 </script>
 
 {#if enabled}
-  <Tooltip.Provider delayDuration={0} disableHoverableContent ignoreNonKeyboardFocus>
+  <Tooltip.Provider delayDuration={700} skipDelayDuration={0} disableHoverableContent ignoreNonKeyboardFocus>
     <Tooltip.Root {tether}>
       {#snippet children({ payload })}
         {#each targets as target (target.element)}

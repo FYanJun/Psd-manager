@@ -74,13 +74,13 @@
   min-height: 40px;
   padding-inline: 14px;
   border-radius: 8px;
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill);
   font-weight: var(--weight-medium);
 }
 
 .update-password-action:hover {
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill-hover);
 }
 
@@ -480,6 +480,9 @@
 
 .account-checkbox {
   position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
   width: 18px;
   height: 18px;
   border: 2px solid var(--gray-500);
@@ -494,16 +497,9 @@
   box-shadow: none;
 }
 
-.account-checkbox.checked::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 5px;
-  height: 10px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+.account-checkbox > svg {
+  display: block;
+  color: var(--primary-text, #fff);
 }
 
 .account-select-box:focus-visible .account-checkbox {

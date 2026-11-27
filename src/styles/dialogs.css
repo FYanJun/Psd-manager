@@ -190,7 +190,7 @@
 
 .type-combo-popover {
   z-index: 80;
-  width: var(--bits-combobox-anchor-width);
+  width: min(var(--bits-combobox-anchor-width), calc(100vw - 16px));
   max-height: min(360px, var(--bits-combobox-content-available-height));
   min-height: 0;
   overflow: hidden;
@@ -743,8 +743,8 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  color: #fff;
-  background: var(--red-500);
+  color: var(--danger-text, #fff);
+  background: var(--danger-fill, var(--red-500));
 }
 
 .confirmation-warning-copy,

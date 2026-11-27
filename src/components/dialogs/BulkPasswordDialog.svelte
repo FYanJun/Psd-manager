@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { preferAvailableSide } from "../../lib/floating-side";
+  let cascadeSide: "top" | "bottom" = "bottom";
   import { Check, ChevronRight, ChevronsUpDown, Minus, WandSparkles, X } from "@lucide/svelte";
   import { Checkbox, Popover } from "bits-ui";
   import ClearableInput from "../ClearableInput.svelte";
@@ -41,6 +43,16 @@
 
   function selectedCount(matches: BulkPasswordMatch[], selected: Set<string>) {
     return matches.filter(match => selected.has(getBulkPasswordMatchKey(match))).length;
+  }
+
+  function deviceCountLabel(matches: BulkPasswordMatch[], selected: Set<string>) {
+    const devices = new Set<string>();
+    const selectedDevices = new Set<string>();
+    for (const match of matches) {
+      devices.add(match.itemUuid);
+      if (selected.has(getBulkPasswordMatchKey(match))) selectedDevices.add(match.itemUuid);
+    }
+    return `${selectedDevices.size} / ${devices.size} 台设备`;
   }
 
   $: cascadeMatches = view.bulkPasswordAllMatches.filter(match => bulkPasswordForm.deviceType === "全部设备" || match.deviceType === bulkPasswordForm.deviceType);
@@ -171,13 +183,13 @@
       <div class="form-control bulk-cascade-field">
         <span>选择设备或账号</span>
         <Popover.Root bind:open={cascadeOpen}>
-          <div class="bulk-cascade-control" bind:this={selectionElement} bind:clientWidth={selectionControlWidth}>
+          <div class="bulk-cascade-control" use:preferAvailableSide={{ anchor: selectionElement, preferredHeight: 420, padding: 12, offset: 8, onSide: side => { cascadeSide = side; } }} bind:this={selectionElement} bind:clientWidth={selectionControlWidth}>
             <Popover.Trigger class={`bulk-cascade-trigger${selectionChips.length ? " has-selection" : ""}`} aria-label="选择设备或账号">
               {#if selectionChips.length === 0}<span>选择需要改密的设备或账号</span>{/if}
               <ChevronsUpDown size={18} aria-hidden="true" />
             </Popover.Trigger>
             {#if hiddenChipCount > 0}
-              <button type="button" class="bulk-tags-overflow" aria-label={`显示其余 ${hiddenChipCount} 个已选标签`}
+              <button type="button" class="bulk-tags-overflow" aria-label={`显示其余 ${hiddenChipCount} 枚已选标签`}
                 aria-expanded={cascadeOpen && overflowDetailsOpen} aria-haspopup="dialog"
                 on:click={() => { overflowDetailsOpen = true; cascadeOpen = true; }}>+{hiddenChipCount}</button>
             {/if}
@@ -200,10 +212,10 @@
               </div>
             </div>
           </div>
-          <Popover.Portal><Popover.Content bind:ref={cascadeElement} role="dialog" class={`bulk-cascade-popover${overflowDetailsOpen ? " has-overflow-details" : ""}`} style={`--bulk-cascade-width: ${selectionControlWidth + 2}px`} aria-label="级联选择改密目标" sideOffset={8} align="start" collisionPadding={12} strategy="fixed" customAnchor={selectionElement}>
+          <Popover.Portal><Popover.Content bind:ref={cascadeElement} role="dialog" class={`bulk-cascade-popover${overflowDetailsOpen ? " has-overflow-details" : ""}`} style={`--bulk-cascade-width: ${selectionControlWidth + 2}px`} aria-label="级联选择改密目标" side={cascadeSide} sideOffset={8} align="start" collisionPadding={12} strategy="fixed" customAnchor={selectionElement}>
             {#if overflowDetailsOpen}
               <section class="bulk-overflow-details" aria-label="其余已选标签" tabindex="-1">
-                <strong>其余已选标签 · {hiddenChipCount}</strong>
+                <strong>其余已选标签 · {hiddenChipCount} 枚</strong>
                 <div class="bulk-overflow-list">
                   {#each hiddenSelectionChips as chip (chip.keys.join(","))}
                     <span class="bulk-selection-tag">
@@ -233,6 +245,9 @@
                 <div class="bulk-cascade-group-list">
                 {#each cascadeGroups as group (group.key)}
                   {@const count = selectedCount(group.matches, selectedMatchKeys)}
+                  {@const groupCountLabel = cascadeMode === "device"
+                    ? `${count} / ${group.matches.length} 个账号`
+                    : deviceCountLabel(group.matches, selectedMatchKeys)}
                   <div class="bulk-cascade-group" class:active={activeCascadeGroup?.key === group.key}>
                     <Checkbox.Root class="bulk-cascade-checkbox" aria-label={`选择分组 ${group.label}`}
                       checked={count === group.matches.length} indeterminate={count > 0 && count < group.matches.length}
@@ -242,7 +257,7 @@
                     <button type="button" class="bulk-cascade-expand" aria-label={`展开分组 ${group.label}`}
                       aria-expanded={activeCascadeGroup?.key === group.key} aria-controls="bulk-cascade-leaves"
                       on:click={() => { expandedGroupKey = group.key; }}>
-                      <span>{group.label}<small>{count} / {group.matches.length} 个账号</small></span><ChevronRight size={16} aria-hidden="true" />
+                      <span>{group.label}<small>{groupCountLabel}</small></span><ChevronRight size={16} aria-hidden="true" />
                     </button>
                   </div>
                 {:else}<p class="quiet-text">没有符合条件的设备或账号</p>{/each}

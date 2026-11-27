@@ -98,7 +98,7 @@ export function createSnapshotController(port: SnapshotControllerPort) {
       snapshotId: snapshot.id,
       title: "恢复数据快照",
       message: `恢复“${snapshot.reason}”？`,
-      detail: "当前资产库会被这个快照替换；恢复前会自动再保存一份当前数据。",
+      detail: "当前资产库会被这份快照替换；恢复前会自动再保存一份当前数据的快照。",
       confirmLabel: "确认恢复",
       summaryItems: [
         { label: "设备", value: `${snapshot.items.length} 台` },

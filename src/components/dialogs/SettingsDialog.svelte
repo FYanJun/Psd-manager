@@ -50,7 +50,7 @@
 <div class="settings-layout">
   <nav class="settings-nav" aria-label="设置分类">
     {#each sections as section}
-      <button class:active={view.activeSection === section.key} aria-current={view.activeSection === section.key ? "true" : undefined} type="button" aria-label={section.label} data-tooltip={section.label} on:click={() => actions.setSection(section.key)}>
+      <button class:active={view.activeSection === section.key} aria-current={view.activeSection === section.key ? "true" : undefined} type="button" aria-label={section.label} on:click={() => actions.setSection(section.key)}>
         <svelte:component this={section.icon} size={17} />
         <span>{section.label}</span>
       </button>
@@ -59,9 +59,8 @@
 
   <section class="settings-content">
     {#if view.activeSection === "interface"}
-      <div class="settings-heading"><h3>通用</h3><p>调整主题和提示信息。</p></div>
+      <div class="settings-heading"><h3>通用</h3><p>调整应用主题和启动方式。</p></div>
       <div class="settings-field"><span>主题</span><SettingsSegmented value={view.theme} options={themeOptions} ariaLabel="主题" onChange={(value) => actions.setTheme(value as ThemePreference)} /></div>
-      <SettingsSwitch label="显示 Tooltip" description="鼠标悬停在按钮上时显示操作说明。" checked={view.tooltipEnabled} onChange={actions.setTooltipEnabled} />
       <SettingsSwitch
         label="开机自启"
         description={view.autostartAvailable ? "登录系统后在系统托盘中运行，不主动打开主页面。" : "仅桌面应用支持，浏览器预览模式不可用。"}

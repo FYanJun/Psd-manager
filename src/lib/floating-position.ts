@@ -37,10 +37,18 @@ export function createFloatingPositioner(
 
   async function update() {
     const sequence = ++updateSequence;
+    const rect = reference.getBoundingClientRect();
+    const gap = options.offset ?? 6;
+    const above = Math.max(0, rect.top - padding - gap);
+    const below = Math.max(0, window.innerHeight - rect.bottom - padding - gap);
+    const desiredHeight = Math.min(options.maxHeight ?? Infinity, floating.scrollHeight + 2);
+    // A previously constrained menu must not look small enough to stay below.
+    const preferredPlacement = placement.startsWith("bottom") && below < desiredHeight && above > below
+      ? placement.replace("bottom", "top") as Placement : placement;
     const middleware = [
       offset(options.offset ?? 6),
       flip({ padding }),
-      shift({ padding }),
+      shift({ padding, crossAxis: true }),
       size({
         padding,
         apply({ availableWidth, availableHeight, rects, elements }) {
@@ -56,7 +64,7 @@ export function createFloatingPositioner(
     ];
     let result: ComputePositionReturn;
     try {
-      result = await computePosition(reference, floating, { placement, strategy, middleware });
+      result = await computePosition(reference, floating, { placement: preferredPlacement, strategy, middleware });
     } catch (error) {
       if (!disposed && sequence === updateSequence) console.error("浮层定位失败", error);
       return;

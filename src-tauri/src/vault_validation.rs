@@ -421,7 +421,7 @@ pub(crate) fn validate_vault_payload(content: &str) -> Result<Value, String> {
     )?;
     let snapshots = require_array_field(object, "snapshots", "资产库")?;
     if snapshots.len() > 10 {
-        return Err("资产库最多保留 10 个数据快照".to_string());
+        return Err("资产库最多保留 10 份数据快照".to_string());
     }
     let mut snapshot_ids = std::collections::HashSet::new();
     for (index, snapshot) in snapshots.iter().enumerate() {
@@ -499,7 +499,7 @@ mod vault_validation_tests {
         value["snapshots"] = json!(vec![json!({}); 11]);
         assert!(validate_vault_payload(&value.to_string())
             .unwrap_err()
-            .contains("10 个"));
+            .contains("10 份数据快照"));
     }
 
     #[test]

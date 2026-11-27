@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ListChecks, ListX, Plus, Trash2, UserRound } from "@lucide/svelte";
+  import { Check, ListChecks, ListX, Plus, Trash2, UserRound } from "@lucide/svelte";
   import { Checkbox, Tabs } from "bits-ui";
   import type { DeviceAccount, VaultItem } from "../../lib/types";
   import type { DeviceDetailActions } from "../../lib/view-models";
@@ -48,7 +48,7 @@
         class="secondary-button account-heading-action danger-outline"
         aria-label={canDeleteSelectedAccountTargets ? "删除选中账号" : "请先选择账号"}
         disabled={!canDeleteSelectedAccountTargets}
-        data-tooltip={canDeleteSelectedAccountTargets ? "删除选中账号" : "请先选择账号"}
+        data-tooltip-reason="true" data-tooltip={canDeleteSelectedAccountTargets ? "删除选中账号" : "请先选择账号"}
         on:click={() => requestDeleteSelectedAccount()}
       >
         <Trash2 size={15} />
@@ -76,7 +76,7 @@
             aria-label={`选择账号 ${account.username || account.title || "未填写用户名"}`}
             bind:checked={() => selectedAccountIds.includes(account.id), () => toggleAccountBatchSelection(account.id)}
           >
-            <span class="account-checkbox" class:checked={selectedAccountIds.includes(account.id)} aria-hidden="true"></span>
+            <span class="account-checkbox" class:checked={selectedAccountIds.includes(account.id)} aria-hidden="true">{#if selectedAccountIds.includes(account.id)}<Check size={14} strokeWidth={3} />{/if}</span>
           </Checkbox.Root>
           <Tabs.Trigger
             value={String(account.id)}

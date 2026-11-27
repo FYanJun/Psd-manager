@@ -30,11 +30,11 @@
     />
   </label>
 
-  <button class="tool-button topbar-tool" aria-label="批量改密" data-tooltip={bulkPasswordDisabled ? "请先新增设备类型、设备和账号" : "批量改密"} aria-keyshortcuts="Meta+B Control+B" disabled={bulkPasswordDisabled} on:click={() => openBulkPasswordDialog()}>
+  <button class="tool-button topbar-tool" aria-label="批量改密" data-tooltip={bulkPasswordDisabled ? "请先新增设备类型、设备和账号" : undefined} data-tooltip-reason="true" aria-keyshortcuts="Meta+B Control+B" disabled={bulkPasswordDisabled} on:click={() => openBulkPasswordDialog()}>
     <UsersRound size={20} />
     <span>批量改密</span>
   </button>
-  <button class="tool-button topbar-tool accent" data-generator-trigger aria-label="密码生成器" data-tooltip="密码生成器" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
+  <button class="tool-button topbar-tool accent" data-generator-trigger aria-label="密码生成器" aria-keyshortcuts="Meta+G Control+G" on:click={() => openGeneratorPanel()}>
     <WandSparkles size={20} />
     <span>密码生成器</span>
   </button>

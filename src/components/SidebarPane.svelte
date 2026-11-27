@@ -64,9 +64,10 @@
       <button
         class:selected={selectedDeviceType === type.label}
         class="device-type-row"
-        aria-label={`${type.label}，${type.count} 个设备`}
+        aria-label={`${type.label}，${type.count} 台设备`}
         aria-current={selectedDeviceType === type.label ? "true" : undefined}
-        data-tooltip={`${type.label} · ${type.count} 个设备`}
+        data-tooltip={`${type.label} · ${type.count} 台设备`}
+        data-tooltip-icon={collapsed ? "true" : undefined}
         on:click={() => selectDeviceType(type.label)}
         on:contextmenu={(event) => openTypeContextMenu(type.label, event)}
       >

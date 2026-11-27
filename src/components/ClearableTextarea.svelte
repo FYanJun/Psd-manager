@@ -77,7 +77,7 @@
     on:compositionend={handleCompositionEnd}
   ></textarea>
   {#if hasValue}
-    <button type="button" class="textarea-icon-button" {disabled} aria-label="清空输入" data-tooltip="清空输入" on:click={clearValue}>
+    <button type="button" class="textarea-icon-button" {disabled} aria-label="清空输入" on:click={clearValue}>
       <X size={15} />
     </button>
   {/if}

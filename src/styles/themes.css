@@ -4,24 +4,30 @@ html[data-theme="dark"] {
   --weight-medium: 400;
   --weight-semibold: 500;
   --weight-bold: 600;
-  --app-text: #eef2f5;
-  --app-background: #171a1e;
-  --sidebar: #1b2027;
-  --sidebar-hover: #272e38;
+  --app-text: #e6e8ec;
+  --app-background: #121418;
+  --sidebar: #181b20;
+  --sidebar-hover: #252931;
   --sidebar-active: #303c4d;
-  --border: #353e49;
-  --muted: #b7c0ca;
-  --quiet: #929da8;
-  --blue: #5aa2ff;
-  --blue-hover: #78b4ff;
-  --primary-fill: #2f78c8;
-  --primary-fill-hover: #286fbd;
-  --surface: #1f242a;
-  --selected: #303841;
-  --field: #272d34;
-  --field-border: #46505b;
-  --surface-muted: #252b32;
-  --surface-subtle: #2b333f;
+  --border: #3b414c;
+  --muted: #b2bac6;
+  --quiet: #a2acba;
+  --blue: #a8c7ed;
+  --blue-hover: #c2d9f3;
+  --primary-fill: #a8c7ed;
+  --primary-fill-hover: #c2d9f3;
+  --surface: #1b1e24;
+  --selected: #303c4d;
+  --field: #181c22;
+  --field-border: #78869a;
+  --editable-border: var(--field-border);
+  --editable-hover-border: #929fb2;
+  --editable-focus-border: var(--accent-focus);
+  --composite-border-width: 1px;
+  --readonly-border: var(--field-border);
+  --notice-border: var(--warning-border);
+  --surface-muted: #20242b;
+  --surface-subtle: #2b303a;
   --type-blue-text: #a6d2ff;
   --type-blue-fill: #203a54;
   --type-green-text: #a2d9b8;
@@ -36,37 +42,56 @@ html[data-theme="dark"] {
   --type-gold-fill: #423a23;
   --type-neutral-text: #ccd4de;
   --type-neutral-fill: #343d48;
-  --text-strong: #f0f3f6;
-  --text-secondary: #b7c0ca;
-  --text-quiet: #929da8;
-  --control-hover: rgba(255, 255, 255, 0.07);
-  --accent-subtle: rgba(90, 162, 255, 0.16);
-  --selection-fill: rgba(90, 162, 255, 0.16);
-  --selection-border: #526d8c;
-  --selection-text: #f4f8ff;
+  --text-strong: #e6e8ec;
+  --text-secondary: #b2bac6;
+  --text-quiet: #a2acba;
+  --control-hover: #303640;
+  --accent-subtle: #29384b;
+  --selection-fill: #29384b;
+  --selection-border: #7189a6;
+  --selection-text: #d4e3f5;
   --selection-shadow: none;
-  --popover-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
-  --overlay: rgba(0, 0, 0, 0.58);
-  --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
-  --tooltip-background: #10171f;
-  --tooltip-border: #6e8194;
-  --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --focus-ring: 0 0 0 3px #79b8ff;
-  --toast-success: #7ed9a6;
-  --danger-subtle: #3f282d;
-  --danger-subtle-hover: #5b3034;
-  --danger-panel: #3f282d;
-  --danger-panel-border: #71413e;
-  --danger-panel-text: #ffaaa5;
-  --surface-elevated: #1f242a;
-  --surface-canvas: #171a1e;
-  --surface-step-1: rgb(32 37 43);
-  --surface-step-2: rgb(34 39 45);
-  --surface-list: #20252b;
-  --topbar-surface: #252b32;
-  --divider: #303943;
-  --text-placeholder: #929da8;
-  --accent-focus: #79b8ff;
+  --popover-shadow: 0 4px 16px rgba(8, 10, 14, 0.24);
+  --overlay: rgba(8, 10, 14, 0.64);
+  --modal-shadow: 0 24px 70px rgba(8, 10, 14, 0.36);
+  --tooltip-background: #2b303a;
+  --tooltip-border: #596371;
+  --tooltip-shadow: 0 8px 24px rgba(8, 10, 14, 0.32);
+  --focus-ring: 0 0 0 3px #a8c7ed;
+  --toast-success: #a2d9b8;
+  --danger-subtle: #39282e;
+  --danger-subtle-hover: #4a3038;
+  --danger-panel: #39282e;
+  --danger-panel-border: #805760;
+  --danger-panel-text: #edb4ba;
+  --surface-elevated: #252931;
+  --surface-canvas: #121418;
+  --workspace-background: var(--surface-canvas);
+  --surface-step-1: rgb(32 36 43);
+  --surface-step-2: rgb(37 41 49);
+  --surface-list: #1b1e24;
+  --topbar-surface: #1b1e24;
+  --divider: #30353e;
+  --text-placeholder: #a2acba;
+  --accent-focus: #a8c7ed;
+  --primary-text: #172333;
+  --danger-fill: #edb4ba;
+  --danger-fill-hover: #f3c8cc;
+  --danger-text: #321e24;
+  --danger-outline-border: #a57580;
+  --warning-text: #e5c995;
+  --warning-fill: #393123;
+  --warning-border: #806e4d;
+  --strength-weak: #e8bc9d;
+  --generator-text: #cdc0ed;
+  --checkbox-border: #8f9aa5;
+  --drawer-overlay: rgba(8, 10, 14, 0.58);
+  --tooltip-text: #e6e8ec;
+  --danger-text-emphasis: #edb4ba;
+  --storage-icon-text: var(--blue);
+  --storage-icon-fill: var(--accent-subtle);
+  --storage-error-fill: var(--danger-subtle);
+  --accent-hover: #33445a;
   background: var(--app-background);
   color: var(--app-text);
 }
@@ -77,24 +102,30 @@ html[data-theme="dark"] {
     --weight-medium: 400;
     --weight-semibold: 500;
     --weight-bold: 600;
-    --app-text: #eef2f5;
-    --app-background: #171a1e;
-    --sidebar: #1b2027;
-    --sidebar-hover: #272e38;
+    --app-text: #e6e8ec;
+    --app-background: #121418;
+    --sidebar: #181b20;
+    --sidebar-hover: #252931;
     --sidebar-active: #303c4d;
-    --border: #353e49;
-    --muted: #b7c0ca;
-    --quiet: #929da8;
-    --blue: #5aa2ff;
-    --blue-hover: #78b4ff;
-    --primary-fill: #2f78c8;
-    --primary-fill-hover: #286fbd;
-    --surface: #1f242a;
-    --selected: #303841;
-    --field: #272d34;
-    --field-border: #46505b;
-    --surface-muted: #252b32;
-    --surface-subtle: #2b333f;
+    --border: #3b414c;
+    --muted: #b2bac6;
+    --quiet: #a2acba;
+    --blue: #a8c7ed;
+    --blue-hover: #c2d9f3;
+    --primary-fill: #a8c7ed;
+    --primary-fill-hover: #c2d9f3;
+    --surface: #1b1e24;
+    --selected: #303c4d;
+    --field: #181c22;
+    --field-border: #78869a;
+    --editable-border: var(--field-border);
+    --editable-hover-border: #929fb2;
+    --editable-focus-border: var(--accent-focus);
+    --composite-border-width: 1px;
+    --readonly-border: var(--field-border);
+    --notice-border: var(--warning-border);
+    --surface-muted: #20242b;
+    --surface-subtle: #2b303a;
     --type-blue-text: #a6d2ff;
     --type-blue-fill: #203a54;
     --type-green-text: #a2d9b8;
@@ -109,35 +140,56 @@ html[data-theme="dark"] {
     --type-gold-fill: #423a23;
     --type-neutral-text: #ccd4de;
     --type-neutral-fill: #343d48;
-    --text-strong: #f0f3f6;
-    --text-secondary: #b7c0ca;
-    --text-quiet: #929da8;
-    --control-hover: rgba(255, 255, 255, 0.07);
-    --accent-subtle: rgba(90, 162, 255, 0.16);
-    --selection-fill: rgba(90, 162, 255, 0.16);
-    --selection-border: #526d8c;
-    --selection-text: #f4f8ff;
+    --text-strong: #e6e8ec;
+    --text-secondary: #b2bac6;
+    --text-quiet: #a2acba;
+    --control-hover: #303640;
+    --accent-subtle: #29384b;
+    --selection-fill: #29384b;
+    --selection-border: #7189a6;
+    --selection-text: #d4e3f5;
     --selection-shadow: none;
-    --popover-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
-    --overlay: rgba(0, 0, 0, 0.58);
-    --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
-    --tooltip-background: #10171f;
-    --tooltip-border: #6e8194;
-    --tooltip-shadow: 0 14px 32px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
-    --focus-ring: 0 0 0 3px #79b8ff;
-    --toast-success: #7ed9a6;
-    --danger-subtle: #3f282d;
-    --danger-subtle-hover: #5b3034;
-    --danger-panel: #3f282d;
-    --danger-panel-border: #71413e;
-    --danger-panel-text: #ffaaa5;
-    --surface-elevated: #1f242a;
-    --surface-canvas: #171a1e;
-    --surface-list: #20252b;
-    --topbar-surface: #252b32;
-    --divider: #303943;
-    --text-placeholder: #929da8;
-    --accent-focus: #79b8ff;
+    --popover-shadow: 0 4px 16px rgba(8, 10, 14, 0.24);
+    --overlay: rgba(8, 10, 14, 0.64);
+    --modal-shadow: 0 24px 70px rgba(8, 10, 14, 0.36);
+    --tooltip-background: #2b303a;
+    --tooltip-border: #596371;
+    --tooltip-shadow: 0 8px 24px rgba(8, 10, 14, 0.32);
+    --focus-ring: 0 0 0 3px #a8c7ed;
+    --toast-success: #a2d9b8;
+    --danger-subtle: #39282e;
+    --danger-subtle-hover: #4a3038;
+    --danger-panel: #39282e;
+    --danger-panel-border: #805760;
+    --danger-panel-text: #edb4ba;
+    --surface-elevated: #252931;
+    --surface-canvas: #121418;
+    --workspace-background: var(--surface-canvas);
+    --surface-list: #1b1e24;
+    --topbar-surface: #1b1e24;
+    --divider: #30353e;
+    --text-placeholder: #a2acba;
+    --accent-focus: #a8c7ed;
+    --primary-text: #172333;
+    --danger-fill: #edb4ba;
+    --danger-fill-hover: #f3c8cc;
+    --danger-text: #321e24;
+    --danger-outline-border: #a57580;
+    --warning-text: #e5c995;
+    --warning-fill: #393123;
+    --warning-border: #806e4d;
+    --strength-weak: #e8bc9d;
+    --generator-text: #cdc0ed;
+    --checkbox-border: #8f9aa5;
+    --drawer-overlay: rgba(8, 10, 14, 0.58);
+    --tooltip-text: #e6e8ec;
+    --danger-text-emphasis: #edb4ba;
+    --storage-icon-text: var(--blue);
+    --storage-icon-fill: var(--accent-subtle);
+    --storage-error-fill: var(--danger-subtle);
+    --accent-hover: #33445a;
+    --surface-step-1: rgb(32 36 43);
+    --surface-step-2: rgb(37 41 49);
   }
 }
 
@@ -155,7 +207,7 @@ html[data-theme="dark"] .item-list,
 html[data-theme="system"] .item-list,
 html[data-theme="dark"] .detail-pane,
 html[data-theme="system"] .detail-pane {
-  background: var(--surface);
+  background: var(--workspace-background, var(--surface));
   color: var(--app-text);
 }
 
@@ -317,7 +369,7 @@ html[data-theme="dark"] .action-popover,
 html[data-theme="system"] .action-popover,
 html[data-theme="dark"] .settings-nav,
 html[data-theme="system"] .settings-nav {
-  background: var(--surface);
+  background: var(--surface-elevated);
   border-color: var(--border);
   box-shadow: var(--modal-shadow);
   color: var(--app-text);
@@ -382,8 +434,8 @@ html[data-theme="system"] .secondary-button {
 
 html[data-theme="dark"] .danger-outline,
 html[data-theme="system"] .danger-outline {
-  border-color: rgba(255, 170, 165, 0.55);
-  color: #ffaaa5;
+  border-color: var(--danger-outline-border, rgba(255, 170, 165, 0.55));
+  color: var(--danger-text-emphasis, #ffaaa5);
   background: var(--danger-subtle);
 }
 
@@ -394,12 +446,12 @@ html[data-theme="system"] .danger-outline:hover {
 
 html[data-theme="dark"] .drawer-scrim,
 html[data-theme="system"] .drawer-scrim {
-  background: rgba(0, 0, 0, 0.52);
+  background: var(--drawer-overlay, rgba(0, 0, 0, 0.52));
 }
 
 html[data-theme="dark"] .type-combo-popover,
 html[data-theme="system"] .type-combo-popover {
-  background: var(--surface);
+  background: var(--surface-elevated);
   border-color: var(--border);
   color: var(--app-text);
 }
@@ -516,21 +568,21 @@ html[data-theme="system"] .format-choice-list button.selected {
 
 html[data-theme="dark"] .export-config-note,
 html[data-theme="system"] .export-config-note {
-  border-color: #806b3d;
-  color: #f5d991;
-  background: rgba(146, 111, 28, 0.18);
+  border-color: var(--warning-border, #806b3d);
+  color: var(--warning-text, #f5d991);
+  background: var(--warning-fill, rgba(146, 111, 28, 0.18));
 }
 
 html[data-theme="dark"] .confirmation-error,
 html[data-theme="system"] .confirmation-error {
-  color: #ffaaa5 !important;
+  color: var(--danger-text-emphasis, #ffaaa5) !important;
 }
 
 html[data-theme="dark"] .vault-lock-error,
 html[data-theme="system"] .vault-lock-error,
 html[data-theme="dark"] .vault-password-error,
 html[data-theme="system"] .vault-password-error {
-  color: #ffaaa5;
+  color: var(--danger-text-emphasis, #ffaaa5);
 }
 
 html[data-theme="dark"] .import-mode-control,
@@ -618,13 +670,13 @@ html[data-theme="system"] .detail-actions .detail-edit-action:disabled {
 
 html[data-theme="dark"] .detail-actions .update-password-action:not(:disabled),
 html[data-theme="system"] .detail-actions .update-password-action:not(:disabled) {
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill);
 }
 
 html[data-theme="dark"] .detail-actions .update-password-action:not(:disabled):hover,
 html[data-theme="system"] .detail-actions .update-password-action:not(:disabled):hover {
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill-hover);
 }
 
@@ -702,7 +754,7 @@ html[data-theme="system"] .account-selection-hint {
 
 html[data-theme="dark"] .strength.weak,
 html[data-theme="system"] .strength.weak {
-  color: #ff9e72;
+  color: var(--strength-weak, #ff9e72);
 }
 
 html[data-theme="dark"] .device-info-card,
@@ -744,7 +796,7 @@ html[data-theme="system"] .history-row {
 
 html[data-theme="dark"] .account-checkbox:not(.checked),
 html[data-theme="system"] .account-checkbox:not(.checked) {
-  border-color: #8f9aa5;
+  border-color: var(--checkbox-border, #8f9aa5);
 }
 
 html[data-theme="dark"] .meta-row,
@@ -761,7 +813,7 @@ html[data-theme="system"] .account-checkbox:not(.checked) {
 
 html[data-theme="dark"] .generator-result span,
 html[data-theme="system"] .generator-result span {
-  color: #b9aaff;
+  color: var(--generator-text, #b9aaff);
 }
 
 html[data-theme="dark"] .number-control input:disabled,
@@ -791,14 +843,14 @@ html[data-theme="system"] .type-combo-empty-state {
 
 html[data-theme="dark"] .vault-storage-icon,
 html[data-theme="system"] .vault-storage-icon {
-  color: #78c4ff;
-  background: rgba(90, 162, 255, 0.16);
+  color: var(--storage-icon-text, #78c4ff);
+  background: var(--storage-icon-fill, rgba(90, 162, 255, 0.16));
 }
 
 html[data-theme="dark"] .vault-storage-icon.error,
 html[data-theme="system"] .vault-storage-icon.error {
-  color: #ffaaa5;
-  background: rgba(196, 56, 43, 0.18);
+  color: var(--danger-text-emphasis, #ffaaa5);
+  background: var(--storage-error-fill, rgba(196, 56, 43, 0.18));
 }
 /* Form popovers and native option menus need their own foreground colors;
    inherited text is not enough when a child rule defines a light-theme color. */

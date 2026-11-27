@@ -11,6 +11,9 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use serde_json::Value;
+#[cfg(test)]
+#[path = "vault_stress_tests.rs"]
+mod stress_tests;
 use std::{
     fs::{self, OpenOptions},
     io::Write,

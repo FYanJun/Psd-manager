@@ -35,7 +35,7 @@
 
 .tool-button.accent:hover {
   color: var(--blue-hover);
-  background: var(--blue-100);
+  background: var(--accent-hover, var(--blue-100));
 }
 
 .icon-button.inline {
@@ -74,14 +74,14 @@
 .secondary-button.danger-outline {
   --button-hover-fill: var(--danger-subtle-hover);
   --button-pressed-fill: color-mix(in srgb, var(--danger-subtle-hover) 85%, var(--red-500));
-  border-color: var(--red-200);
-  color: var(--red-500);
+  border-color: var(--danger-outline-border, var(--red-200));
+  color: var(--danger-text-emphasis, var(--red-500));
   background: var(--red-50);
 }
 
 .secondary-button.danger-outline:hover {
-  border-color: var(--red-500);
-  color: var(--red-600);
+  border-color: var(--danger-text-emphasis, var(--red-500));
+  color: var(--danger-text-emphasis, var(--red-600));
   background: var(--red-50);
 }
 
@@ -112,18 +112,18 @@ button:disabled {
   justify-content: center;
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid var(--red-600);
+  border: 1px solid var(--danger-outline-border, var(--red-600));
   border-radius: 8px;
-  color: #fff;
-  background: var(--red-500);
+  color: var(--danger-text, #fff);
+  background: var(--danger-fill, var(--red-500));
   font-weight: var(--weight-semibold);
   line-height: 1.2;
   text-align: center;
 }
 
 .danger-button:hover {
-  color: #fff;
-  background: var(--red-600);
+  color: var(--danger-text, #fff);
+  background: var(--danger-fill-hover, var(--red-600));
 }
 
 button:focus-visible {

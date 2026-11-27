@@ -6,7 +6,7 @@
   border-radius: 8px;
   border: 1px solid var(--tooltip-border, rgba(255, 255, 255, 0.14));
   pointer-events: none;
-  color: #fff;
+  color: var(--tooltip-text, #fff);
   background: var(--tooltip-background, rgba(34, 38, 42, 0.96));
   box-shadow: var(--tooltip-shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
   font-size: var(--font-size-12);

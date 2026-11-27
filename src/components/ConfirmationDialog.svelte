@@ -154,7 +154,7 @@
               class={importConfigMode === "add-missing" ? "selected" : ""}
               type="button"
               disabled={busy || Boolean(pendingConfirmation.importModeErrors?.["add-missing"])}
-              data-tooltip={pendingConfirmation.importModeErrors?.["add-missing"] ?? "仅新增"}
+              data-tooltip={pendingConfirmation.importModeErrors?.["add-missing"]} data-tooltip-reason="true"
             >
               <strong>仅新增</strong>
               <small>保留现有数据</small>
@@ -164,7 +164,6 @@
               class={importConfigMode === "replace" ? "selected" : ""}
               type="button"
               disabled={busy}
-              data-tooltip="全部覆盖"
             >
               <strong>全部覆盖</strong>
               <small>以导入文件为准</small>

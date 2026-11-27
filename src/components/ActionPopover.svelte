@@ -159,12 +159,11 @@
   }
 
   .action-popover-host :global(.action-popover) {
-    position: fixed;
     z-index: 70;
     display: grid;
     gap: 0;
     width: min(236px, calc(100vw - 24px));
-    max-height: min(330px, var(--bits-dropdown-menu-content-available-height, calc(100vh - 24px)));
+    max-height: min(330px, calc(100vh - 24px));
     overflow: auto;
     padding: 8px;
     border: 1px solid var(--border);

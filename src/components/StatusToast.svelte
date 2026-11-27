@@ -71,7 +71,7 @@
 <style>
   .toast-region {
     position: fixed;
-    bottom: 24px;
+    top: calc(var(--workspace-toolbar-height) + 12px);
     left: 50%;
     z-index: 90;
     transform: translateX(-50%);

@@ -23,13 +23,13 @@
 
 <section class="item-list" aria-label="设备名称">
   <div class="list-toolbar pane-list-toolbar">
-    <div class="list-context" aria-label="当前设备范围">
+    <div class="list-context" role="group" aria-label={`当前设备范围，${filteredItems.length} 台设备`}>
       {#if searchQuery.trim()}
         <Search size={21} />
       {/if}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users focus this text to read the full scope name in its tooltip.) -->
       <span tabindex="0" data-value-tooltip={listContextLabel}>{listContextLabel}</span>
-      <small>{filteredItems.length}</small>
+      <small aria-hidden="true">{filteredItems.length}</small>
     </div>
     <div class="toolbar-actions">
       <button class="icon-button compact-action" aria-label="新增设备" data-tooltip={deviceTypeOptionsLength === 0 ? "请先新增设备类型" : "新增设备"} disabled={deviceTypeOptionsLength === 0} on:click={() => openAddDeviceDialog()}>

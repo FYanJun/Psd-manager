@@ -117,15 +117,15 @@
         </div>
       </div>
       <div class="detail-actions">
-        <button class="tool-button update-password-action" aria-label={selectedAccountTargetCount > 0 ? "更新密码" : "请先新增账号"} data-tooltip={selectedAccountTargetCount > 0 ? "更新密码" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => openPasswordDialog()}>
+        <button class="tool-button update-password-action" aria-label={selectedAccountTargetCount > 0 ? "更新密码" : "请先新增账号"} data-tooltip-reason="true" data-tooltip={selectedAccountTargetCount > 0 ? "更新密码" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => openPasswordDialog()}>
           <KeyRound size={19} />
           <span>{selectedAccountTargetCount > 1 ? `更新 ${selectedAccountTargetCount} 个` : "更新密码"}</span>
         </button>
-        <button class="tool-button detail-copy-action" aria-label={copyableAccountTargetCount > 0 ? "复制账号密码" : selectedAccountTargetCount > 0 ? "所选账号未设置密码" : "请先新增账号"} data-tooltip={copyableAccountTargetCount > 0 ? "复制账号密码" : selectedAccountTargetCount > 0 ? "所选账号未设置密码" : "请先新增账号"} disabled={copyableAccountTargetCount === 0} on:click={() => copySelectedAccountInfo()}>
+        <button class="tool-button detail-copy-action" aria-label={copyableAccountTargetCount > 0 ? "复制账号密码" : selectedAccountTargetCount > 0 ? "所选账号未设置密码" : "请先新增账号"} data-tooltip-reason="true" data-tooltip={copyableAccountTargetCount > 0 ? "复制账号密码" : selectedAccountTargetCount > 0 ? "所选账号未设置密码" : "请先新增账号"} disabled={copyableAccountTargetCount === 0} on:click={() => copySelectedAccountInfo()}>
           <Copy size={20} />
           <span>{copyableAccountTargetCount > 1 ? `复制 ${copyableAccountTargetCount} 个` : "复制账号密码"}</span>
         </button>
-        <button class="tool-button detail-edit-action" aria-label={selectedAccountTargetCount > 0 ? "编辑账号" : "请先新增账号"} data-tooltip={selectedAccountTargetCount > 0 ? "编辑账号" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => openEditAccountDialog()}>
+        <button class="tool-button detail-edit-action" aria-label={selectedAccountTargetCount > 0 ? "编辑账号" : "请先新增账号"} data-tooltip-reason="true" data-tooltip={selectedAccountTargetCount > 0 ? "编辑账号" : "请先新增账号"} disabled={selectedAccountTargetCount === 0} on:click={() => openEditAccountDialog()}>
           <Pencil size={20} />
           <span>编辑账号</span>
         </button>

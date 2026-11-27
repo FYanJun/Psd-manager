@@ -360,7 +360,7 @@ body.is-resizing-pane::after {
   min-height: 40px;
   padding: 0 16px;
   border-radius: 8px;
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill);
   font-size: var(--type-control);
   font-weight: var(--weight-semibold);
@@ -370,7 +370,7 @@ body.is-resizing-pane::after {
 }
 
 .primary-button:hover {
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill-hover);
 }
 
@@ -385,7 +385,7 @@ body.is-resizing-pane::after {
 }
 
 .primary-button:disabled:hover {
-  color: #fff;
+  color: var(--primary-text, #fff);
   background: var(--primary-fill);
 }
 

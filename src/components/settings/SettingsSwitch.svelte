@@ -33,6 +33,6 @@
   .settings-switch :global(.settings-switch-track[data-state="checked"]) { --button-hover-fill: var(--primary-fill-hover); --button-pressed-fill: color-mix(in srgb, var(--primary-fill-hover) 90%, black); border-color: var(--primary-fill); background: var(--primary-fill); }
   .settings-switch :global(.settings-switch-track:not(:disabled):hover) { background: var(--button-hover-fill); }
   .settings-switch :global(.settings-switch-track:not(:disabled):active) { background: var(--button-pressed-fill); }
-  .settings-switch :global(.settings-switch-thumb[data-state="checked"]) { background: #fff; transform: translateX(18px); }
+  .settings-switch :global(.settings-switch-thumb[data-state="checked"]) { background: var(--primary-text, #fff); transform: translateX(18px); }
   @media (max-width: 430px) { .settings-switch-row { gap: 10px; } }
 </style>

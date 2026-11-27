@@ -7,10 +7,10 @@
   import type { FormValidationFeedback, ReportFormValidationError } from "./lib/form-validation";
   import { version as packageVersion } from "../package.json";
   import type { SettingsView, StorageInfo } from "./lib/view-models";
-import { getVersion } from "@tauri-apps/api/app";
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { invoke, isTauri } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
+  import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
   import { createBackupController, emptyBackupView } from "./lib/controllers/backup-controller";
   import { backupPlatform } from "./lib/backup-platform";
   import OverlayLayer from "./components/OverlayLayer.svelte";
@@ -24,7 +24,7 @@ import { disable as disableAutostart, enable as enableAutostart, isEnabled as is
     SIDEBAR_DEFAULT_RATIO,
     initialItems,
   } from "./lib/constants";
-  import { createDefaultAppSettings, loadAppSettings, normalizeAppSettings, parseAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
+  import { createDefaultAppSettings, loadAppSettings, normalizeAppSettings, resetAppSettings, saveAppSettings } from "./lib/app-settings";
   import {
     formatDeviceInfo,
   } from "./lib/device-commands";
@@ -41,7 +41,7 @@ import { disable as disableAutostart, enable as enableAutostart, isEnabled as is
   import { createKeyboardController, type KeyboardState } from "./lib/controllers/keyboard-controller";
   import { createNavigationController, type NavigationState } from "./lib/controllers/navigation-controller";
   import { createOverlayController, type OverlayState } from "./lib/controllers/overlay-controller";
-import { captureEditableSelection, type EditableSelection, type EditableTarget } from "./lib/editable-context";
+  import { captureEditableSelection, type EditableSelection, type EditableTarget } from "./lib/editable-context";
   import { createPasswordGeneratorController, type PasswordGeneratorState } from "./lib/controllers/password-generator-controller";
   import { createSnapshotController } from "./lib/controllers/snapshot-controller";
   import { createStatusController, type StatusViewState } from "./lib/controllers/status-controller";
@@ -81,7 +81,6 @@ import { captureEditableSelection, type EditableSelection, type EditableTarget }
   import { filterDeviceTypeChoices, getErrorMessage } from "./lib/utils";
   import {
     normalizeDeviceTypeMetaList,
-    normalizeVaultIdentityData,
   } from "./lib/config";
   import {
     createBlankItem,
@@ -100,7 +99,7 @@ import { captureEditableSelection, type EditableSelection, type EditableTarget }
   import { createSearchSession } from "./lib/search-session";
   import { createStartupSession } from "./lib/startup-session";
   import { createAutoLockSession } from "./lib/auto-lock-session";
-import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/clipboard";
+  import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/clipboard";
 
   let vaultPasswordWarning = "";
   const vaultSecurity = createVaultSecurityApi(invoke, warning => (vaultPasswordWarning = warning));
@@ -1495,10 +1494,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
     autoLockSession.schedule();
   }
 
-  function setTooltipSetting(value: boolean) {
-    updateInterfaceSettings({ tooltipEnabled: value });
-  }
-
   async function setStartOnBootSetting(value: boolean) {
     if (!isTauri()) {
       showStatus("浏览器预览模式不支持开机自启", undefined, "", null, { tone: "info", operation: "settings" });
@@ -2102,7 +2097,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   const settingsActions = {
     setSection: setSettingsSection,
-    setTooltipEnabled: setTooltipSetting,
     setStartOnBoot: setStartOnBootSetting,
     setStartupLock,
     setAutoLockEnabled,
@@ -2241,7 +2235,6 @@ import { hasClipboardText, readClipboardText, writeClipboardText } from "./lib/c
 
   $: settingsView = {
     activeSection: settingsActiveSection,
-    tooltipEnabled,
     startOnBoot: appSettings.interface.startOnBoot,
     startupLock: vaultLockEnabled,
     autoLockMinutes: appSettings.interface.autoLockMinutes,

@@ -79,7 +79,7 @@
                   </Dialog.Title>
                   {#if description}<Dialog.Description class="modal-description">{description}</Dialog.Description>{/if}
                 </div>
-                <button class="icon-button" aria-label="关闭弹窗" data-tooltip="关闭弹窗" type="button" disabled={!canClose} on:click={requestClose}>
+                <button class="icon-button" aria-label="关闭弹窗" type="button" disabled={!canClose} on:click={requestClose}>
                   <X size={20} />
                 </button>
                 <FeedbackAlert owner={modalId} />
